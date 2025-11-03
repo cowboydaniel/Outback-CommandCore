@@ -1,0 +1,108 @@
+╔═════════════════════════════════════════════════════════════════════════════════╗
+║                        BLACKSTORM WIPE PROFILES                               ║
+╚═════════════════════════════════════════════════════════════════════════════════╝
+
+
+1. **REDBACK Protocol**
+   **Category:** National Security / SIGINT-Class Sanitisation
+   **Description:** Maximum-grade wipe for classified or Top Secret materials
+   **Use Case:** Destroying critical defence, intelligence, or field operation data
+   **Compliance:** ASD ISM (Top Secret), DoD 5220.22-M, NIST 800-88 Rev.1, PSPF
+   **Passes:** 3
+   **Key Wipe:** Yes
+   **Bootloader Wipe:** Yes
+   **Volatile Memory:** Yes
+   **Thermal Stress:** Yes
+   **Verification:** Entropy Analysis
+   **Tamper Log:** Yes
+
+2. **KOOKABURRA Sweep**
+   **Category:** Civilian / Personal / Recyclable Drive
+   **Description:** Lightweight one-pass overwrite for non-sensitive environments
+   **Use Case:** Donating or reselling personal devices, workstations for asset return
+   **Compliance:** N/A
+   **Passes:** 1
+   **Key Wipe:** No
+   **Bootloader Wipe:** No
+   **Volatile Memory:** No
+   **Thermal Stress:** No
+   **Verification:** Basic
+   **Tamper Log:** No
+
+3. **FEDPOL Purge**
+   **Category:** Law Enforcement / Forensics
+   **Description:** Two-pass wipe with journal and shadow copy cleaning
+   **Use Case:** Sanitising forensic drives post-extraction, evidence drive turnover
+   **Compliance:** ACIC digital evidence protocols, Federal Court IT evidence procedures
+   **Passes:** 2
+   **Key Wipe:** Yes
+   **Bootloader Wipe:** Yes
+   **Volatile Memory:** No
+   **Thermal Stress:** No
+   **Verification:** Basic
+   **Tamper Log:** Yes
+
+4. **IRONBANK Reset**
+   **Category:** Corporate / Finance / Government Agencies
+   **Description:** Two-pass random pattern + metadata overwrite
+   **Use Case:** Securely wiping corporate laptops, financial servers, government machines
+   **Compliance:** ASD Essential Eight (Level 3), ISO/IEC 27040, OAIC
+   **Passes:** 2
+   **Key Wipe:** Yes
+   **Bootloader Wipe:** Yes
+   **Volatile Memory:** No
+   **Thermal Stress:** No
+   **Verification:** Basic
+   **Tamper Log:** Yes
+
+5. **WALLABY ZeroClean**
+   **Category:** Fast Wipe / Logistics / Rapid Deployment
+   **Description:** Ultra-fast one-pass zero fill for staging drives
+   **Use Case:** Resetting gear between missions, setting up field kits
+   **Compliance:** N/A
+   **Passes:** 1
+   **Key Wipe:** No
+   **Bootloader Wipe:** Yes
+   **Volatile Memory:** No
+   **Thermal Stress:** No
+   **Verification:** Basic
+   **Tamper Log:** No
+
+6. **NIGHTOWL Erasure**
+   **Category:** Covert / Intelligence / Field Op
+   **Description:** Stealth-focused 3-pass cryptographic shred
+   **Use Case:** Covert destruction in hostile/surveilled environments
+   **Compliance:** Classified
+   **Passes:** 3
+   **Key Wipe:** Yes
+   **Bootloader Wipe:** Yes
+   **Volatile Memory:** Yes
+   **Thermal Stress:** No
+   **Verification:** Entropy Analysis
+   **Tamper Log:** Yes
+
+7. **WEDGE-TAIL Purifier**
+   **Category:** Military (Standard Deployment-Level Sanitisation)
+   **Description:** Two-pass with journal wipe and bootloader cleanse
+   **Use Case:** Post-mission sanitisation of field-deployed systems
+   **Compliance:** ASD ISM (Secret), ADF disposal practices
+   **Passes:** 2
+   **Key Wipe:** Yes
+   **Bootloader Wipe:** Yes
+   **Volatile Memory:** No
+   **Thermal Stress:** No
+   **Verification:** Basic
+   **Tamper Log:** Yes
+
+8. **NULLDRIVE**
+   **Category:** Bricking / Emergency
+   **Description:** Permanent drive destruction with firmware overwrite
+   **Use Case:** Permanent sanitisation under capture risk
+   **Compliance:** N/A
+   **Passes:** 1
+   **Key Wipe:** Yes
+   **Bootloader Wipe:** Yes
+   **Volatile Memory:** No
+   **Thermal Stress:** No
+   **Verification:** None
+   **Tamper Log:** No
