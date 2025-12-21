@@ -38,8 +38,9 @@ class ConnectionMixin:
         layout.addWidget(output_text)
 
         def update_output(message):
-            output_text.appendPlainText(message)
-            QtWidgets.QApplication.processEvents()
+            def append_text():
+                output_text.appendPlainText(message)
+            QtCore.QTimer.singleShot(0, append_text)
 
         # Start the setup process
         update_output("Setting up WiFi ADB...")
