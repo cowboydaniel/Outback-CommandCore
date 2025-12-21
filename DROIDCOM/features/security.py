@@ -735,12 +735,39 @@ class SecurityMixin:
             text=True,
         )
         width, height = 1080, 1920
-        if size_result.returncode == 0 and "Physical size:" in size_result.stdout:
+        if size_result.returncode == 0:
             try:
-                size_str = size_result.stdout.split("Physical size:")[1].strip()
-                width, height = map(int, size_str.split("x"))
-            except (IndexError, ValueError):
-                pass
+                size_match = re.search(r"(?:Physical|Override) size:\s*(\d+)x(\d+)", size_result.stdout)
+                if not size_match:
+                    size_match = re.search(r"(\d+)x(\d+)", size_result.stdout)
+                if size_match:
+                    width, height = map(int, size_match.groups())
+                else:
+                    raise ValueError("No size pattern found")
+            except (IndexError, ValueError) as exc:
+                logging.warning(
+                    "Failed to parse wm size output: %s (error: %s)",
+                    size_result.stdout.strip(),
+                    exc,
+                )
+                display_result = subprocess.run(
+                    [adb_cmd, "-s", serial, "shell", "dumpsys", "display"],
+                    capture_output=True,
+                    text=True,
+                )
+                if display_result.returncode == 0:
+                    try:
+                        display_match = re.search(r"(\d+)x(\d+)", display_result.stdout)
+                        if display_match:
+                            width, height = map(int, display_match.groups())
+                        else:
+                            raise ValueError("No display size found")
+                    except (IndexError, ValueError) as display_exc:
+                        logging.warning(
+                            "Failed to parse dumpsys display output: %s (error: %s)",
+                            display_result.stdout.strip(),
+                            display_exc,
+                        )
         return width, height
 
     def _detect_lock_screen_type(self, serial):
