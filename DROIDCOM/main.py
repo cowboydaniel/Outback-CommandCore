@@ -31,7 +31,8 @@ def main():
         QtCore.Qt.WindowCloseButtonHint
     )
     # Set a smaller default size that fits most screens
-    window.resize(680, 700)
+    window.resize(800, 600)  # Wider but shorter
+    window.setMinimumSize(800, 400)  # Set minimum size
 
     layout = QtWidgets.QVBoxLayout(window)
     app = AndroidToolsModule(window)
