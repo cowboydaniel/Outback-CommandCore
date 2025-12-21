@@ -37,6 +37,9 @@ class ConnectionMixin:
         output_text.setLineWrapMode(QtWidgets.QPlainTextEdit.WidgetWidth)
         layout.addWidget(output_text)
 
+        # Show the dialog so user can see the status
+        status_window.show()
+
         def update_output(message):
             def append_text():
                 output_text.appendPlainText(message)
