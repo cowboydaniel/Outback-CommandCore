@@ -204,7 +204,7 @@ class SystemToolsMixin:
                 except Exception:
                     pass
 
-                stats = self._parse_battery_stats(
+                stats, skipped_lines = self._parse_battery_stats(
                     stdout, battery_level, battery_status, discharge_current, serial, adb_cmd
                 )
 
@@ -230,6 +230,9 @@ class SystemToolsMixin:
                     result.append("-" * 50)
                     for app, power in stats:
                         result.append(f"{app}\t\t{power} mAh")
+                if skipped_lines:
+                    result.append("")
+                    result.append(f"Skipped {skipped_lines} unparsable usage lines.")
 
                 return "\n".join(result)
 
@@ -1323,6 +1326,7 @@ class SystemToolsMixin:
         self, dump_output, battery_level="Unknown", battery_status="Unknown", discharge_current=0,
         serial="", adb_cmd="adb"
     ):
+        skipped_lines = 0
         stats = []
         is_checkin_format = "9,0,i,uid," in dump_output
 
@@ -1335,6 +1339,9 @@ class SystemToolsMixin:
                         uid = parts[4]
                         package = parts[5]
                         package_map[uid] = package
+                    else:
+                        skipped_lines += 1
+                        logging.warning("Skipped UID mapping line: %s", line)
 
             cpu_stats = {}
             power_stats = {}
@@ -1351,7 +1358,12 @@ class SystemToolsMixin:
                                 if power_value > 0:
                                     power_stats[uid] = (package_name, power_value)
                         except (ValueError, IndexError):
+                            skipped_lines += 1
+                            logging.warning("Skipped usage line: %s", line)
                             continue
+                    else:
+                        skipped_lines += 1
+                        logging.warning("Skipped usage line: %s", line)
                 elif "l,cpu," in line:
                     parts = line.strip().split(",")
                     if len(parts) >= 5:
@@ -1365,7 +1377,12 @@ class SystemToolsMixin:
                                     package_name = package_map.get(uid, f"UID {uid}")
                                     cpu_stats[uid] = (package_name, cpu_power)
                         except (ValueError, IndexError):
+                            skipped_lines += 1
+                            logging.warning("Skipped usage line: %s", line)
                             continue
+                    else:
+                        skipped_lines += 1
+                        logging.warning("Skipped usage line: %s", line)
 
             for uid, (package, power) in power_stats.items():
                 stats.append((uid, package, f"{power:.2f}"))
@@ -1399,7 +1416,8 @@ class SystemToolsMixin:
                                 app_stats[uid]["cpu"] += (usr_ms + krn_ms) / 60000
                                 break
                     except (ValueError, IndexError):
-                        pass
+                        skipped_lines += 1
+                        logging.warning("Skipped usage line: %s", line)
                 elif "Foreground activities:" in line:
                     try:
                         fg_parts = line.split("Foreground activities:", 1)[1].strip().split()
@@ -1427,7 +1445,8 @@ class SystemToolsMixin:
                                 app_stats[uid]["fg"] = total_ms / 60000
                                 break
                     except (ValueError, IndexError):
-                        pass
+                        skipped_lines += 1
+                        logging.warning("Skipped usage line: %s", line)
 
             for uid, data in app_stats.items():
                 power_value = data["cpu"] + (data["fg"] * 0.2)
@@ -1448,6 +1467,8 @@ class SystemToolsMixin:
                             if power_value > 0:
                                 stats.append((uid_part, package_part, f"{power_value:.2f}"))
                         except (ValueError, IndexError):
+                            skipped_lines += 1
+                            logging.warning("Skipped usage line: %s", line)
                             continue
 
         if not stats:
@@ -1560,7 +1581,7 @@ class SystemToolsMixin:
                 package, power = entry
                 formatted_stats.append((package, power))
 
-        return formatted_stats
+        return formatted_stats, skipped_lines
 
     def _format_bytes(self, bytes_val):
         if bytes_val < 1024:
