@@ -345,11 +345,29 @@ class WidgetsMixin:
         self._create_tools_tab()
 
     def _create_device_info_tab(self):
-        """Create the Device Info tab with modern styling"""
+        """Create the Device Info tab with modern styling and scrollable content"""
+        # Create main container widget and layout
         self.device_frame = QtWidgets.QWidget(self.notebook)
-        device_layout = QtWidgets.QVBoxLayout(self.device_frame)
+        main_layout = QtWidgets.QVBoxLayout(self.device_frame)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+        
+        # Create scroll area
+        scroll_area = QtWidgets.QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QtWidgets.QFrame.NoFrame)
+        
+        # Create content widget and layout
+        content_widget = QtWidgets.QWidget()
+        device_layout = QtWidgets.QVBoxLayout(content_widget)
         device_layout.setContentsMargins(12, 12, 12, 12)
         device_layout.setSpacing(14)
+        
+        # Set up the scroll area
+        scroll_area.setWidget(content_widget)
+        main_layout.addWidget(scroll_area)
+        
+        # Add the tab to the notebook
         self.notebook.addTab(self.device_frame, "\U0001F4F1 Device Info")
 
         # === CONNECTION SECTION ===
