@@ -3,7 +3,7 @@ DROIDCOM - Android Device Management Tool
 Main application module that combines all features.
 """
 
-from .ui.qt_compat import tk, ttk, messagebox
+from PySide6 import QtCore, QtWidgets
 import subprocess
 import os
 import shutil
@@ -50,7 +50,7 @@ class AndroidToolsModule(
     DebuggingMixin,
     AdvancedTestsMixin,
     AutomationMixin,
-    ttk.Frame
+    QtWidgets.QWidget
 ):
     """Main Android Tools Module that combines all feature mixins."""
 
@@ -99,7 +99,7 @@ class AndroidToolsModule(
             # Use after() to ensure the UI is fully loaded before attempting connection
             self.log_message("Android Tools module loaded - will attempt auto-connection shortly")
             # Increase delay to 1000ms to ensure UI is fully loaded
-            self.after(1000, self.auto_connect_sequence)
+            QtCore.QTimer.singleShot(1000, self.auto_connect_sequence)
 
     def _find_adb_path(self):
         """Find the ADB executable path on Windows"""
@@ -239,7 +239,9 @@ class AndroidToolsModule(
             except Exception as e:
                 self.log_message(f"Download failed: {str(e)}")
                 self.update_status("Installation failed")
-                messagebox.showerror("Download Error", f"Failed to download Android platform tools: {str(e)}")
+                QtWidgets.QMessageBox.critical(
+                    self, "Download Error", f"Failed to download Android platform tools: {str(e)}"
+                )
                 return
 
             # Determine the installation directory
@@ -263,7 +265,9 @@ class AndroidToolsModule(
             except Exception as e:
                 self.log_message(f"Extraction failed: {str(e)}")
                 self.update_status("Installation failed")
-                messagebox.showerror("Extraction Error", f"Failed to extract Android platform tools: {str(e)}")
+                QtWidgets.QMessageBox.critical(
+                    self, "Extraction Error", f"Failed to extract Android platform tools: {str(e)}"
+                )
                 return
 
             # Set up PATH environment variable
@@ -298,14 +302,17 @@ class AndroidToolsModule(
                 self.log_message(f"Failed to clean up temporary files: {str(e)}")
 
             # Update UI to reflect successful installation
-            self.after(0, lambda: self.tools_label.configure(text="Android Platform Tools: ✅ Installed"))
+            QtCore.QTimer.singleShot(
+                0, lambda: self.tools_label.configure(text="Android Platform Tools: ✅ Installed")
+            )
             self.platform_tools_installed = True
 
             # Show success message with PATH instructions
             self.update_status("Installation completed")
             self.log_message("Android platform tools installed successfully")
 
-            messagebox.showinfo(
+            QtWidgets.QMessageBox.information(
+                self,
                 "Installation Complete",
                 f"Android platform tools have been installed successfully.\n\n{path_instructions}"
             )
@@ -313,7 +320,9 @@ class AndroidToolsModule(
         except Exception as e:
             self.log_message(f"Installation error: {str(e)}")
             self.update_status("Installation failed")
-            messagebox.showerror("Installation Error", f"Failed to install Android platform tools: {str(e)}")
+            QtWidgets.QMessageBox.critical(
+                self, "Installation Error", f"Failed to install Android platform tools: {str(e)}"
+            )
 
     def run_adb_command(self, command, device_serial=None, timeout=60):
         """Run an ADB command and return the result

@@ -12,6 +12,7 @@ import re
 import logging
 
 from ..constants import IS_WINDOWS
+from ..utils.qt_dispatcher import append_text, emit_ui, schedule_ui
 
 
 class ConnectionMixin:
@@ -33,9 +34,13 @@ class ConnectionMixin:
         output_text.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
         def update_output(message):
-            output_text.insert(tk.END, message + "\n")
-            output_text.see(tk.END)
-            status_window.update()
+            def apply_update():
+                append_text(output_text, message + "\n")
+                if hasattr(output_text, "see"):
+                    output_text.see("end")
+                if hasattr(status_window, "update"):
+                    status_window.update()
+            emit_ui(self, apply_update)
 
         # Start the setup process
         update_output("Setting up WiFi ADB...")
@@ -93,7 +98,7 @@ class ConnectionMixin:
                     if 'connected' in connect_result.lower():
                         update_output("\nWiFi ADB connection successful!")
                         # Update device list to show the new wireless connection
-                        self.parent.after(1000, self.refresh_device_list)
+                        schedule_ui(self.refresh_device_list, 1000)
                     else:
                         update_output(f"\nFailed to connect wirelessly. Please try manually:\nadb connect {ip}:5555")
                 except Exception as e:
@@ -134,7 +139,7 @@ class ConnectionMixin:
         try:
             selected = self.device_listbox.curselection()
             if not selected:
-                self.after(0, lambda: messagebox.showinfo("No Device Selected", "Please select a device from the list"))
+                emit_ui(self, lambda: messagebox.showinfo("No Device Selected", "Please select a device from the list"))
                 return
 
             # Get the selected device serial
@@ -142,10 +147,14 @@ class ConnectionMixin:
 
             # Check if the device is marked as offline/disconnected
             if "DISCONNECTED" in device_entry or "Offline" in device_entry or "❌" in device_entry:
-                self.log_message(f"Rejected connection attempt to offline device: {device_entry}")
-                self.after(0, lambda: messagebox.showinfo("Device Offline",
+                emit_ui(self, lambda: self.log_message(
+                    f"Rejected connection attempt to offline device: {device_entry}"
+                ))
+                emit_ui(self, lambda: messagebox.showinfo(
+                    "Device Offline",
                     "The selected device is offline and cannot be connected.\n\n"
-                    "Please use the 'Remove Offline' button to clear disconnected devices from the list."))
+                    "Please use the 'Remove Offline' button to clear disconnected devices from the list."
+                ))
                 return
 
             # Extract the serial number from the device entry
@@ -156,14 +165,14 @@ class ConnectionMixin:
             else:
                 serial = device_entry.strip()
 
-            self.log_message(f"Connecting to device: {serial}")
-            self.update_status(f"Connecting to {serial}...")
+            emit_ui(self, lambda: self.log_message(f"Connecting to device: {serial}"))
+            emit_ui(self, lambda: self.update_status(f"Connecting to {serial}..."))
 
             # Get the platform tools path
             if IS_WINDOWS:
                 adb_path = self._find_adb_path()
                 if not adb_path:
-                    self.update_status("ADB not found")
+                    emit_ui(self, lambda: self.update_status("ADB not found"))
                     return
                 adb_cmd = adb_path
             else:
@@ -179,34 +188,44 @@ class ConnectionMixin:
             )
 
             if result.returncode != 0 or serial not in result.stdout:
-                self.log_message(f"Device {serial} not found or disconnected")
-                self.update_status("Device not found")
-                messagebox.showerror("Connection Error", "Device not found or disconnected. Try refreshing the device list.")
+                emit_ui(self, lambda: self.log_message(f"Device {serial} not found or disconnected"))
+                emit_ui(self, lambda: self.update_status("Device not found"))
+                emit_ui(self, lambda: messagebox.showerror(
+                    "Connection Error",
+                    "Device not found or disconnected. Try refreshing the device list."
+                ))
                 return
 
             # Get device information
-            self.log_message("Retrieving device information...")
-            self.update_status("Getting device info...")
+            emit_ui(self, lambda: self.log_message("Retrieving device information..."))
+            emit_ui(self, lambda: self.update_status("Getting device info..."))
             self.device_info = self._get_device_info(serial, adb_cmd)
 
             if self.device_info:
                 self.device_connected = True
                 self.device_serial = serial
-                self.after(0, self.update_device_info)
-                self.after(0, self.enable_device_actions)
-                self.log_message("Device connected successfully")
-                self.update_status(f"Connected to {self.device_info.get('model', serial)}")
+                emit_ui(self, self.update_device_info)
+                emit_ui(self, self.enable_device_actions)
+                emit_ui(self, lambda: self.log_message("Device connected successfully"))
+                emit_ui(self, lambda: self.update_status(
+                    f"Connected to {self.device_info.get('model', serial)}"
+                ))
             else:
                 self.device_connected = False
-                self.log_message("Failed to get device information")
-                self.update_status("Connection failed")
-                messagebox.showerror("Connection Error",
-                    "Failed to get device information. The device may be locked or not responding.")
+                emit_ui(self, lambda: self.log_message("Failed to get device information"))
+                emit_ui(self, lambda: self.update_status("Connection failed"))
+                emit_ui(self, lambda: messagebox.showerror(
+                    "Connection Error",
+                    "Failed to get device information. The device may be locked or not responding."
+                ))
 
         except Exception as e:
-            self.log_message(f"Error connecting to device: {str(e)}")
-            self.update_status("Connection failed")
-            messagebox.showerror("Connection Error", f"Failed to connect to device: {str(e)}")
+            emit_ui(self, lambda: self.log_message(f"Error connecting to device: {str(e)}"))
+            emit_ui(self, lambda: self.update_status("Connection failed"))
+            emit_ui(self, lambda: messagebox.showerror(
+                "Connection Error",
+                f"Failed to connect to device: {str(e)}"
+            ))
 
     def auto_connect_sequence(self):
         """Start automatic device detection and connection"""
@@ -218,7 +237,7 @@ class ConnectionMixin:
         """Worker thread for auto-refresh device list"""
         try:
             adb_cmd = self.adb_path if IS_WINDOWS else "adb"
-            self.update_status("Refreshing device list...")
+            emit_ui(self, lambda: self.update_status("Refreshing device list..."))
 
             result = subprocess.run(
                 [adb_cmd, "devices"], capture_output=True, text=True, check=True
@@ -272,21 +291,23 @@ class ConnectionMixin:
                             break
 
                     if connected_device_index is not None:
-                        self.log_message(f"Found available device at index {connected_device_index} - initiating connection")
+                        self.log_message(
+                            f"Found available device at index {connected_device_index} - initiating connection"
+                        )
                         self.device_listbox.selection_clear(0, tk.END)
                         self.device_listbox.selection_set(connected_device_index)
                         self.device_listbox.see(connected_device_index)
-                        self.after(100, self._trigger_connect)
+                        schedule_ui(self._trigger_connect, 100)
                     else:
                         self.log_message("Auto-connect: No available devices found for automatic connection")
                 else:
                     self.update_status("No devices found")
 
-            self.after(0, update_ui)
+            emit_ui(self, update_ui)
 
         except Exception as e:
             logging.error(f"Error refreshing device list: {e}", exc_info=True)
-            self.after(0, lambda: self.update_status(f"Error refreshing device list: {str(e)}"))
+            emit_ui(self, lambda: self.update_status(f"Error refreshing device list: {str(e)}"))
 
     def _trigger_connect(self):
         """Helper method to trigger the connect_device method after a short delay"""
@@ -303,13 +324,13 @@ class ConnectionMixin:
     def _remove_offline_devices_task(self):
         """Worker thread to remove offline devices from the list"""
         try:
-            self.update_status("Removing offline devices...")
-            self.log_message("Removing offline devices from the list...")
+            emit_ui(self, lambda: self.update_status("Removing offline devices..."))
+            emit_ui(self, lambda: self.log_message("Removing offline devices from the list..."))
 
             if IS_WINDOWS:
                 adb_cmd = self._find_adb_path()
                 if not adb_cmd:
-                    self.update_status("ADB not found")
+                    emit_ui(self, lambda: self.update_status("ADB not found"))
                     return
             else:
                 adb_cmd = 'adb'
@@ -323,8 +344,10 @@ class ConnectionMixin:
             )
 
             if result.returncode != 0:
-                self.update_status("Failed to check connected devices")
-                self.log_message(f"Error checking connected devices: {result.stderr.strip()}")
+                emit_ui(self, lambda: self.update_status("Failed to check connected devices"))
+                emit_ui(self, lambda: self.log_message(
+                    f"Error checking connected devices: {result.stderr.strip()}"
+                ))
                 return
 
             lines = result.stdout.strip().split('\n')
@@ -339,37 +362,39 @@ class ConnectionMixin:
                         if status == 'device':
                             connected_serials.append(serial)
 
-            current_devices = []
-            for i in range(self.device_listbox.size()):
-                device_entry = self.device_listbox.get(i)
-                if '[' in device_entry:
-                    serial = device_entry.split('[')[0].strip()
-                elif '(' in device_entry and ')' in device_entry:
-                    serial = device_entry.split('(')[1].split(')')[0].strip()
+            def update_ui():
+                current_devices = []
+                for i in range(self.device_listbox.size()):
+                    device_entry = self.device_listbox.get(i)
+                    if '[' in device_entry:
+                        serial = device_entry.split('[')[0].strip()
+                    elif '(' in device_entry and ')' in device_entry:
+                        serial = device_entry.split('(')[1].split(')')[0].strip()
+                    else:
+                        serial = device_entry.strip()
+                    current_devices.append(serial)
+
+                devices_to_remove = [s for s in current_devices if s not in connected_serials]
+
+                self.device_listbox.delete(0, tk.END)
+                for serial in connected_serials:
+                    self.device_listbox.insert(tk.END, serial)
+
+                if devices_to_remove:
+                    self.update_status(f"Removed {len(devices_to_remove)} offline device(s)")
+                    self.log_message(f"Removed offline devices: {', '.join(devices_to_remove)}")
                 else:
-                    serial = device_entry.strip()
-                current_devices.append(serial)
+                    self.update_status("No offline devices to remove")
+                    self.log_message("No offline devices found to remove")
 
-            devices_to_remove = [s for s in current_devices if s not in connected_serials]
+                if self.device_listbox.size() > 0:
+                    self.device_listbox.selection_set(0)
 
-            self.after(0, lambda: self.device_listbox.delete(0, tk.END))
-
-            for serial in connected_serials:
-                self.after(0, lambda s=serial: self.device_listbox.insert(tk.END, s))
-
-            if devices_to_remove:
-                self.update_status(f"Removed {len(devices_to_remove)} offline device(s)")
-                self.log_message(f"Removed offline devices: {', '.join(devices_to_remove)}")
-            else:
-                self.update_status("No offline devices to remove")
-                self.log_message("No offline devices found to remove")
-
-            if self.device_listbox.size() > 0:
-                self.after(0, lambda: self.device_listbox.selection_set(0))
+            emit_ui(self, update_ui)
 
         except Exception as e:
-            self.update_status("Failed to remove offline devices")
-            self.log_message(f"Error removing offline devices: {str(e)}")
+            emit_ui(self, lambda: self.update_status("Failed to remove offline devices"))
+            emit_ui(self, lambda: self.log_message(f"Error removing offline devices: {str(e)}"))
 
     def refresh_device_list(self):
         """Refresh the list of connected devices"""
@@ -380,19 +405,19 @@ class ConnectionMixin:
     def _refresh_device_list_task(self):
         """Worker thread to refresh the device list"""
         try:
-            self.update_status("Refreshing device list...")
-            self.log_message("Refreshing list of connected Android devices...")
+            emit_ui(self, lambda: self.update_status("Refreshing device list..."))
+            emit_ui(self, lambda: self.log_message("Refreshing list of connected Android devices..."))
 
             if IS_WINDOWS:
                 adb_path = self._find_adb_path()
                 if not adb_path:
-                    self.update_status("ADB not found")
+                    emit_ui(self, lambda: self.update_status("ADB not found"))
                     return
                 adb_cmd = adb_path
             else:
                 adb_cmd = 'adb'
 
-            self.after(0, lambda: self.device_listbox.delete(0, tk.END))
+            emit_ui(self, lambda: self.device_listbox.delete(0, tk.END))
 
             result = subprocess.run(
                 [adb_cmd, 'devices', '-l'],
@@ -403,8 +428,10 @@ class ConnectionMixin:
             )
 
             if result.returncode != 0:
-                self.log_message(f"Error getting device list: {result.stderr.strip()}")
-                self.update_status("Failed to get device list")
+                emit_ui(self, lambda: self.log_message(
+                    f"Error getting device list: {result.stderr.strip()}"
+                ))
+                emit_ui(self, lambda: self.update_status("Failed to get device list"))
                 return
 
             lines = result.stdout.strip().split('\n')
@@ -428,6 +455,7 @@ class ConnectionMixin:
                                 devices.append(device_info)
 
                 if devices:
+                    display_items = []
                     for idx, device in enumerate(devices):
                         display_text = f"{device['serial']}"
                         if device['details']:
@@ -440,17 +468,22 @@ class ConnectionMixin:
                             if model_info:
                                 display_text = f"{model_info} ({device['serial']})"
 
-                        self.after(0, lambda t=display_text: self.device_listbox.insert(tk.END, t))
+                        display_items.append(display_text)
 
-                    self.log_message(f"Found {len(devices)} connected device(s)")
-                    self.update_status(f"{len(devices)} device(s) found")
+                    def update_ui():
+                        for item in display_items:
+                            self.device_listbox.insert(tk.END, item)
+                        self.log_message(f"Found {len(devices)} connected device(s)")
+                        self.update_status(f"{len(devices)} device(s) found")
+
+                    emit_ui(self, update_ui)
                 else:
-                    self.log_message("No connected devices found")
-                    self.update_status("No devices found")
+                    emit_ui(self, lambda: self.log_message("No connected devices found"))
+                    emit_ui(self, lambda: self.update_status("No devices found"))
             else:
-                self.log_message("No connected devices found")
-                self.update_status("No devices found")
+                emit_ui(self, lambda: self.log_message("No connected devices found"))
+                emit_ui(self, lambda: self.update_status("No devices found"))
 
         except Exception as e:
-            self.log_message(f"Error refreshing device list: {str(e)}")
-            self.update_status("Failed to refresh device list")
+            emit_ui(self, lambda: self.log_message(f"Error refreshing device list: {str(e)}"))
+            emit_ui(self, lambda: self.update_status("Failed to refresh device list"))

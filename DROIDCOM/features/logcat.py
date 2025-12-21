@@ -11,6 +11,7 @@ import re
 import time
 
 from ..constants import IS_WINDOWS
+from ..utils.qt_dispatcher import append_text, clear_text, emit_ui
 
 
 class LogcatMixin:
@@ -27,13 +28,13 @@ class LogcatMixin:
     def _view_logcat_task(self):
         """Worker thread to open a logcat viewer"""
         try:
-            self.update_status("Opening logcat viewer...")
-            self.log_message("Opening logcat viewer...")
+            emit_ui(self, lambda: self.update_status("Opening logcat viewer..."))
+            emit_ui(self, lambda: self.log_message("Opening logcat viewer..."))
 
             if IS_WINDOWS:
                 adb_path = self._find_adb_path()
                 if not adb_path:
-                    self.update_status("ADB not found")
+                    emit_ui(self, lambda: self.update_status("ADB not found"))
                     return
                 adb_cmd = adb_path
             else:
@@ -41,15 +42,15 @@ class LogcatMixin:
 
             serial = self.device_info.get('serial')
             if not serial:
-                self.log_message("Device serial not found")
-                self.update_status("Failed to open logcat")
+                emit_ui(self, lambda: self.log_message("Device serial not found"))
+                emit_ui(self, lambda: self.update_status("Failed to open logcat"))
                 return
 
-            self.after(0, lambda: self._show_logcat_window(serial, adb_cmd))
+            emit_ui(self, lambda: self._show_logcat_window(serial, adb_cmd))
 
         except Exception as e:
-            self.log_message(f"Error opening logcat: {str(e)}")
-            self.update_status("Failed to open logcat")
+            emit_ui(self, lambda: self.log_message(f"Error opening logcat: {str(e)}"))
+            emit_ui(self, lambda: self.update_status("Failed to open logcat"))
 
     def _show_logcat_window(self, serial, adb_cmd):
         """Show the logcat window"""
@@ -197,7 +198,7 @@ class LogcatMixin:
 
             window.logcat_process = process
 
-            self.after(0, lambda: self._clear_logcat(log_text))
+            emit_ui(self, lambda: self._clear_logcat(log_text))
 
             for line in iter(process.stdout.readline, ''):
                 if not hasattr(window, 'winfo_exists') or not window.winfo_exists():
@@ -222,20 +223,22 @@ class LogcatMixin:
                         tag = "FATAL"
 
                 if hasattr(window, 'winfo_exists') and window.winfo_exists():
-                    window.after(0, lambda l=line, t=tag: self._append_logcat_line(log_text, l, t))
+                    emit_ui(self, lambda l=line, t=tag: self._append_logcat_line(log_text, l, t))
 
             if process.poll() is not None:
                 status = process.poll()
                 if hasattr(window, 'winfo_exists') and window.winfo_exists():
-                    window.after(0, lambda: self._append_logcat_line(
-                        log_text, f"\nLogcat process ended (status {status}). Please close and reopen the viewer.\n", "ERROR"
+                    emit_ui(self, lambda: self._append_logcat_line(
+                        log_text,
+                        f"\nLogcat process ended (status {status}). Please close and reopen the viewer.\n",
+                        "ERROR"
                     ))
 
         except Exception as e:
-            self.log_message(f"Error in logcat thread: {str(e)}")
+            emit_ui(self, lambda: self.log_message(f"Error in logcat thread: {str(e)}"))
 
             if hasattr(window, 'winfo_exists') and window.winfo_exists():
-                window.after(0, lambda: self._append_logcat_line(
+                emit_ui(self, lambda: self._append_logcat_line(
                     log_text, f"\nError: {str(e)}\n", "ERROR"
                 ))
 
@@ -253,7 +256,7 @@ class LogcatMixin:
                 return
 
             log_text.config(state="normal")
-            log_text.insert(tk.END, line, tag)
+            append_text(log_text, line, tag=tag)
             log_text.see(tk.END)
             log_text.config(state="disabled")
 
@@ -264,7 +267,7 @@ class LogcatMixin:
         """Clear the logcat display"""
         try:
             log_text.config(state="normal")
-            log_text.delete(1.0, tk.END)
+            clear_text(log_text)
             log_text.config(state="disabled")
         except Exception as e:
             self.log_message(f"Error clearing logcat: {str(e)}")

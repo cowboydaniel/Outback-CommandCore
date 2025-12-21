@@ -10,6 +10,7 @@ import threading
 import os
 
 from ..constants import IS_WINDOWS
+from ..utils.qt_dispatcher import append_text, clear_text, emit_ui, set_progress
 
 
 class AutomationMixin:
@@ -119,16 +120,16 @@ class AutomationMixin:
                             capture_output=True, text=True, timeout=10
                         )
 
-                        dialog.after(0, lambda: [
-                            output_text.insert(tk.END, "=== STDOUT ===\n"),
-                            output_text.insert(tk.END, result.stdout or "(empty)\n"),
-                            output_text.insert(tk.END, "\n=== STDERR ===\n"),
-                            output_text.insert(tk.END, result.stderr or "(empty)\n"),
-                            output_text.insert(tk.END, f"\n=== Return code: {result.returncode} ===\n")
+                        emit_ui(self, lambda: [
+                            append_text(output_text, "=== STDOUT ===\n"),
+                            append_text(output_text, result.stdout or "(empty)\n"),
+                            append_text(output_text, "\n=== STDERR ===\n"),
+                            append_text(output_text, result.stderr or "(empty)\n"),
+                            append_text(output_text, f"\n=== Return code: {result.returncode} ===\n")
                         ])
 
                     except Exception as e:
-                        dialog.after(0, lambda: output_text.insert(tk.END, f"Error: {str(e)}"))
+                        emit_ui(self, lambda: append_text(output_text, f"Error: {str(e)}"))
 
                 threading.Thread(target=execute_script, daemon=True).start()
 
@@ -148,7 +149,7 @@ class AutomationMixin:
 
             def clear_script():
                 script_text.delete(1.0, tk.END)
-                output_text.delete(1.0, tk.END)
+                clear_text(output_text)
 
             buttons_frame = ttk.Frame(main_frame)
             buttons_frame.pack(fill="x", pady=10)
@@ -244,10 +245,12 @@ class AutomationMixin:
                 def run_installation():
                     for i, apk in enumerate(apks):
                         progress = ((i + 1) / total) * 100
-                        dialog.after(0, lambda p=progress: install_progress.configure(value=p))
+                        emit_ui(self, lambda p=progress: set_progress(install_progress, p))
 
                         filename = os.path.basename(apk)
-                        dialog.after(0, lambda f=filename: install_output.insert(tk.END, f"Installing {f}...\n"))
+                        emit_ui(self, lambda f=filename: append_text(
+                            install_output, f"Installing {f}...\n"
+                        ))
 
                         try:
                             result = subprocess.run(
@@ -256,14 +259,22 @@ class AutomationMixin:
                             )
 
                             if "Success" in result.stdout:
-                                dialog.after(0, lambda f=filename: install_output.insert(tk.END, f"  ✓ {f} installed\n"))
+                                emit_ui(self, lambda f=filename: append_text(
+                                    install_output, f"  ✓ {f} installed\n"
+                                ))
                             else:
-                                dialog.after(0, lambda f=filename, e=result.stderr: install_output.insert(tk.END, f"  ✗ {f} failed: {e}\n"))
+                                emit_ui(self, lambda f=filename, e=result.stderr: append_text(
+                                    install_output, f"  ✗ {f} failed: {e}\n"
+                                ))
 
                         except Exception as e:
-                            dialog.after(0, lambda f=filename, err=str(e): install_output.insert(tk.END, f"  ✗ {f} error: {err}\n"))
+                            emit_ui(self, lambda f=filename, err=str(e): append_text(
+                                install_output, f"  ✗ {f} error: {err}\n"
+                            ))
 
-                    dialog.after(0, lambda: install_output.insert(tk.END, "\nBatch installation complete!\n"))
+                    emit_ui(self, lambda: append_text(
+                        install_output, "\nBatch installation complete!\n"
+                    ))
 
                 threading.Thread(target=run_installation, daemon=True).start()
 
@@ -292,9 +303,17 @@ class AutomationMixin:
                 )
 
                 if result.returncode == 0:
-                    packages = sorted([line[8:] for line in result.stdout.strip().split('\n') if line.startswith('package:')])
-                    dialog.after(0, lambda: [uninstall_listbox.delete(0, tk.END)] +
-                        [uninstall_listbox.insert(tk.END, p) for p in packages])
+                    packages = sorted([
+                        line[8:] for line in result.stdout.strip().split('\n')
+                        if line.startswith('package:')
+                    ])
+
+                    def update_packages():
+                        uninstall_listbox.delete(0, tk.END)
+                        for package in packages:
+                            uninstall_listbox.insert(tk.END, package)
+
+                    emit_ui(self, update_packages)
 
             threading.Thread(target=load_installed_packages, daemon=True).start()
 
@@ -316,9 +335,11 @@ class AutomationMixin:
                 def run_uninstallation():
                     for i, pkg in enumerate(packages):
                         progress = ((i + 1) / total) * 100
-                        dialog.after(0, lambda p=progress: uninstall_progress.configure(value=p))
+                        emit_ui(self, lambda p=progress: set_progress(uninstall_progress, p))
 
-                        dialog.after(0, lambda p=pkg: uninstall_output.insert(tk.END, f"Uninstalling {p}...\n"))
+                        emit_ui(self, lambda p=pkg: append_text(
+                            uninstall_output, f"Uninstalling {p}...\n"
+                        ))
 
                         try:
                             result = subprocess.run(
@@ -327,15 +348,23 @@ class AutomationMixin:
                             )
 
                             if "Success" in result.stdout:
-                                dialog.after(0, lambda p=pkg: uninstall_output.insert(tk.END, f"  ✓ {p} uninstalled\n"))
+                                emit_ui(self, lambda p=pkg: append_text(
+                                    uninstall_output, f"  ✓ {p} uninstalled\n"
+                                ))
                             else:
-                                dialog.after(0, lambda p=pkg, e=result.stderr: uninstall_output.insert(tk.END, f"  ✗ {p} failed: {e}\n"))
+                                emit_ui(self, lambda p=pkg, e=result.stderr: append_text(
+                                    uninstall_output, f"  ✗ {p} failed: {e}\n"
+                                ))
 
                         except Exception as e:
-                            dialog.after(0, lambda p=pkg, err=str(e): uninstall_output.insert(tk.END, f"  ✗ {p} error: {err}\n"))
+                            emit_ui(self, lambda p=pkg, err=str(e): append_text(
+                                uninstall_output, f"  ✗ {p} error: {err}\n"
+                            ))
 
-                    dialog.after(0, load_installed_packages)
-                    dialog.after(0, lambda: uninstall_output.insert(tk.END, "\nBatch uninstallation complete!\n"))
+                    emit_ui(self, load_installed_packages)
+                    emit_ui(self, lambda: append_text(
+                        uninstall_output, "\nBatch uninstallation complete!\n"
+                    ))
 
                 threading.Thread(target=run_uninstallation, daemon=True).start()
 
@@ -440,8 +469,8 @@ class AutomationMixin:
                             # Apply filter
                             filter_text = filter_var.get().lower()
                             if not filter_text or filter_text in line.lower():
-                                dialog.after(0, lambda l=line, t=tag: [
-                                    logcat_text.insert(tk.END, l, t),
+                                emit_ui(self, lambda l=line, t=tag: [
+                                    append_text(logcat_text, l, tag=t),
                                     logcat_text.see(tk.END)
                                 ])
 

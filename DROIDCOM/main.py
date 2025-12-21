@@ -6,7 +6,7 @@ Entry point for running the application standalone.
 from pathlib import Path
 import sys
 
-from .ui.qt_compat import tk
+from PySide6 import QtWidgets
 
 if __package__:
     from .app import AndroidToolsModule
@@ -18,15 +18,19 @@ else:
 
 def main():
     """Main entry point for the application"""
-    root = tk.Tk()
-    root.title("Android Tools Module Test")
-    root.geometry("700x800")
-    root.option_add('*applicationVersion', '1.0.0')
+    qt_app = QtWidgets.QApplication(sys.argv)
+    qt_app.setApplicationVersion("1.0.0")
 
-    app = AndroidToolsModule(root)
-    app.pack(expand=True, fill="both")
+    window = QtWidgets.QWidget()
+    window.setWindowTitle("Android Tools Module Test")
+    window.resize(700, 800)
 
-    root.mainloop()
+    layout = QtWidgets.QVBoxLayout(window)
+    app = AndroidToolsModule(window)
+    layout.addWidget(app)
+
+    window.show()
+    qt_app.exec()
 
 
 # For testing the module independently
