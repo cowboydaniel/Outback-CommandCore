@@ -492,17 +492,25 @@ class AutomationMixin:
                                 )
 
                     except Exception as e:
-                        pass
+                        emit_ui(
+                            self,
+                            lambda e=e: self.log_message(f"Error reading logcat: {str(e)}"),
+                        )
 
                 threading.Thread(target=read_logcat, daemon=True).start()
 
             def stop_logcat():
                 logcat_running['value'] = False
-                if logcat_running['process']:
+                process = logcat_running.get('process')
+                logcat_running['process'] = None
+                if process:
                     try:
-                        logcat_running['process'].terminate()
-                    except:
-                        pass
+                        process.terminate()
+                    except Exception as e:
+                        emit_ui(
+                            self,
+                            lambda e=e: self.log_message(f"Error stopping logcat: {str(e)}"),
+                        )
 
             def clear_logcat():
                 logcat_text.clear()
