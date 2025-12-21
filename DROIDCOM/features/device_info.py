@@ -185,19 +185,10 @@ class DeviceInfoMixin:
             return None
 
     def _check_tesseract_installed(self):
-        """Check if tesseract is installed without causing a segfault"""
-        try:
-            result = subprocess.run(
-                ['tesseract', '--version'],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                timeout=2
-            )
-            return result.returncode == 0
-        except (FileNotFoundError, subprocess.TimeoutExpired):
-            return False
-        except Exception:
-            return False
+        """Check if tesseract is installed and working safely"""
+        # Disable OCR-based IMEI extraction due to stability issues
+        # The service call and dumpsys methods are more reliable
+        return False
 
     def _dialer_method_worker(self, device_info, serial, adb_cmd, result_list):
         """Worker function for dialer IMEI method - runs in thread with timeout"""
