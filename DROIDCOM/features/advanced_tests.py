@@ -11,6 +11,7 @@ import threading
 import time
 
 from ..constants import IS_WINDOWS
+from ..utils.qt_dispatcher import append_text, emit_ui, set_text
 
 
 class AdvancedTestsMixin:
@@ -3056,7 +3057,7 @@ class AdvancedTestsMixin:
                 )
                 if result.returncode == 0:
                     packages = [line[8:] for line in result.stdout.strip().split('\n') if line.startswith('package:')]
-                    dialog.after(0, lambda: pkg_combo.configure(values=packages))
+                    emit_ui(self, lambda: pkg_combo.configure(values=packages))
 
             threading.Thread(target=load_packages, daemon=True).start()
 
@@ -3092,8 +3093,7 @@ class AdvancedTestsMixin:
             output_text.pack(fill="both", expand=True, pady=10)
 
             # Status
-            status_var = tk.StringVar(value="Ready")
-            status_label = ttk.Label(main_frame, textvariable=status_var)
+            status_label = ttk.Label(main_frame, text="Ready")
             status_label.pack(pady=5)
 
             running = {'value': False}
@@ -3108,7 +3108,7 @@ class AdvancedTestsMixin:
                     return
 
                 running['value'] = True
-                status_var.set("Running...")
+                set_text(status_label, "Running...")
                 output_text.delete(1.0, tk.END)
 
                 def run_monkey():
@@ -3138,18 +3138,18 @@ class AdvancedTestsMixin:
                             if not running['value']:
                                 process.terminate()
                                 break
-                            dialog.after(0, lambda l=line: [
-                                output_text.insert(tk.END, l),
+                            emit_ui(self, lambda l=line: [
+                                append_text(output_text, l),
                                 output_text.see(tk.END)
                             ])
 
                         process.wait()
-                        dialog.after(0, lambda: status_var.set("Completed"))
+                        emit_ui(self, lambda: set_text(status_label, "Completed"))
 
                     except Exception as e:
-                        dialog.after(0, lambda: [
-                            output_text.insert(tk.END, f"\nError: {str(e)}"),
-                            status_var.set("Error")
+                        emit_ui(self, lambda: [
+                            append_text(output_text, f"\nError: {str(e)}"),
+                            set_text(status_label, "Error")
                         ])
                     finally:
                         running['value'] = False
@@ -3158,7 +3158,7 @@ class AdvancedTestsMixin:
 
             def stop_test():
                 running['value'] = False
-                status_var.set("Stopped")
+                set_text(status_label, "Stopped")
 
             buttons_frame = ttk.Frame(main_frame)
             buttons_frame.pack(fill="x", pady=10)
@@ -3249,12 +3249,14 @@ class AdvancedTestsMixin:
 
                         block_count = (size_mb * 1024) // block_kb
 
-                        output_text.insert(tk.END, f"Starting I/O test...\n")
-                        output_text.insert(tk.END, f"File size: {size_mb} MB\n")
-                        output_text.insert(tk.END, f"Block size: {block_kb} KB\n\n")
+                        emit_ui(self, lambda: [
+                            append_text(output_text, "Starting I/O test...\n"),
+                            append_text(output_text, f"File size: {size_mb} MB\n"),
+                            append_text(output_text, f"Block size: {block_kb} KB\n\n")
+                        ])
 
                         if test_type in ["write", "both"]:
-                            output_text.insert(tk.END, "Running write test...\n")
+                            emit_ui(self, lambda: append_text(output_text, "Running write test...\n"))
 
                             cmd = f"dd if=/dev/zero of=/data/local/tmp/iotest bs={block_kb}k count={block_count}"
                             result = subprocess.run(
@@ -3262,13 +3264,13 @@ class AdvancedTestsMixin:
                                 capture_output=True, text=True, timeout=300
                             )
 
-                            dialog.after(0, lambda: [
-                                output_text.insert(tk.END, result.stderr),
-                                output_text.insert(tk.END, "\n")
+                            emit_ui(self, lambda: [
+                                append_text(output_text, result.stderr),
+                                append_text(output_text, "\n")
                             ])
 
                         if test_type in ["read", "both"]:
-                            output_text.insert(tk.END, "Running read test...\n")
+                            emit_ui(self, lambda: append_text(output_text, "Running read test...\n"))
 
                             cmd = f"dd if=/data/local/tmp/iotest of=/dev/null bs={block_kb}k"
                             result = subprocess.run(
@@ -3276,9 +3278,9 @@ class AdvancedTestsMixin:
                                 capture_output=True, text=True, timeout=300
                             )
 
-                            dialog.after(0, lambda: [
-                                output_text.insert(tk.END, result.stderr),
-                                output_text.insert(tk.END, "\n")
+                            emit_ui(self, lambda: [
+                                append_text(output_text, result.stderr),
+                                append_text(output_text, "\n")
                             ])
 
                         # Cleanup
@@ -3287,10 +3289,10 @@ class AdvancedTestsMixin:
                             capture_output=True, text=True, timeout=10
                         )
 
-                        dialog.after(0, lambda: output_text.insert(tk.END, "\nTest completed!\n"))
+                        emit_ui(self, lambda: append_text(output_text, "\nTest completed!\n"))
 
                     except Exception as e:
-                        dialog.after(0, lambda: output_text.insert(tk.END, f"\nError: {str(e)}\n"))
+                        emit_ui(self, lambda: append_text(output_text, f"\nError: {str(e)}\n"))
                     finally:
                         running['value'] = False
 
@@ -3349,7 +3351,7 @@ class AdvancedTestsMixin:
                         capture_output=True, text=True
                     )
                 except Exception as e:
-                    self.after(0, lambda: self.log_message(f"scrcpy error: {str(e)}"))
+                    emit_ui(self, lambda: self.log_message(f"scrcpy error: {str(e)}"))
 
             threading.Thread(target=launch_scrcpy, daemon=True).start()
 
