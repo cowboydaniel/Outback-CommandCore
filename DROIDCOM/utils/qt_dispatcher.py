@@ -25,7 +25,7 @@ def get_ui_dispatcher(owner):
     """Return a cached UiDispatcher for the owner."""
     dispatcher = getattr(owner, "_ui_dispatcher", None)
     if dispatcher is None:
-        dispatcher = UiDispatcher()
+        dispatcher = UiDispatcher(parent=owner)
         owner._ui_dispatcher = dispatcher
     return dispatcher
 
