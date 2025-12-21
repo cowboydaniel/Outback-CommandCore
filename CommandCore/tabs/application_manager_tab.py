@@ -150,8 +150,11 @@ def detect_version(app_path: str) -> str:
         if version:
             return version
     elif 'droidcom' in app_name:
-        # DROIDCOM is a Tkinter app
-        version = get_version_from_file(app_path, [r'root\.option_add\(\s*[\'\"]\*?applicationVersion[\'\"]\s*,\s*[\'\"]([^\'\"]+)[\'\"]\)'])
+        # DROIDCOM uses Qt application version metadata
+        version = get_version_from_file(
+            app_path,
+            [r'setApplicationVersion\(\s*[\'\"]([^\'\"]+)[\'\"]\s*\)']
+        )
         if version:
             return version
     elif 'pc_tools_linux' in app_name:
