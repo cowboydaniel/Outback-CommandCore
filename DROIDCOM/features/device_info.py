@@ -184,9 +184,28 @@ class DeviceInfoMixin:
             self.log_message(f"Error getting device info: {str(e)}")
             return None
 
+    def _check_tesseract_installed(self):
+        """Check if tesseract is installed without causing a segfault"""
+        try:
+            result = subprocess.run(
+                ['tesseract', '--version'],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=2
+            )
+            return result.returncode == 0
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            return False
+        except Exception:
+            return False
+
     def _dialer_method_worker(self, device_info, serial, adb_cmd, result_list):
         """Worker function for dialer IMEI method - runs in thread with timeout"""
         try:
+            # Skip dialer method if tesseract is not available
+            if not self._check_tesseract_installed():
+                return
+
             temp_dir = tempfile.mkdtemp()
             screenshot_path = os.path.join(temp_dir, "imei_screen.png")
 
@@ -296,7 +315,11 @@ class DeviceInfoMixin:
         """Try to get device IMEI using multiple methods"""
         try:
             # Method 1: Using dialer method with OCR (run in thread with timeout)
-            self.log_message("Trying dialer code method to get IMEI...")
+            # Only try this method if tesseract is installed
+            if self._check_tesseract_installed():
+                self.log_message("Trying dialer code method to get IMEI...")
+            else:
+                self.log_message("Skipping dialer method - tesseract OCR not installed, using alternative methods...")
 
             result_list = []
             dialer_thread = threading.Thread(
