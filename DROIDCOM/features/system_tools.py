@@ -318,8 +318,9 @@ class SystemToolsMixin:
                         "\n\n--- DETAILED PER-PROCESS MEMORY USAGE (ROOT) ---\n\n"
                         + proc_output
                     )
-            except Exception:
-                pass
+            except Exception as exc:
+                logging.info("procrank unavailable or permission denied: %s", exc)
+                output += "\n\nprocrank unavailable or permission denied."
 
             emit_ui(self, lambda: text_widget.setPlainText(output))
 
