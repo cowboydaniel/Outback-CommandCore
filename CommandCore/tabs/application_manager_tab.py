@@ -789,9 +789,11 @@ class ApplicationManagerTab(QWidget):
                             print(f"Found running process for {process_name}")
                             return True
                     elif process_name == 'droidcom_process':
-                        if cmdline and 'android_tools_linux.android_tools_linux' in ' '.join(cmdline).lower():
-                            print(f"Found running process for {process_name}")
-                            return True
+                        if cmdline:
+                            cmdline_text = ' '.join(cmdline).lower()
+                            if 'android_tools_linux.py' in cmdline_text or 'droidcom.app' in cmdline_text:
+                                print(f"Found running process for {process_name}")
+                                return True
                     elif process_name == 'hackattack_process':
                         if cmdline and 'hackattack.launch' in ' '.join(cmdline).lower():
                             print(f"Found running process for {process_name}")
