@@ -95,12 +95,12 @@ def test_device_lookup(analyzer, vendor_id, product_id):
 
 def main():
     # Check if we're running in a GUI environment
-    gui_env = 'PyQt5.QtWidgets' in sys.modules
+    gui_env = 'PySide6.QtWidgets' in sys.modules
     
     # Only create QApplication if we're in a GUI environment
     app = None
     if gui_env:
-        from PyQt5.QtWidgets import QApplication
+        from PySide6.QtWidgets import QApplication
         app = QApplication.instance()
         if app is None:
             app = QApplication(sys.argv)

@@ -14,28 +14,19 @@ warnings.filterwarnings("ignore", category=RuntimeWarning)
 # Set environment variable to suppress IBus warning
 os.environ["QT_LOGGING_RULES"] = "qt.dbus.integration.warning=false"
 
-# Import PyQt6 components with error handling for standalone execution
+# Import PySide6 components with error handling for standalone execution
 try:
-    from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
-                                QHBoxLayout, QLabel, QPushButton, QFileDialog, 
-                                QTextEdit, QGroupBox, QFormLayout, QLineEdit, 
-                                QProgressBar, QTabWidget, QTreeWidget, QTreeWidgetItem, 
-                                QHeaderView, QSplitter, QStatusBar)
-    from PyQt6.QtCore import Qt, QThread, pyqtSignal
-    PYQT6_AVAILABLE = True
-except ImportError:
-    try:
-        from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
-                                   QHBoxLayout, QLabel, QPushButton, QFileDialog, 
-                                   QTextEdit, QGroupBox, QFormLayout, QLineEdit, 
-                                   QProgressBar, QTabWidget, QTreeWidget, QTreeWidgetItem, 
+    from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
+                                   QHBoxLayout, QLabel, QPushButton, QFileDialog,
+                                   QTextEdit, QGroupBox, QFormLayout, QLineEdit,
+                                   QProgressBar, QTabWidget, QTreeWidget, QTreeWidgetItem,
                                    QHeaderView, QSplitter, QStatusBar)
-        from PyQt5.QtCore import Qt, QThread, pyqtSignal
-        PYQT6_AVAILABLE = True
-    except ImportError:
-        PYQT6_AVAILABLE = False
-        print("Error: PyQt6 or PyQt5 is required to run this application.")
-        sys.exit(1)
+    from PySide6.QtCore import Qt, QThread, Signal
+    PYSIDE6_AVAILABLE = True
+except ImportError:
+    PYSIDE6_AVAILABLE = False
+    print("Error: PySide6 is required to run this application.")
+    sys.exit(1)
 
 class FirmwareAnalysisGUI(QWidget):
     """
@@ -459,7 +450,7 @@ class FirmwareAnalysisGUI(QWidget):
 
 class FirmwareAnalysisThread(QThread):
     """Thread for running firmware analysis in the background"""
-    analysis_complete = pyqtSignal(dict)
+    analysis_complete = Signal(dict)
     
     def __init__(self, firmware_path):
         super().__init__()
@@ -503,7 +494,7 @@ class FirmwareAnalysisThread(QThread):
 
 class SecurityCheckThread(QThread):
     """Thread for running security checks in the background"""
-    results_ready = pyqtSignal(dict)
+    results_ready = Signal(dict)
     
     def run(self):
         results = {}
@@ -751,8 +742,8 @@ class SecurityCheckThread(QThread):
 
 def main():
     """Main function to run the Firmware & OS Analysis as a standalone application"""
-    if not PYQT6_AVAILABLE:
-        print("Error: PyQt6 or PyQt5 is required to run this application.")
+    if not PYSIDE6_AVAILABLE:
+        print("Error: PySide6 is required to run this application.")
         return 1
     
     app = QApplication(sys.argv)

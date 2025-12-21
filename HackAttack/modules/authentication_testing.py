@@ -39,16 +39,16 @@ logger.info(f"Log file: {os.path.abspath(log_file)}")
 # GUI Dependencies (only imported when running as standalone)
 GUI_ENABLED = True
 try:
-    from PyQt6.QtCore import QThread, pyqtSignal, Qt, QSize, QTimer, QEventLoop
-    from PyQt6.QtGui import QIcon, QFont, QColor, QAction, QTextCursor, QIntValidator
-    from PyQt6.QtWidgets import (
+    from PySide6.QtCore import QThread, Signal, Qt, QSize, QTimer, QEventLoop
+    from PySide6.QtGui import QIcon, QFont, QColor, QAction, QTextCursor, QIntValidator
+    from PySide6.QtWidgets import (
         QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
         QPushButton, QTreeWidget, QTreeWidgetItem, QTabWidget, QLabel,
         QStatusBar, QMessageBox, QFileDialog, QTableWidget, QTableWidgetItem,
         QLineEdit, QProgressBar, QHeaderView, QStyle, QMenu, QGroupBox,
         QFormLayout, QCheckBox, QComboBox, QSpinBox, QDoubleSpinBox, QTextEdit, QSplitter
     )
-    from PyQt6 import QtCore, QtGui, QtWidgets
+    from PySide6 import QtCore, QtGui, QtWidgets
     GUI_ENABLED = True
 except Exception as e:
     print(f"GUI disabled: {e}")
@@ -58,8 +58,8 @@ except Exception as e:
 
 class BruteForcePasswordThread(QThread):
     """Thread for running password brute force simulation in the background."""
-    update_signal = pyqtSignal(dict)
-    finished_signal = pyqtSignal(dict)
+    update_signal = Signal(dict)
+    finished_signal = Signal(dict)
     
     def __init__(self, target_password, charset, min_length, max_length, max_attempts, delay):
         super().__init__()
@@ -396,8 +396,8 @@ class BruteForcePasswordThread(QThread):
 
 class BruteForceThread(QThread):
     """Thread for running PIN brute force simulation in the background."""
-    update_signal = pyqtSignal(dict)
-    finished_signal = pyqtSignal(dict)
+    update_signal = Signal(dict)
+    finished_signal = Signal(dict)
     
     def __init__(self, target_pin, max_attempts, delay):
         super().__init__()
@@ -1860,7 +1860,7 @@ class AuthenticationTestingGUI(QMainWindow):
 def main():
     """Main function to run the Authentication Testing tool as a standalone application."""
     if not GUI_ENABLED:
-        print("GUI dependencies not available. Please install PyQt6 to use the GUI.")
+        print("GUI dependencies not available. Please install PySide6 to use the GUI.")
         return 1
         
     try:

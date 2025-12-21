@@ -55,7 +55,9 @@ unicorn>=2.0.0
 peepdf>=0.4.2
 
 # GUI & Visualization
-PyQt5>=5.15.7
+PySide6>=6.4.0
+PySide6-Addons>=6.4.0
+PySide6-Essentials>=6.4.0
 pyqtgraph>=0.12.4
 matplotlib>=3.5.1
 qdarkstyle>=3.1.0
