@@ -418,6 +418,7 @@ class ConnectionMixin:
         try:
             emit_ui(self, lambda: self.update_status("Refreshing device list..."))
             emit_ui(self, lambda: self.log_message("Refreshing list of connected Android devices..."))
+            emit_ui(self, lambda: self.device_listbox.clear())
 
             if IS_WINDOWS:
                 adb_path = self._find_adb_path()
@@ -427,8 +428,6 @@ class ConnectionMixin:
                 adb_cmd = adb_path
             else:
                 adb_cmd = 'adb'
-
-            QtCore.QTimer.singleShot(0, lambda: self.device_listbox.clear())
 
             result = subprocess.run(
                 [adb_cmd, 'devices', '-l'],
@@ -449,6 +448,8 @@ class ConnectionMixin:
 
             if len(lines) > 1:
                 devices = []
+                display_items = []
+
                 for line in lines[1:]:
                     if line.strip():
                         parts = line.strip().split()
@@ -456,38 +457,31 @@ class ConnectionMixin:
                             serial = parts[0]
                             status = parts[1]
 
-                            device_info = {
-                                'serial': serial,
-                                'status': status,
-                                'details': ' '.join(parts[2:]) if len(parts) > 2 else ''
-                            }
-
                             if status == 'device':
+                                device_info = {
+                                    'serial': serial,
+                                    'status': status,
+                                    'details': ' '.join(parts[2:]) if len(parts) > 2 else ''
+                                }
                                 devices.append(device_info)
 
-                if devices:
-                    display_items = []
-                    for idx, device in enumerate(devices):
-                        display_text = f"{device['serial']}"
-                        if device['details']:
-                            model_info = ''
-                            for detail in device['details'].split():
-                                if detail.startswith('model:'):
-                                    model_info = detail.split(':', 1)[1]
-                                    break
+                                # Extract model information for display
+                                display_text = f"{device_info['serial']}"
+                                if device_info['details']:
+                                    for detail in device_info['details'].split():
+                                        if detail.startswith('model:'):
+                                            model_info = detail.split(':', 1)[1]
+                                            display_text = f"{model_info} ({device_info['serial']})"
+                                            break
 
-                            if model_info:
-                                display_text = f"{model_info} ({device['serial']})"
+                                display_items.append(display_text)
 
-                        QtCore.QTimer.singleShot(
-                            0, lambda t=display_text: self.device_listbox.addItem(t)
-                        )
-
+                if display_items:
                     def update_ui():
                         for item in display_items:
-                            self.device_listbox.insert(tk.END, item)
-                        self.log_message(f"Found {len(devices)} connected device(s)")
-                        self.update_status(f"{len(devices)} device(s) found")
+                            self.device_listbox.addItem(item)
+                        self.log_message(f"Found {len(display_items)} connected device(s)")
+                        self.update_status(f"{len(display_items)} device(s) found")
 
                     emit_ui(self, update_ui)
                 else:
