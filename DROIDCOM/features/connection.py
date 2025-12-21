@@ -40,7 +40,7 @@ class ConnectionMixin:
         def update_output(message):
             def append_text():
                 output_text.appendPlainText(message)
-            QtCore.QTimer.singleShot(0, append_text)
+            emit_ui(self, append_text)
 
         # Start the setup process
         update_output("Setting up WiFi ADB...")
@@ -97,8 +97,8 @@ class ConnectionMixin:
                     # Check if connection was successful
                     if 'connected' in connect_result.lower():
                         update_output("\nWiFi ADB connection successful!")
-                        # Update device list to show the new wireless connection
-                        QtCore.QTimer.singleShot(1000, self.refresh_device_list)
+                        # Update device list to show the new wireless connection (1 second delay)
+                        threading.Timer(1.0, self.refresh_device_list).start()
                     else:
                         update_output(f"\nFailed to connect wirelessly. Please try manually:\nadb connect {ip}:5555")
                 except Exception as e:
@@ -302,7 +302,8 @@ class ConnectionMixin:
                         self.device_listbox.scrollToItem(
                             self.device_listbox.item(connected_device_index)
                         )
-                        QtCore.QTimer.singleShot(100, self._trigger_connect)
+                        # Schedule connection after brief delay using threading (safe from worker thread)
+                        threading.Timer(0.1, lambda: emit_ui(self, self._trigger_connect)).start()
                     else:
                         self.log_message("Auto-connect: No available devices found for automatic connection")
                 else:
