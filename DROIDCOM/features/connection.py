@@ -97,8 +97,11 @@ class ConnectionMixin:
                     # Check if connection was successful
                     if 'connected' in connect_result.lower():
                         update_output("\nWiFi ADB connection successful!")
-                        # Update device list to show the new wireless connection (1 second delay)
-                        threading.Timer(1.0, self.refresh_device_list).start()
+                        # Update device list to show the new wireless connection after brief delay
+                        def refresh_with_delay():
+                            time.sleep(1.0)
+                            self.refresh_device_list()
+                        threading.Thread(target=refresh_with_delay, daemon=True).start()
                     else:
                         update_output(f"\nFailed to connect wirelessly. Please try manually:\nadb connect {ip}:5555")
                 except Exception as e:
@@ -302,8 +305,8 @@ class ConnectionMixin:
                         self.device_listbox.scrollToItem(
                             self.device_listbox.item(connected_device_index)
                         )
-                        # Schedule connection after brief delay using threading (safe from worker thread)
-                        threading.Timer(0.1, lambda: emit_ui(self, self._trigger_connect)).start()
+                        # Schedule connection on main thread (emit_ui handles thread marshalling)
+                        emit_ui(self, self._trigger_connect)
                     else:
                         self.log_message("Auto-connect: No available devices found for automatic connection")
                 else:
