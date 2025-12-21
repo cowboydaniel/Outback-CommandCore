@@ -3,8 +3,8 @@ DROIDCOM - Automation Feature Module
 Handles automation features like shell scripts, batch operations, etc.
 """
 
-import tkinter as tk
-from tkinter import ttk, messagebox, filedialog, scrolledtext
+from ..ui.qt_compat import tk
+from ..ui.qt_compat import ttk, messagebox, filedialog, scrolledtext
 import subprocess
 import threading
 import os

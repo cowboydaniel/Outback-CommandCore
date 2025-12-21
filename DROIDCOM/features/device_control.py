@@ -3,8 +3,8 @@ DROIDCOM - Device Control Feature Module
 Handles device control operations like reboot, toggles, etc.
 """
 
-import tkinter as tk
-from tkinter import ttk, messagebox
+from ..ui.qt_compat import tk
+from ..ui.qt_compat import ttk, messagebox
 import subprocess
 import logging
 

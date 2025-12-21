@@ -3,8 +3,8 @@ DROIDCOM - Security Feature Module
 Handles security-related features like root check, encryption status, etc.
 """
 
-import tkinter as tk
-from tkinter import ttk, messagebox, scrolledtext
+from ..ui.qt_compat import tk
+from ..ui.qt_compat import ttk, messagebox, scrolledtext
 import subprocess
 import threading
 import logging
