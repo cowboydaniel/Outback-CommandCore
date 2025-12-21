@@ -195,14 +195,14 @@ class AdvancedTestsMixin:
 
         # Function to update output in the text widget
         def update_output(text):
-            QTimer.singleShot(0, lambda: [
+            emit_ui(self, lambda: [
                 output_text.append(text),
                 output_text.moveCursor(QTextCursor.End)
             ])
 
         # Update status in the window
         def update_status(text):
-            QTimer.singleShot(0, lambda: status_label.setText(text))
+            emit_ui(self, lambda: status_label.setText(text))
 
         # Function to save the current sequence
         def save_sequence():
@@ -612,18 +612,18 @@ class AdvancedTestsMixin:
 
         # Function to update output in the text widget
         def update_output(text):
-            QTimer.singleShot(0, lambda: [
+            emit_ui(self, lambda: [
                 output_text.append(text),
                 output_text.moveCursor(QTextCursor.End)
             ])
 
         # Update status in the window
         def update_status(text):
-            QTimer.singleShot(0, lambda: status_label.setText(text))
+            emit_ui(self, lambda: status_label.setText(text))
 
         # Update battery info display
         def update_battery_info(text):
-            QTimer.singleShot(0, lambda: batt_info_label.setText(text))
+            emit_ui(self, lambda: batt_info_label.setText(text))
 
         # Start the test in a separate thread
         threading.Thread(
@@ -918,14 +918,14 @@ class AdvancedTestsMixin:
 
         # Function to update output in the text widget
         def update_output(text):
-            QTimer.singleShot(0, lambda: [
+            emit_ui(self, lambda: [
                 output_text.append(text),
                 output_text.moveCursor(QTextCursor.End)
             ])
 
         # Update status in the window
         def update_status(text):
-            QTimer.singleShot(0, lambda: status_label.setText(text))
+            emit_ui(self, lambda: status_label.setText(text))
 
         # Function to refresh app list
         def refresh_apps():
@@ -1322,14 +1322,14 @@ class AdvancedTestsMixin:
 
         # Function to update output in the text widget
         def update_output(text):
-            QTimer.singleShot(0, lambda: [
+            emit_ui(self, lambda: [
                 output_text.append(text),
                 output_text.moveCursor(QTextCursor.End)
             ])
 
         # Update status in the window
         def update_status(text):
-            QTimer.singleShot(0, lambda: status_label.setText(text))
+            emit_ui(self, lambda: status_label.setText(text))
 
         # Start the test in a separate thread
         threading.Thread(
@@ -1531,18 +1531,18 @@ class AdvancedTestsMixin:
 
         # Function to update output in the text widget
         def update_output(text):
-            QTimer.singleShot(0, lambda: [
+            emit_ui(self, lambda: [
                 output_text.append(text),
                 output_text.moveCursor(QTextCursor.End)
             ])
 
         # Update status in the window
         def update_status(text):
-            QTimer.singleShot(0, lambda: status_label.setText(text))
+            emit_ui(self, lambda: status_label.setText(text))
 
         # Update memory info display
         def update_memory_info(text):
-            QTimer.singleShot(0, lambda: mem_info_label.setText(text))
+            emit_ui(self, lambda: mem_info_label.setText(text))
 
         # Start the test in a separate thread
         threading.Thread(
@@ -1880,14 +1880,14 @@ class AdvancedTestsMixin:
 
         # Function to update output in the text widget
         def update_output(text):
-            QTimer.singleShot(0, lambda: [
+            emit_ui(self, lambda: [
                 output_text.append(text),
                 output_text.moveCursor(QTextCursor.End)
             ])
 
         # Update status in the window
         def update_status(text):
-            QTimer.singleShot(0, lambda: status_label.setText(text))
+            emit_ui(self, lambda: status_label.setText(text))
 
         # Start the test in a separate thread
         threading.Thread(
@@ -2138,18 +2138,18 @@ class AdvancedTestsMixin:
 
         # Function to update output in the text widget
         def update_output(text):
-            QTimer.singleShot(0, lambda: [
+            emit_ui(self, lambda: [
                 output_text.append(text),
                 output_text.moveCursor(QTextCursor.End)
             ])
 
         # Update status in the window
         def update_status(text):
-            QTimer.singleShot(0, lambda: status_label.setText(text))
+            emit_ui(self, lambda: status_label.setText(text))
 
         # Update cache info display
         def update_cache_info(text):
-            QTimer.singleShot(0, lambda: cache_info_label.setText(text))
+            emit_ui(self, lambda: cache_info_label.setText(text))
 
         # Start the test in a separate thread
         threading.Thread(
@@ -2571,7 +2571,7 @@ class AdvancedTestsMixin:
 
         # Function to update results
         def update_result(message):
-            QTimer.singleShot(0, lambda: [
+            emit_ui(self, lambda: [
                 result_text.append(message),
                 result_text.moveCursor(QTextCursor.End)
             ])
@@ -2583,7 +2583,7 @@ class AdvancedTestsMixin:
                 if message:
                     status_label.setText(message)
 
-            QTimer.singleShot(0, apply_progress)
+            emit_ui(self, apply_progress)
 
         # Function called when benchmark is complete
         def on_benchmark_complete():
@@ -2593,7 +2593,7 @@ class AdvancedTestsMixin:
                 running[0] = False
                 status_label.setText("Completed")
 
-            QTimer.singleShot(0, finalize)
+            emit_ui(self, finalize)
 
         # Add buttons
         start_btn = QPushButton("Start")
@@ -3072,7 +3072,7 @@ class AdvancedTestsMixin:
                 )
                 if result.returncode == 0:
                     packages = [line[8:] for line in result.stdout.strip().split('\n') if line.startswith('package:')]
-                    QTimer.singleShot(0, lambda: pkg_combo.addItems(packages))
+                    emit_ui(self, lambda: pkg_combo.addItems(packages))
 
             threading.Thread(target=load_packages, daemon=True).start()
 
@@ -3160,17 +3160,17 @@ class AdvancedTestsMixin:
                             if not running['value']:
                                 process.terminate()
                                 break
-                            QTimer.singleShot(0, lambda l=line: output_text.append(l.rstrip("\n")))
+                            emit_ui(self, lambda l=line: output_text.append(l.rstrip("\n")))
 
                         process.wait()
-                        QTimer.singleShot(0, lambda: status_label.setText("Completed"))
+                        emit_ui(self, lambda: status_label.setText("Completed"))
 
                     except Exception as e:
                         def report_error():
                             output_text.append(f"\nError: {str(e)}")
                             status_label.setText("Error")
 
-                        QTimer.singleShot(0, report_error)
+                        emit_ui(self, report_error)
                     finally:
                         running['value'] = False
 
@@ -3277,7 +3277,7 @@ class AdvancedTestsMixin:
 
             running = {'value': False}
             def append_output(message):
-                QTimer.singleShot(0, lambda: output_text.append(message))
+                emit_ui(self, lambda: output_text.append(message))
 
             def run_io_test():
                 if running['value']:
@@ -3400,7 +3400,7 @@ class AdvancedTestsMixin:
                         capture_output=True, text=True
                     )
                 except Exception as e:
-                    QTimer.singleShot(0, lambda: self.log_message(f"scrcpy error: {str(e)}"))
+                    emit_ui(self, lambda: self.log_message(f"scrcpy error: {str(e)}"))
 
             threading.Thread(target=launch_scrcpy, daemon=True).start()
 

@@ -15,6 +15,7 @@ import urllib.request
 
 from .constants import IS_WINDOWS
 from .dependencies import check_and_install_android_dependencies
+from .utils.qt_dispatcher import emit_ui
 
 # Import UI mixin
 from .ui.widgets import WidgetsMixin
@@ -302,9 +303,7 @@ class AndroidToolsModule(
                 self.log_message(f"Failed to clean up temporary files: {str(e)}")
 
             # Update UI to reflect successful installation
-            QtCore.QTimer.singleShot(
-                0, lambda: self.tools_label.setText("Android Platform Tools: ✅ Installed")
-            )
+            emit_ui(self, lambda: self.tools_label.setText("Android Platform Tools: ✅ Installed"))
             self.platform_tools_installed = True
 
             # Show success message with PATH instructions
