@@ -186,49 +186,189 @@ class DeviceInfoMixin:
     def _get_device_imei(self, device_info, serial, adb_cmd):
         """Try to get device IMEI using multiple methods"""
         try:
-            # Method 1: Skip dialer/OCR method - causes memory corruption with screencap subprocess
-            # This method requires a display and tesseract, and causes adb crashes
-            pass
+            # Method 1: Using dialer method with OCR
+            self.log_message("Trying dialer code method to get IMEI...")
+
+            temp_dir = tempfile.mkdtemp()
+            screenshot_path = os.path.join(temp_dir, "imei_screen.png")
+
+            try:
+                # Launch the dialer with *#06# code
+                try:
+                    subprocess.run(
+                        [adb_cmd, '-s', serial, 'shell', 'am', 'start', '-a', 'android.intent.action.DIAL'],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        timeout=10
+                    )
+                except Exception:
+                    pass
+
+                time.sleep(2)
+
+                # Use Popen with communicate for better subprocess handling
+                try:
+                    dial_proc = subprocess.Popen(
+                        [adb_cmd, '-s', serial, 'shell', 'am', 'start', '-a', 'android.intent.action.DIAL', '-d', 'tel:*#06#'],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE
+                    )
+                    try:
+                        dial_proc.communicate(timeout=10)
+                    except subprocess.TimeoutExpired:
+                        dial_proc.kill()
+                        dial_proc.wait()
+                except Exception:
+                    pass
+
+                time.sleep(2)
+
+                # Capture screenshot using Popen with communicate for binary data handling
+                try:
+                    screencap_proc = subprocess.Popen(
+                        [adb_cmd, '-s', serial, 'exec-out', 'screencap', '-p'],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE
+                    )
+                    try:
+                        stdout_data, _ = screencap_proc.communicate(timeout=10)
+                        if screencap_proc.returncode == 0 and stdout_data:
+                            with open(screenshot_path, 'wb') as f:
+                                f.write(stdout_data)
+
+                            try:
+                                # OCR with Popen
+                                ocr_proc = subprocess.Popen(
+                                    ['tesseract', screenshot_path, 'stdout'],
+                                    stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE,
+                                    text=True
+                                )
+                                try:
+                                    ocr_stdout, _ = ocr_proc.communicate(timeout=15)
+                                    if ocr_proc.returncode == 0:
+                                        ocr_text = ocr_stdout.strip()
+                                        self.log_message("OCR text extracted from dialer screen.")
+
+                                        imei = None
+
+                                        for line in ocr_text.split('\n'):
+                                            if 'IMEI' in line.upper() or 'Device ID' in line:
+                                                digits = ''.join(c for c in line if c.isdigit())
+                                                if len(digits) >= 14:
+                                                    imei = digits
+                                                    break
+
+                                        if not imei:
+                                            imei_matches = re.findall(r'\b\d{14,16}\b', ocr_text)
+                                            if imei_matches:
+                                                for match in imei_matches:
+                                                    if 14 <= len(match) <= 16:
+                                                        imei = match
+                                                        break
+
+                                        if imei:
+                                            self.log_message("IMEI found in OCR text!")
+                                            device_info['imei'] = imei
+                                except subprocess.TimeoutExpired:
+                                    ocr_proc.kill()
+                                    ocr_proc.wait()
+                                    self.log_message("OCR processing timed out")
+                            except Exception as e:
+                                self.log_message(f"OCR processing error: {str(e)}")
+                    except subprocess.TimeoutExpired:
+                        screencap_proc.kill()
+                        screencap_proc.wait()
+                        self.log_message("Screenshot capture timed out")
+                except Exception:
+                    pass
+
+            finally:
+                # Clean up temp files properly
+                try:
+                    if os.path.exists(screenshot_path):
+                        os.remove(screenshot_path)
+                except Exception:
+                    pass
+                try:
+                    if os.path.exists(temp_dir):
+                        os.rmdir(temp_dir)
+                except Exception:
+                    pass
 
             # Method 2: service call iphonesubinfo
             if 'imei' not in device_info:
                 self.log_message("Trying service call method for IMEI...")
-                imei_cmd = subprocess.run(
-                    [adb_cmd, '-s', serial, 'shell', 'service', 'call', 'iphonesubinfo', '1'],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                    timeout=5
-                )
-                if imei_cmd.returncode == 0:
-                    imei_output = imei_cmd.stdout.strip()
-                    imei = ''
-                    parcel_found = False
-                    for line in imei_output.split('\n'):
-                        if not parcel_found and 'Parcel' in line:
-                            parcel_found = True
-                        elif parcel_found:
-                            hex_values = line.strip().split()
-                            for hex_val in hex_values:
-                                if hex_val.startswith("'") and hex_val.endswith("'"):
-                                    char = hex_val.strip("'")
-                                    if char.isdigit():
-                                        imei += char
-                                elif len(hex_val) == 2 and hex_val != '00':
-                                    try:
-                                        char = chr(int(hex_val, 16))
-                                        if char.isdigit():
-                                            imei += char
-                                    except:
-                                        pass
+                try:
+                    imei_proc = subprocess.Popen(
+                        [adb_cmd, '-s', serial, 'shell', 'service', 'call', 'iphonesubinfo', '1'],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True
+                    )
+                    try:
+                        stdout_data, _ = imei_proc.communicate(timeout=5)
+                        if imei_proc.returncode == 0:
+                            imei_output = stdout_data.strip()
+                            imei = ''
+                            parcel_found = False
+                            for line in imei_output.split('\n'):
+                                if not parcel_found and 'Parcel' in line:
+                                    parcel_found = True
+                                elif parcel_found:
+                                    hex_values = line.strip().split()
+                                    for hex_val in hex_values:
+                                        if hex_val.startswith("'") and hex_val.endswith("'"):
+                                            char = hex_val.strip("'")
+                                            if char.isdigit():
+                                                imei += char
+                                        elif len(hex_val) == 2 and hex_val != '00':
+                                            try:
+                                                char = chr(int(hex_val, 16))
+                                                if char.isdigit():
+                                                    imei += char
+                                            except:
+                                                pass
 
-                    if imei and len(imei) >= 14:
-                        imei = ''.join(c for c in imei if c.isdigit())
-                        if len(imei) >= 14:
-                            device_info['imei'] = imei
+                            if imei and len(imei) >= 14:
+                                imei = ''.join(c for c in imei if c.isdigit())
+                                if len(imei) >= 14:
+                                    device_info['imei'] = imei
+                    except subprocess.TimeoutExpired:
+                        imei_proc.kill()
+                        imei_proc.wait()
+                        self.log_message("Service call IMEI query timed out")
+                except Exception as e:
+                    self.log_message(f"Service call method error: {str(e)}")
 
-            # Method 3: Skip dumpsys iphonesubinfo - causes adb crashes on some devices
-            # Use Android ID fallback instead
+            # Method 3: dumpsys iphonesubinfo
+            if 'imei' not in device_info:
+                self.log_message("Trying dumpsys method for IMEI...")
+                try:
+                    dumpsys_proc = subprocess.Popen(
+                        [adb_cmd, '-s', serial, 'shell', 'dumpsys', 'iphonesubinfo'],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True
+                    )
+                    try:
+                        stdout_data, _ = dumpsys_proc.communicate(timeout=5)
+                        if dumpsys_proc.returncode == 0:
+                            imei_output = stdout_data.strip()
+                            for line in imei_output.split('\n'):
+                                if 'Device ID' in line or 'IMEI' in line:
+                                    parts = line.split('=' if '=' in line else ':')
+                                    if len(parts) > 1:
+                                        imei = parts[1].strip()
+                                        if imei and len(imei) >= 14 and imei.isdigit():
+                                            device_info['imei'] = imei
+                                            break
+                    except subprocess.TimeoutExpired:
+                        dumpsys_proc.kill()
+                        dumpsys_proc.wait()
+                        self.log_message("Dumpsys IMEI query timed out")
+                except Exception as e:
+                    self.log_message(f"Dumpsys method error: {str(e)}")
 
         except Exception as e:
             self.log_message(f"Error getting IMEI: {str(e)}")
