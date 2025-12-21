@@ -6,7 +6,7 @@ Entry point for running the application standalone.
 from pathlib import Path
 import sys
 
-from PySide6 import QtWidgets
+from PySide6 import QtCore, QtWidgets
 
 if __package__:
     from .app import AndroidToolsModule
@@ -23,7 +23,15 @@ def main():
 
     window = QtWidgets.QWidget()
     window.setWindowTitle("Android Tools Module Test")
-    window.resize(700, 800)
+    # Ensure window has minimize, maximize and close buttons
+    window.setWindowFlags(
+        QtCore.Qt.Window |
+        QtCore.Qt.WindowMinimizeButtonHint |
+        QtCore.Qt.WindowMaximizeButtonHint |
+        QtCore.Qt.WindowCloseButtonHint
+    )
+    # Set a smaller default size that fits most screens
+    window.resize(680, 700)
 
     layout = QtWidgets.QVBoxLayout(window)
     app = AndroidToolsModule(window)

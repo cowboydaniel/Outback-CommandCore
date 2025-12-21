@@ -627,8 +627,8 @@ class WidgetsMixin:
                 f"{category['icon']} {category['name']}", categories_container
             )
             category_frame.setStyleSheet(get_category_frame_style())
-            category_frame.setMinimumHeight(380)
-            category_frame.setMinimumWidth(450)
+            category_frame.setMinimumHeight(280)
+            category_frame.setMinimumWidth(320)
 
             category_layout = QtWidgets.QVBoxLayout(category_frame)
             category_layout.setContentsMargins(12, 20, 12, 12)
