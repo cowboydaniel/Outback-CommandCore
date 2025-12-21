@@ -3395,9 +3395,12 @@ class AdvancedTestsMixin:
 
             def launch_scrcpy():
                 try:
-                    subprocess.run(
+                    # Use Popen to launch scrcpy as an independent GUI process
+                    # Don't capture output so the window can display properly
+                    subprocess.Popen(
                         ["scrcpy", "-s", serial],
-                        capture_output=True, text=True
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL
                     )
                 except Exception as e:
                     emit_ui(self, lambda: self.log_message(f"scrcpy error: {str(e)}"))
