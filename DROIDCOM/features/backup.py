@@ -3,8 +3,7 @@ DROIDCOM - Backup Feature Module
 Handles device backup and restore functionality.
 """
 
-import tkinter as tk
-from tkinter import ttk, messagebox, filedialog
+from PySide6 import QtWidgets, QtCore
 import subprocess
 import os
 import json
@@ -19,108 +18,66 @@ class BackupMixin:
     def backup_device(self):
         """Backup the connected Android device"""
         if not self.device_connected:
-            messagebox.showinfo("Not Connected", "Please connect to a device first.")
+            QtWidgets.QMessageBox.information(
+                self, "Not Connected", "Please connect to a device first."
+            )
             return
 
         # Ask for backup directory
-        backup_path = filedialog.askdirectory(title="Select Backup Directory")
+        backup_path = QtWidgets.QFileDialog.getExistingDirectory(
+            self, "Select Backup Directory"
+        )
 
         if not backup_path:
             return
 
         # Show backup options dialog
-        backup_dialog = tk.Toplevel(self)
-        backup_dialog.title("Backup Options")
-        backup_dialog.geometry("750x850")
-        backup_dialog.resizable(False, False)
+        backup_dialog = QtWidgets.QDialog(self)
+        backup_dialog.setWindowTitle("Backup Options")
+        backup_dialog.resize(750, 850)
+        backup_dialog.setModal(True)
 
-        # Center the dialog
-        x_pos = (self.winfo_screenwidth() - 400) // 2
-        y_pos = (self.winfo_screenheight() - 450) // 2
-        backup_dialog.geometry(f"+{x_pos}+{y_pos}")
+        main_layout = QtWidgets.QVBoxLayout(backup_dialog)
+        title = QtWidgets.QLabel("Android Backup Options")
+        title.setStyleSheet("font-weight: bold;")
+        main_layout.addWidget(title)
 
-        backup_dialog.transient(self)
-        backup_dialog.grab_set()
+        options_group = QtWidgets.QGroupBox("Backup Content")
+        options_layout = QtWidgets.QVBoxLayout(options_group)
 
-        # Main frame
-        main_frame = ttk.Frame(backup_dialog, padding=10)
-        main_frame.pack(fill="both", expand=True)
+        backup_options = {
+            "apps": QtWidgets.QCheckBox("Apps and App Data"),
+            "system": QtWidgets.QCheckBox("System Settings"),
+            "media": QtWidgets.QCheckBox("Media (Photos, Videos, Music)"),
+            "documents": QtWidgets.QCheckBox("Documents and Downloads"),
+            "shared": QtWidgets.QCheckBox("Shared Storage"),
+        }
+        backup_options["apps"].setChecked(True)
+        backup_options["system"].setChecked(True)
+        for key in ("apps", "system", "media", "documents", "shared"):
+            options_layout.addWidget(backup_options[key])
 
-        # Title
-        ttk.Label(
-            main_frame, text="Android Backup Options", font=("Arial", 12, "bold")
-        ).pack(pady=(0, 10))
+        main_layout.addWidget(options_group)
 
-        # Backup options frame
-        options_frame = ttk.LabelFrame(main_frame, text="Backup Content", padding=10)
-        options_frame.pack(fill="x", pady=5)
+        adv_group = QtWidgets.QGroupBox("Advanced Options")
+        adv_layout = QtWidgets.QVBoxLayout(adv_group)
+        backup_options["encrypt"] = QtWidgets.QCheckBox("Encrypt Backup (Password Protected)")
+        adv_layout.addWidget(backup_options["encrypt"])
+        main_layout.addWidget(adv_group)
 
-        # Checkboxes
-        backup_options = {}
-
-        backup_options['apps'] = tk.BooleanVar(value=True)
-        ttk.Checkbutton(
-            options_frame, text="Apps and App Data",
-            variable=backup_options['apps']
-        ).pack(anchor="w", pady=2)
-
-        backup_options['system'] = tk.BooleanVar(value=True)
-        ttk.Checkbutton(
-            options_frame, text="System Settings",
-            variable=backup_options['system']
-        ).pack(anchor="w", pady=2)
-
-        backup_options['media'] = tk.BooleanVar(value=False)
-        ttk.Checkbutton(
-            options_frame, text="Media (Photos, Videos, Music)",
-            variable=backup_options['media']
-        ).pack(anchor="w", pady=2)
-
-        backup_options['documents'] = tk.BooleanVar(value=False)
-        ttk.Checkbutton(
-            options_frame, text="Documents and Downloads",
-            variable=backup_options['documents']
-        ).pack(anchor="w", pady=2)
-
-        backup_options['shared'] = tk.BooleanVar(value=False)
-        ttk.Checkbutton(
-            options_frame, text="Shared Storage",
-            variable=backup_options['shared']
-        ).pack(anchor="w", pady=2)
-
-        # Advanced options
-        adv_frame = ttk.LabelFrame(main_frame, text="Advanced Options", padding=10)
-        adv_frame.pack(fill="x", pady=5)
-
-        backup_options['encrypt'] = tk.BooleanVar(value=False)
-        ttk.Checkbutton(
-            adv_frame, text="Encrypt Backup (Password Protected)",
-            variable=backup_options['encrypt']
-        ).pack(anchor="w", pady=2)
-
-        # Separator
-        ttk.Separator(main_frame, orient="horizontal").pack(fill="x", pady=15)
-
-        # Buttons frame
-        buttons_frame = ttk.Frame(main_frame)
-        buttons_frame.pack(fill="x", pady=10)
-
-        btn_container = ttk.Frame(buttons_frame)
-        btn_container.pack(fill="x")
-
-        cancel_btn = ttk.Button(
-            btn_container, text="Cancel", width=15,
-            command=backup_dialog.destroy
+        button_layout = QtWidgets.QHBoxLayout()
+        start_btn = QtWidgets.QPushButton("Start Backup")
+        start_btn.clicked.connect(
+            lambda: self._start_backup(backup_dialog, backup_path, backup_options)
         )
-        cancel_btn.pack(side="right", padx=5)
+        cancel_btn = QtWidgets.QPushButton("Cancel")
+        cancel_btn.clicked.connect(backup_dialog.close)
+        button_layout.addStretch()
+        button_layout.addWidget(start_btn)
+        button_layout.addWidget(cancel_btn)
+        main_layout.addLayout(button_layout)
 
-        start_btn = ttk.Button(
-            btn_container, text="Start Backup", width=15,
-            command=lambda: self._start_backup(backup_dialog, backup_path, backup_options)
-        )
-        start_btn.pack(side="right", padx=5)
-
-        self.wait_window(backup_dialog)
+        backup_dialog.exec()
 
     def _start_backup(self, dialog, backup_path, options):
         """Start the backup process"""
@@ -159,14 +116,14 @@ class BackupMixin:
             # Build backup command
             backup_flags = []
 
-            if options['apps'].get():
+            if options['apps'].isChecked():
                 backup_flags.append("-apk")
                 backup_flags.append("-all")
 
-            if options['system'].get():
+            if options['system'].isChecked():
                 backup_flags.append("-system")
 
-            if options['shared'].get():
+            if options['shared'].isChecked():
                 backup_flags.append("-shared")
 
             backup_file = os.path.join(backup_folder, "backup.ab")
@@ -178,11 +135,15 @@ class BackupMixin:
             self.log_message("Starting ADB backup (you may need to confirm on your device)")
             self.update_status("Backup in progress...")
 
-            self.after(0, lambda: messagebox.showinfo(
-                "Backup Started",
-                "The backup process has started. You may need to unlock your device and confirm the backup.\n\n"
-                "Please DO NOT disconnect your device until the backup is complete."
-            ))
+            QtCore.QTimer.singleShot(
+                0,
+                lambda: QtWidgets.QMessageBox.information(
+                    self,
+                    "Backup Started",
+                    "The backup process has started. You may need to unlock your device and confirm the backup.\n\n"
+                    "Please DO NOT disconnect your device until the backup is complete.",
+                ),
+            )
 
             result = subprocess.run(
                 cmd,
@@ -195,11 +156,13 @@ class BackupMixin:
             if result.returncode != 0:
                 self.log_message(f"Backup failed: {result.stderr.strip()}")
                 self.update_status("Backup failed")
-                messagebox.showerror("Backup Error", f"Failed to backup device: {result.stderr.strip()}")
+                QtWidgets.QMessageBox.critical(
+                    self, "Backup Error", f"Failed to backup device: {result.stderr.strip()}"
+                )
                 return
 
             # Backup files if selected
-            if options['media'].get() or options['documents'].get():
+            if options['media'].isChecked() or options['documents'].isChecked():
                 self._backup_files(adb_cmd, serial, backup_folder, options)
 
             # Create backup info file
@@ -208,28 +171,32 @@ class BackupMixin:
             self.log_message("Device backup completed successfully")
             self.update_status("Backup completed")
 
-            messagebox.showinfo(
+            QtWidgets.QMessageBox.information(
+                self,
                 "Backup Complete",
-                f"Your device has been successfully backed up to:\n{backup_folder}"
+                f"Your device has been successfully backed up to:\n{backup_folder}",
             )
 
         except subprocess.TimeoutExpired:
             self.log_message("Backup timeout - this may be normal if the backup is large")
             self.update_status("Backup in progress on device")
-            messagebox.showinfo(
+            QtWidgets.QMessageBox.information(
+                self,
                 "Backup In Progress",
                 "The backup is being processed on your device. This may take some time.\n\n"
-                "You will need to confirm the backup on your device and wait for it to complete."
+                "You will need to confirm the backup on your device and wait for it to complete.",
             )
         except Exception as e:
             self.log_message(f"Error during backup: {str(e)}")
             self.update_status("Backup failed")
-            messagebox.showerror("Backup Error", f"Failed to backup device: {str(e)}")
+            QtWidgets.QMessageBox.critical(
+                self, "Backup Error", f"Failed to backup device: {str(e)}"
+            )
 
     def _backup_files(self, adb_cmd, serial, backup_folder, options):
         """Backup files from the device"""
         try:
-            if options['media'].get():
+            if options['media'].isChecked():
                 media_folder = os.path.join(backup_folder, "Media")
                 os.makedirs(os.path.join(media_folder, "Pictures"), exist_ok=True)
                 os.makedirs(os.path.join(media_folder, "Videos"), exist_ok=True)
@@ -256,7 +223,7 @@ class BackupMixin:
                     stderr=subprocess.PIPE
                 )
 
-            if options['documents'].get():
+            if options['documents'].isChecked():
                 docs_folder = os.path.join(backup_folder, "Documents")
                 os.makedirs(docs_folder, exist_ok=True)
 

@@ -3,8 +3,6 @@ DROIDCOM - Device Info Feature Module
 Handles device information retrieval and display.
 """
 
-import tkinter as tk
-from tkinter import messagebox
 import subprocess
 import tempfile
 import time

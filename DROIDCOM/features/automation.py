@@ -3,8 +3,7 @@ DROIDCOM - Automation Feature Module
 Handles automation features like shell scripts, batch operations, etc.
 """
 
-import tkinter as tk
-from tkinter import ttk, messagebox, filedialog, scrolledtext
+from PySide6 import QtWidgets, QtCore
 import subprocess
 import threading
 import os
@@ -18,73 +17,71 @@ class AutomationMixin:
     def _run_shell_script_dialog(self):
         """Show dialog to run a shell script on the device"""
         if not self.device_connected:
-            messagebox.showinfo("Not Connected", "Please connect to a device first.")
+            QtWidgets.QMessageBox.information(
+                self, "Not Connected", "Please connect to a device first."
+            )
             return
 
         try:
             serial = self.device_serial
             adb_cmd = self.adb_path if IS_WINDOWS else "adb"
 
-            dialog = tk.Toplevel(self)
-            dialog.title("Run Shell Script")
-            dialog.geometry("700x500")
-            dialog.transient(self)
-            dialog.grab_set()
+            dialog = QtWidgets.QDialog(self)
+            dialog.setWindowTitle("Run Shell Script")
+            dialog.resize(700, 500)
+            dialog.setModal(True)
 
-            x_pos = (self.winfo_screenwidth() - 700) // 2
-            y_pos = (self.winfo_screenheight() - 500) // 2
-            dialog.geometry(f"+{x_pos}+{y_pos}")
+            main_layout = QtWidgets.QVBoxLayout(dialog)
+            title = QtWidgets.QLabel("Run Shell Script")
+            title.setStyleSheet("font-weight: bold;")
+            main_layout.addWidget(title)
 
-            main_frame = ttk.Frame(dialog, padding=20)
-            main_frame.pack(fill="both", expand=True)
-
-            ttk.Label(main_frame, text="Run Shell Script", font=("Arial", 12, "bold")).pack(pady=(0, 10))
-
-            # Script file selection
-            file_frame = ttk.Frame(main_frame)
-            file_frame.pack(fill="x", pady=5)
-
-            ttk.Label(file_frame, text="Script file:").pack(side="left")
-            file_var = tk.StringVar()
-            file_entry = ttk.Entry(file_frame, textvariable=file_var, width=50)
-            file_entry.pack(side="left", padx=5, fill="x", expand=True)
+            file_layout = QtWidgets.QHBoxLayout()
+            file_layout.addWidget(QtWidgets.QLabel("Script file:"))
+            file_entry = QtWidgets.QLineEdit()
+            file_layout.addWidget(file_entry)
 
             def browse_script():
-                file_path = filedialog.askopenfilename(
-                    title="Select Script",
-                    filetypes=[("Shell scripts", "*.sh"), ("All files", "*.*")]
+                file_path, _ = QtWidgets.QFileDialog.getOpenFileName(
+                    self,
+                    "Select Script",
+                    "",
+                    "Shell scripts (*.sh);;All files (*.*)",
                 )
                 if file_path:
-                    file_var.set(file_path)
+                    file_entry.setText(file_path)
                     # Load script content
                     try:
                         with open(file_path, 'r') as f:
-                            script_text.delete(1.0, tk.END)
-                            script_text.insert(tk.END, f.read())
+                            script_text.setPlainText(f.read())
                     except Exception as e:
-                        messagebox.showerror("Error", f"Failed to read script: {str(e)}")
+                        QtWidgets.QMessageBox.critical(
+                            self, "Error", f"Failed to read script: {str(e)}"
+                        )
 
-            ttk.Button(file_frame, text="Browse", command=browse_script).pack(side="left")
+            browse_btn = QtWidgets.QPushButton("Browse")
+            browse_btn.clicked.connect(browse_script)
+            file_layout.addWidget(browse_btn)
+            main_layout.addLayout(file_layout)
 
-            # Script content
-            ttk.Label(main_frame, text="Script content:").pack(anchor="w", pady=(10, 5))
+            main_layout.addWidget(QtWidgets.QLabel("Script content:"))
+            script_text = QtWidgets.QPlainTextEdit()
+            script_text.setLineWrapMode(QtWidgets.QPlainTextEdit.WidgetWidth)
+            main_layout.addWidget(script_text)
 
-            script_text = scrolledtext.ScrolledText(main_frame, wrap=tk.WORD, height=10, width=70)
-            script_text.pack(fill="both", expand=True, pady=5)
-
-            # Output
-            ttk.Label(main_frame, text="Output:").pack(anchor="w", pady=(10, 5))
-
-            output_text = scrolledtext.ScrolledText(main_frame, wrap=tk.WORD, height=8, width=70)
-            output_text.pack(fill="both", expand=True, pady=5)
+            main_layout.addWidget(QtWidgets.QLabel("Output:"))
+            output_text = QtWidgets.QPlainTextEdit()
+            output_text.setReadOnly(True)
+            output_text.setLineWrapMode(QtWidgets.QPlainTextEdit.WidgetWidth)
+            main_layout.addWidget(output_text)
 
             def run_script():
-                script = script_text.get(1.0, tk.END).strip()
+                script = script_text.toPlainText().strip()
                 if not script:
-                    messagebox.showerror("Error", "Please enter a script")
+                    QtWidgets.QMessageBox.critical(self, "Error", "Please enter a script")
                     return
 
-                output_text.delete(1.0, tk.END)
+                output_text.clear()
 
                 def execute_script():
                     try:
@@ -119,135 +116,155 @@ class AutomationMixin:
                             capture_output=True, text=True, timeout=10
                         )
 
-                        dialog.after(0, lambda: [
-                            output_text.insert(tk.END, "=== STDOUT ===\n"),
-                            output_text.insert(tk.END, result.stdout or "(empty)\n"),
-                            output_text.insert(tk.END, "\n=== STDERR ===\n"),
-                            output_text.insert(tk.END, result.stderr or "(empty)\n"),
-                            output_text.insert(tk.END, f"\n=== Return code: {result.returncode} ===\n")
-                        ])
+                        def append_output():
+                            output_text.appendPlainText("=== STDOUT ===")
+                            output_text.appendPlainText(result.stdout or "(empty)")
+                            output_text.appendPlainText("\n=== STDERR ===")
+                            output_text.appendPlainText(result.stderr or "(empty)")
+                            output_text.appendPlainText(
+                                f"\n=== Return code: {result.returncode} ==="
+                            )
+
+                        QtCore.QTimer.singleShot(0, append_output)
 
                     except Exception as e:
-                        dialog.after(0, lambda: output_text.insert(tk.END, f"Error: {str(e)}"))
+                        QtCore.QTimer.singleShot(
+                            0, lambda: output_text.appendPlainText(f"Error: {str(e)}")
+                        )
 
                 threading.Thread(target=execute_script, daemon=True).start()
 
             def save_script():
-                script = script_text.get(1.0, tk.END).strip()
+                script = script_text.toPlainText().strip()
                 if not script:
                     return
 
-                file_path = filedialog.asksaveasfilename(
-                    defaultextension=".sh",
-                    filetypes=[("Shell scripts", "*.sh"), ("All files", "*.*")]
+                file_path, _ = QtWidgets.QFileDialog.getSaveFileName(
+                    self,
+                    "Save Script",
+                    "",
+                    "Shell scripts (*.sh);;All files (*.*)",
                 )
                 if file_path:
                     with open(file_path, 'w') as f:
                         f.write(script)
-                    messagebox.showinfo("Saved", f"Script saved to:\n{file_path}")
+                    QtWidgets.QMessageBox.information(
+                        self, "Saved", f"Script saved to:\n{file_path}"
+                    )
 
             def clear_script():
-                script_text.delete(1.0, tk.END)
-                output_text.delete(1.0, tk.END)
+                script_text.clear()
+                output_text.clear()
 
-            buttons_frame = ttk.Frame(main_frame)
-            buttons_frame.pack(fill="x", pady=10)
+            buttons_layout = QtWidgets.QHBoxLayout()
+            run_btn = QtWidgets.QPushButton("Run")
+            run_btn.clicked.connect(run_script)
+            save_btn = QtWidgets.QPushButton("Save")
+            save_btn.clicked.connect(save_script)
+            clear_btn = QtWidgets.QPushButton("Clear")
+            clear_btn.clicked.connect(clear_script)
+            close_btn = QtWidgets.QPushButton("Close")
+            close_btn.clicked.connect(dialog.close)
+            buttons_layout.addWidget(run_btn)
+            buttons_layout.addWidget(save_btn)
+            buttons_layout.addWidget(clear_btn)
+            buttons_layout.addStretch()
+            buttons_layout.addWidget(close_btn)
+            main_layout.addLayout(buttons_layout)
 
-            ttk.Button(buttons_frame, text="Run", command=run_script).pack(side="left", padx=5)
-            ttk.Button(buttons_frame, text="Save", command=save_script).pack(side="left", padx=5)
-            ttk.Button(buttons_frame, text="Clear", command=clear_script).pack(side="left", padx=5)
-            ttk.Button(buttons_frame, text="Close", command=dialog.destroy).pack(side="right", padx=5)
+            dialog.show()
 
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to open shell script dialog: {str(e)}")
+            QtWidgets.QMessageBox.critical(
+                self, "Error", f"Failed to open shell script dialog: {str(e)}"
+            )
 
     def _batch_app_manager_dialog(self):
         """Show dialog for batch app management"""
         if not self.device_connected:
-            messagebox.showinfo("Not Connected", "Please connect to a device first.")
+            QtWidgets.QMessageBox.information(
+                self, "Not Connected", "Please connect to a device first."
+            )
             return
 
         try:
             serial = self.device_serial
             adb_cmd = self.adb_path if IS_WINDOWS else "adb"
 
-            dialog = tk.Toplevel(self)
-            dialog.title("Batch App Manager")
-            dialog.geometry("700x600")
-            dialog.transient(self)
-            dialog.grab_set()
+            dialog = QtWidgets.QDialog(self)
+            dialog.setWindowTitle("Batch App Manager")
+            dialog.resize(700, 600)
+            dialog.setModal(True)
 
-            x_pos = (self.winfo_screenwidth() - 700) // 2
-            y_pos = (self.winfo_screenheight() - 600) // 2
-            dialog.geometry(f"+{x_pos}+{y_pos}")
+            main_layout = QtWidgets.QVBoxLayout(dialog)
+            notebook = QtWidgets.QTabWidget()
+            main_layout.addWidget(notebook)
 
-            main_frame = ttk.Frame(dialog, padding=10)
-            main_frame.pack(fill="both", expand=True)
+            install_frame = QtWidgets.QWidget()
+            install_layout = QtWidgets.QVBoxLayout(install_frame)
+            install_layout.addWidget(QtWidgets.QLabel("APK Files to Install:"))
 
-            notebook = ttk.Notebook(main_frame)
-            notebook.pack(fill="both", expand=True)
+            install_listbox = QtWidgets.QListWidget()
+            install_layout.addWidget(install_listbox)
 
-            # Install tab
-            install_frame = ttk.Frame(notebook, padding=10)
-            notebook.add(install_frame, text="Batch Install")
-
-            ttk.Label(install_frame, text="APK Files to Install:").pack(anchor="w")
-
-            install_list_frame = ttk.Frame(install_frame)
-            install_list_frame.pack(fill="both", expand=True, pady=5)
-
-            install_scrollbar = ttk.Scrollbar(install_list_frame)
-            install_scrollbar.pack(side="right", fill="y")
-
-            install_listbox = tk.Listbox(install_list_frame, yscrollcommand=install_scrollbar.set)
-            install_listbox.pack(fill="both", expand=True)
-            install_scrollbar.config(command=install_listbox.yview)
-
-            install_btn_frame = ttk.Frame(install_frame)
-            install_btn_frame.pack(fill="x", pady=5)
+            install_btn_layout = QtWidgets.QHBoxLayout()
+            install_layout.addLayout(install_btn_layout)
 
             def add_apks():
-                files = filedialog.askopenfilenames(
-                    title="Select APK files",
-                    filetypes=[("Android Package", "*.apk")]
+                files, _ = QtWidgets.QFileDialog.getOpenFileNames(
+                    self,
+                    "Select APK files",
+                    "",
+                    "Android Package (*.apk)",
                 )
                 for f in files:
-                    install_listbox.insert(tk.END, f)
+                    install_listbox.addItem(f)
 
             def remove_apks():
-                selection = install_listbox.curselection()
-                for i in reversed(selection):
-                    install_listbox.delete(i)
+                for item in install_listbox.selectedItems():
+                    install_listbox.takeItem(install_listbox.row(item))
 
             def clear_apks():
-                install_listbox.delete(0, tk.END)
+                install_listbox.clear()
 
-            ttk.Button(install_btn_frame, text="Add APKs", command=add_apks).pack(side="left", padx=5)
-            ttk.Button(install_btn_frame, text="Remove", command=remove_apks).pack(side="left", padx=5)
-            ttk.Button(install_btn_frame, text="Clear", command=clear_apks).pack(side="left", padx=5)
+            add_btn = QtWidgets.QPushButton("Add APKs")
+            remove_btn = QtWidgets.QPushButton("Remove")
+            clear_btn = QtWidgets.QPushButton("Clear")
+            add_btn.clicked.connect(add_apks)
+            remove_btn.clicked.connect(remove_apks)
+            clear_btn.clicked.connect(clear_apks)
+            install_btn_layout.addWidget(add_btn)
+            install_btn_layout.addWidget(remove_btn)
+            install_btn_layout.addWidget(clear_btn)
 
-            install_output = scrolledtext.ScrolledText(install_frame, wrap=tk.WORD, height=8)
-            install_output.pack(fill="both", expand=True, pady=5)
+            install_output = QtWidgets.QPlainTextEdit()
+            install_output.setReadOnly(True)
+            install_output.setLineWrapMode(QtWidgets.QPlainTextEdit.WidgetWidth)
+            install_layout.addWidget(install_output)
 
-            install_progress = ttk.Progressbar(install_frame, mode='determinate')
-            install_progress.pack(fill="x", pady=5)
+            install_progress = QtWidgets.QProgressBar()
+            install_layout.addWidget(install_progress)
 
             def install_apks():
-                apks = list(install_listbox.get(0, tk.END))
+                apks = [install_listbox.item(i).text() for i in range(install_listbox.count())]
                 if not apks:
-                    messagebox.showerror("Error", "No APKs selected")
+                    QtWidgets.QMessageBox.critical(self, "Error", "No APKs selected")
                     return
 
-                install_output.delete(1.0, tk.END)
+                install_output.clear()
                 total = len(apks)
 
                 def run_installation():
                     for i, apk in enumerate(apks):
                         progress = ((i + 1) / total) * 100
-                        dialog.after(0, lambda p=progress: install_progress.configure(value=p))
+                        QtCore.QTimer.singleShot(
+                            0, lambda p=progress: install_progress.setValue(int(p))
+                        )
 
                         filename = os.path.basename(apk)
-                        dialog.after(0, lambda f=filename: install_output.insert(tk.END, f"Installing {f}...\n"))
+                        QtCore.QTimer.singleShot(
+                            0, lambda f=filename: install_output.appendPlainText(f"Installing {f}...")
+                        )
 
                         try:
                             result = subprocess.run(
@@ -256,34 +273,46 @@ class AutomationMixin:
                             )
 
                             if "Success" in result.stdout:
-                                dialog.after(0, lambda f=filename: install_output.insert(tk.END, f"  ✓ {f} installed\n"))
+                                QtCore.QTimer.singleShot(
+                                    0,
+                                    lambda f=filename: install_output.appendPlainText(
+                                        f"  ✓ {f} installed"
+                                    ),
+                                )
                             else:
-                                dialog.after(0, lambda f=filename, e=result.stderr: install_output.insert(tk.END, f"  ✗ {f} failed: {e}\n"))
+                                QtCore.QTimer.singleShot(
+                                    0,
+                                    lambda f=filename, e=result.stderr: install_output.appendPlainText(
+                                        f"  ✗ {f} failed: {e}"
+                                    ),
+                                )
 
                         except Exception as e:
-                            dialog.after(0, lambda f=filename, err=str(e): install_output.insert(tk.END, f"  ✗ {f} error: {err}\n"))
+                            QtCore.QTimer.singleShot(
+                                0,
+                                lambda f=filename, err=str(e): install_output.appendPlainText(
+                                    f"  ✗ {f} error: {err}"
+                                ),
+                            )
 
-                    dialog.after(0, lambda: install_output.insert(tk.END, "\nBatch installation complete!\n"))
+                    QtCore.QTimer.singleShot(
+                        0, lambda: install_output.appendPlainText("\nBatch installation complete!")
+                    )
 
                 threading.Thread(target=run_installation, daemon=True).start()
 
-            ttk.Button(install_frame, text="Install All", command=install_apks).pack(pady=5)
+            install_all_btn = QtWidgets.QPushButton("Install All")
+            install_all_btn.clicked.connect(install_apks)
+            install_layout.addWidget(install_all_btn)
 
             # Uninstall tab
-            uninstall_frame = ttk.Frame(notebook, padding=10)
-            notebook.add(uninstall_frame, text="Batch Uninstall")
+            uninstall_frame = QtWidgets.QWidget()
+            uninstall_layout = QtWidgets.QVBoxLayout(uninstall_frame)
+            uninstall_layout.addWidget(QtWidgets.QLabel("Installed Packages:"))
 
-            ttk.Label(uninstall_frame, text="Installed Packages:").pack(anchor="w")
-
-            uninstall_list_frame = ttk.Frame(uninstall_frame)
-            uninstall_list_frame.pack(fill="both", expand=True, pady=5)
-
-            uninstall_scrollbar = ttk.Scrollbar(uninstall_list_frame)
-            uninstall_scrollbar.pack(side="right", fill="y")
-
-            uninstall_listbox = tk.Listbox(uninstall_list_frame, selectmode=tk.MULTIPLE, yscrollcommand=uninstall_scrollbar.set)
-            uninstall_listbox.pack(fill="both", expand=True)
-            uninstall_scrollbar.config(command=uninstall_listbox.yview)
+            uninstall_listbox = QtWidgets.QListWidget()
+            uninstall_listbox.setSelectionMode(QtWidgets.QAbstractItemView.MultiSelection)
+            uninstall_layout.addWidget(uninstall_listbox)
 
             def load_installed_packages():
                 result = subprocess.run(
@@ -293,32 +322,42 @@ class AutomationMixin:
 
                 if result.returncode == 0:
                     packages = sorted([line[8:] for line in result.stdout.strip().split('\n') if line.startswith('package:')])
-                    dialog.after(0, lambda: [uninstall_listbox.delete(0, tk.END)] +
-                        [uninstall_listbox.insert(tk.END, p) for p in packages])
+                    def update_packages():
+                        uninstall_listbox.clear()
+                        for pkg in packages:
+                            uninstall_listbox.addItem(pkg)
+
+                    QtCore.QTimer.singleShot(0, update_packages)
 
             threading.Thread(target=load_installed_packages, daemon=True).start()
 
-            uninstall_output = scrolledtext.ScrolledText(uninstall_frame, wrap=tk.WORD, height=8)
-            uninstall_output.pack(fill="both", expand=True, pady=5)
+            uninstall_output = QtWidgets.QPlainTextEdit()
+            uninstall_output.setReadOnly(True)
+            uninstall_output.setLineWrapMode(QtWidgets.QPlainTextEdit.WidgetWidth)
+            uninstall_layout.addWidget(uninstall_output)
 
-            uninstall_progress = ttk.Progressbar(uninstall_frame, mode='determinate')
-            uninstall_progress.pack(fill="x", pady=5)
+            uninstall_progress = QtWidgets.QProgressBar()
+            uninstall_layout.addWidget(uninstall_progress)
 
             def uninstall_packages():
-                selection = uninstall_listbox.curselection()
+                selection = uninstall_listbox.selectedItems()
                 if not selection:
-                    messagebox.showerror("Error", "No packages selected")
+                    QtWidgets.QMessageBox.critical(self, "Error", "No packages selected")
                     return
 
-                packages = [uninstall_listbox.get(i) for i in selection]
+                packages = [item.text() for item in selection]
                 total = len(packages)
 
                 def run_uninstallation():
                     for i, pkg in enumerate(packages):
                         progress = ((i + 1) / total) * 100
-                        dialog.after(0, lambda p=progress: uninstall_progress.configure(value=p))
+                        QtCore.QTimer.singleShot(
+                            0, lambda p=progress: uninstall_progress.setValue(int(p))
+                        )
 
-                        dialog.after(0, lambda p=pkg: uninstall_output.insert(tk.END, f"Uninstalling {p}...\n"))
+                        QtCore.QTimer.singleShot(
+                            0, lambda p=pkg: uninstall_output.appendPlainText(f"Uninstalling {p}...")
+                        )
 
                         try:
                             result = subprocess.run(
@@ -327,78 +366,97 @@ class AutomationMixin:
                             )
 
                             if "Success" in result.stdout:
-                                dialog.after(0, lambda p=pkg: uninstall_output.insert(tk.END, f"  ✓ {p} uninstalled\n"))
+                                QtCore.QTimer.singleShot(
+                                    0,
+                                    lambda p=pkg: uninstall_output.appendPlainText(
+                                        f"  ✓ {p} uninstalled"
+                                    ),
+                                )
                             else:
-                                dialog.after(0, lambda p=pkg, e=result.stderr: uninstall_output.insert(tk.END, f"  ✗ {p} failed: {e}\n"))
+                                QtCore.QTimer.singleShot(
+                                    0,
+                                    lambda p=pkg, e=result.stderr: uninstall_output.appendPlainText(
+                                        f"  ✗ {p} failed: {e}"
+                                    ),
+                                )
 
                         except Exception as e:
-                            dialog.after(0, lambda p=pkg, err=str(e): uninstall_output.insert(tk.END, f"  ✗ {p} error: {err}\n"))
+                            QtCore.QTimer.singleShot(
+                                0,
+                                lambda p=pkg, err=str(e): uninstall_output.appendPlainText(
+                                    f"  ✗ {p} error: {err}"
+                                ),
+                            )
 
-                    dialog.after(0, load_installed_packages)
-                    dialog.after(0, lambda: uninstall_output.insert(tk.END, "\nBatch uninstallation complete!\n"))
+                    QtCore.QTimer.singleShot(0, load_installed_packages)
+                    QtCore.QTimer.singleShot(
+                        0, lambda: uninstall_output.appendPlainText("\nBatch uninstallation complete!")
+                    )
 
                 threading.Thread(target=run_uninstallation, daemon=True).start()
 
-            uninstall_btn_frame = ttk.Frame(uninstall_frame)
-            uninstall_btn_frame.pack(fill="x", pady=5)
+            uninstall_btn_layout = QtWidgets.QHBoxLayout()
+            refresh_btn = QtWidgets.QPushButton("Refresh")
+            refresh_btn.clicked.connect(
+                lambda: threading.Thread(target=load_installed_packages, daemon=True).start()
+            )
+            uninstall_btn = QtWidgets.QPushButton("Uninstall Selected")
+            uninstall_btn.clicked.connect(uninstall_packages)
+            uninstall_btn_layout.addWidget(refresh_btn)
+            uninstall_btn_layout.addWidget(uninstall_btn)
+            uninstall_layout.addLayout(uninstall_btn_layout)
 
-            ttk.Button(uninstall_btn_frame, text="Refresh", command=lambda: threading.Thread(target=load_installed_packages, daemon=True).start()).pack(side="left", padx=5)
-            ttk.Button(uninstall_btn_frame, text="Uninstall Selected", command=uninstall_packages).pack(side="left", padx=5)
+            notebook.addTab(install_frame, "Batch Install")
+            notebook.addTab(uninstall_frame, "Batch Uninstall")
 
-            # Close button
-            ttk.Button(main_frame, text="Close", command=dialog.destroy).pack(pady=10)
+            close_btn = QtWidgets.QPushButton("Close")
+            close_btn.clicked.connect(dialog.close)
+            main_layout.addWidget(close_btn)
+
+            dialog.show()
 
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to open batch app manager: {str(e)}")
+            QtWidgets.QMessageBox.critical(
+                self, "Error", f"Failed to open batch app manager: {str(e)}"
+            )
 
     def _logcat_screencap_dialog(self):
         """Combined logcat and screenshot/recording dialog"""
         if not self.device_connected:
-            messagebox.showinfo("Not Connected", "Please connect to a device first.")
+            QtWidgets.QMessageBox.information(
+                self, "Not Connected", "Please connect to a device first."
+            )
             return
 
         try:
             serial = self.device_serial
             adb_cmd = self.adb_path if IS_WINDOWS else "adb"
 
-            dialog = tk.Toplevel(self)
-            dialog.title("Live Monitor")
-            dialog.geometry("900x700")
+            dialog = QtWidgets.QDialog(self)
+            dialog.setWindowTitle("Live Monitor")
+            dialog.resize(900, 700)
 
-            x_pos = (self.winfo_screenwidth() - 900) // 2
-            y_pos = (self.winfo_screenheight() - 700) // 2
-            dialog.geometry(f"+{x_pos}+{y_pos}")
+            main_layout = QtWidgets.QVBoxLayout(dialog)
+            splitter = QtWidgets.QSplitter(QtCore.Qt.Vertical)
+            main_layout.addWidget(splitter)
 
-            main_frame = ttk.Frame(dialog, padding=10)
-            main_frame.pack(fill="both", expand=True)
+            logcat_frame = QtWidgets.QGroupBox("Live Logcat")
+            logcat_layout = QtWidgets.QVBoxLayout(logcat_frame)
 
-            # Paned window
-            paned = ttk.PanedWindow(main_frame, orient="vertical")
-            paned.pack(fill="both", expand=True)
+            logcat_controls = QtWidgets.QHBoxLayout()
+            logcat_controls.addWidget(QtWidgets.QLabel("Filter:"))
+            filter_entry = QtWidgets.QLineEdit()
+            logcat_controls.addWidget(filter_entry)
+            logcat_controls.addWidget(QtWidgets.QLabel("Level:"))
+            level_combo = QtWidgets.QComboBox()
+            level_combo.addItems(["V", "D", "I", "W", "E"])
+            logcat_controls.addWidget(level_combo)
+            logcat_layout.addLayout(logcat_controls)
 
-            # Logcat frame
-            logcat_frame = ttk.LabelFrame(paned, text="Live Logcat", padding=10)
-            paned.add(logcat_frame, weight=2)
-
-            logcat_controls = ttk.Frame(logcat_frame)
-            logcat_controls.pack(fill="x", pady=(0, 5))
-
-            filter_var = tk.StringVar()
-            ttk.Label(logcat_controls, text="Filter:").pack(side="left", padx=(0, 5))
-            ttk.Entry(logcat_controls, textvariable=filter_var, width=30).pack(side="left", padx=5)
-
-            level_var = tk.StringVar(value="V")
-            ttk.Label(logcat_controls, text="Level:").pack(side="left", padx=(10, 5))
-            ttk.Combobox(logcat_controls, textvariable=level_var, values=["V", "D", "I", "W", "E"], width=5).pack(side="left")
-
-            logcat_text = scrolledtext.ScrolledText(logcat_frame, wrap=tk.NONE, height=15)
-            logcat_text.pack(fill="both", expand=True)
-
-            logcat_text.tag_configure("V", foreground="gray")
-            logcat_text.tag_configure("D", foreground="black")
-            logcat_text.tag_configure("I", foreground="green")
-            logcat_text.tag_configure("W", foreground="orange")
-            logcat_text.tag_configure("E", foreground="red")
+            logcat_text = QtWidgets.QPlainTextEdit()
+            logcat_text.setReadOnly(True)
+            logcat_text.setLineWrapMode(QtWidgets.QPlainTextEdit.NoWrap)
+            logcat_layout.addWidget(logcat_text)
 
             logcat_running = {'value': False, 'process': None}
 
@@ -407,11 +465,11 @@ class AutomationMixin:
                     return
 
                 logcat_running['value'] = True
-                logcat_text.delete(1.0, tk.END)
+                logcat_text.clear()
 
                 def read_logcat():
                     try:
-                        cmd = [adb_cmd, "-s", serial, "logcat", f"*:{level_var.get()}"]
+                        cmd = [adb_cmd, "-s", serial, "logcat", f"*:{level_combo.currentText()}"]
                         process = subprocess.Popen(
                             cmd,
                             stdout=subprocess.PIPE,
@@ -424,26 +482,13 @@ class AutomationMixin:
                             if not logcat_running['value']:
                                 break
 
-                            # Determine tag
-                            tag = "D"
-                            if "/V " in line:
-                                tag = "V"
-                            elif "/D " in line:
-                                tag = "D"
-                            elif "/I " in line:
-                                tag = "I"
-                            elif "/W " in line:
-                                tag = "W"
-                            elif "/E " in line:
-                                tag = "E"
-
                             # Apply filter
-                            filter_text = filter_var.get().lower()
+                            filter_text = filter_entry.text().lower()
                             if not filter_text or filter_text in line.lower():
-                                dialog.after(0, lambda l=line, t=tag: [
-                                    logcat_text.insert(tk.END, l, t),
-                                    logcat_text.see(tk.END)
-                                ])
+                                QtCore.QTimer.singleShot(
+                                    0,
+                                    lambda l=line: logcat_text.appendPlainText(l.rstrip("\n")),
+                                )
 
                     except Exception as e:
                         pass
@@ -459,21 +504,24 @@ class AutomationMixin:
                         pass
 
             def clear_logcat():
-                logcat_text.delete(1.0, tk.END)
+                logcat_text.clear()
 
-            logcat_btn_frame = ttk.Frame(logcat_frame)
-            logcat_btn_frame.pack(fill="x", pady=5)
+            logcat_btn_layout = QtWidgets.QHBoxLayout()
+            start_btn = QtWidgets.QPushButton("Start")
+            stop_btn = QtWidgets.QPushButton("Stop")
+            clear_btn = QtWidgets.QPushButton("Clear")
+            start_btn.clicked.connect(start_logcat)
+            stop_btn.clicked.connect(stop_logcat)
+            clear_btn.clicked.connect(clear_logcat)
+            logcat_btn_layout.addWidget(start_btn)
+            logcat_btn_layout.addWidget(stop_btn)
+            logcat_btn_layout.addWidget(clear_btn)
+            logcat_layout.addLayout(logcat_btn_layout)
 
-            ttk.Button(logcat_btn_frame, text="Start", command=start_logcat).pack(side="left", padx=5)
-            ttk.Button(logcat_btn_frame, text="Stop", command=stop_logcat).pack(side="left", padx=5)
-            ttk.Button(logcat_btn_frame, text="Clear", command=clear_logcat).pack(side="left", padx=5)
-
-            # Screenshot frame
-            capture_frame = ttk.LabelFrame(paned, text="Capture", padding=10)
-            paned.add(capture_frame, weight=1)
-
-            capture_controls = ttk.Frame(capture_frame)
-            capture_controls.pack(fill="x")
+            capture_frame = QtWidgets.QGroupBox("Capture")
+            capture_layout = QtWidgets.QVBoxLayout(capture_frame)
+            capture_controls = QtWidgets.QHBoxLayout()
+            capture_layout.addLayout(capture_controls)
 
             def capture_screenshot():
                 try:
@@ -482,10 +530,11 @@ class AutomationMixin:
 
                     timestamp = time.strftime("%Y%m%d_%H%M%S")
                     filename = f"screenshot_{timestamp}.png"
-                    save_path = filedialog.asksaveasfilename(
-                        defaultextension=".png",
-                        initialfile=filename,
-                        filetypes=[("PNG files", "*.png")]
+                    save_path, _ = QtWidgets.QFileDialog.getSaveFileName(
+                        self,
+                        "Save Screenshot",
+                        filename,
+                        "PNG files (*.png)",
                     )
 
                     if not save_path:
@@ -509,20 +558,34 @@ class AutomationMixin:
                         capture_output=True, timeout=5
                     )
 
-                    messagebox.showinfo("Saved", f"Screenshot saved to:\n{save_path}")
+                    QtWidgets.QMessageBox.information(
+                        self, "Saved", f"Screenshot saved to:\n{save_path}"
+                    )
 
                 except Exception as e:
-                    messagebox.showerror("Error", f"Failed to capture screenshot: {str(e)}")
+                    QtWidgets.QMessageBox.critical(
+                        self, "Error", f"Failed to capture screenshot: {str(e)}"
+                    )
 
-            ttk.Button(capture_controls, text="Screenshot", command=capture_screenshot).pack(side="left", padx=5)
+            screenshot_btn = QtWidgets.QPushButton("Screenshot")
+            screenshot_btn.clicked.connect(capture_screenshot)
+            capture_controls.addWidget(screenshot_btn)
 
             def on_closing():
                 stop_logcat()
-                dialog.destroy()
+                dialog.close()
 
-            dialog.protocol("WM_DELETE_WINDOW", on_closing)
+            dialog.finished.connect(lambda _: on_closing())
 
-            ttk.Button(main_frame, text="Close", command=on_closing).pack(pady=10)
+            close_btn = QtWidgets.QPushButton("Close")
+            close_btn.clicked.connect(on_closing)
+            main_layout.addWidget(close_btn)
+
+            splitter.addWidget(logcat_frame)
+            splitter.addWidget(capture_frame)
+            dialog.show()
 
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to open live monitor: {str(e)}")
+            QtWidgets.QMessageBox.critical(
+                self, "Error", f"Failed to open live monitor: {str(e)}"
+            )

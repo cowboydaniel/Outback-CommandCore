@@ -3,8 +3,7 @@ DROIDCOM - Logcat Feature Module
 Handles logcat viewing and filtering.
 """
 
-import tkinter as tk
-from tkinter import ttk, messagebox, filedialog
+from PySide6 import QtWidgets, QtCore
 import subprocess
 import threading
 import re
@@ -19,7 +18,9 @@ class LogcatMixin:
     def view_logcat(self):
         """View logcat from the connected Android device"""
         if not self.device_connected:
-            messagebox.showinfo("Not Connected", "Please connect to a device first.")
+            QtWidgets.QMessageBox.information(
+                self, "Not Connected", "Please connect to a device first."
+            )
             return
 
         self._run_in_thread(self._view_logcat_task)
@@ -45,7 +46,7 @@ class LogcatMixin:
                 self.update_status("Failed to open logcat")
                 return
 
-            self.after(0, lambda: self._show_logcat_window(serial, adb_cmd))
+            QtCore.QTimer.singleShot(0, lambda: self._show_logcat_window(serial, adb_cmd))
 
         except Exception as e:
             self.log_message(f"Error opening logcat: {str(e)}")
@@ -54,120 +55,84 @@ class LogcatMixin:
     def _show_logcat_window(self, serial, adb_cmd):
         """Show the logcat window"""
         try:
-            logcat_window = tk.Toplevel(self)
-            logcat_window.title("Android Logcat Viewer")
-            logcat_window.geometry("800x600")
-            logcat_window.minsize(600, 400)
+            logcat_window = QtWidgets.QDialog(self)
+            logcat_window.setWindowTitle("Android Logcat Viewer")
+            logcat_window.resize(800, 600)
+            logcat_window.setMinimumSize(600, 400)
 
-            x_pos = (self.winfo_screenwidth() - 800) // 2
-            y_pos = (self.winfo_screenheight() - 600) // 2
-            logcat_window.geometry(f"+{x_pos}+{y_pos}")
+            main_layout = QtWidgets.QVBoxLayout(logcat_window)
 
-            main_frame = ttk.Frame(logcat_window)
-            main_frame.pack(fill="both", expand=True, padx=10, pady=10)
+            filter_layout = QtWidgets.QHBoxLayout()
+            filter_layout.addWidget(QtWidgets.QLabel("Filter:"))
 
-            # Filter frame
-            filter_frame = ttk.Frame(main_frame)
-            filter_frame.pack(fill="x", pady=(0, 10))
+            filter_entry = QtWidgets.QLineEdit()
+            filter_layout.addWidget(filter_entry)
 
-            ttk.Label(filter_frame, text="Filter:").pack(side="left", padx=(0, 5))
+            filter_layout.addWidget(QtWidgets.QLabel("Log Level:"))
+            level_combo = QtWidgets.QComboBox()
+            level_combo.addItems(["VERBOSE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL"])
+            filter_layout.addWidget(level_combo)
 
-            filter_var = tk.StringVar()
-            filter_entry = ttk.Entry(filter_frame, textvariable=filter_var, width=30)
-            filter_entry.pack(side="left", fill="x", expand=True, padx=(0, 10))
+            apply_btn = QtWidgets.QPushButton("Apply Filter")
+            clear_btn = QtWidgets.QPushButton("Clear")
+            filter_layout.addWidget(apply_btn)
+            filter_layout.addWidget(clear_btn)
 
-            ttk.Label(filter_frame, text="Log Level:").pack(side="left", padx=(10, 5))
+            main_layout.addLayout(filter_layout)
 
-            level_var = tk.StringVar(value="VERBOSE")
-            level_combo = ttk.Combobox(filter_frame, textvariable=level_var, width=10)
-            level_combo['values'] = ("VERBOSE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL")
-            level_combo.pack(side="left", padx=(0, 10))
+            log_text = QtWidgets.QPlainTextEdit()
+            log_text.setReadOnly(True)
+            log_text.setLineWrapMode(QtWidgets.QPlainTextEdit.NoWrap)
+            main_layout.addWidget(log_text)
 
-            clear_btn = ttk.Button(filter_frame, text="Clear", width=8)
-            clear_btn.pack(side="right", padx=5)
+            button_layout = QtWidgets.QHBoxLayout()
+            save_btn = QtWidgets.QPushButton("Save Log")
+            close_btn = QtWidgets.QPushButton("Close")
+            button_layout.addWidget(save_btn)
+            button_layout.addStretch()
+            button_layout.addWidget(close_btn)
+            main_layout.addLayout(button_layout)
 
-            apply_btn = ttk.Button(filter_frame, text="Apply Filter", width=12)
-            apply_btn.pack(side="right", padx=5)
+            log_text.appendPlainText("Loading logcat... Please wait.")
 
-            # Log frame
-            log_frame = ttk.Frame(main_frame)
-            log_frame.pack(fill="both", expand=True, pady=(0, 10))
-
-            log_text = tk.Text(log_frame, wrap=tk.NONE, width=80, height=20)
-            log_text.pack(side="left", fill="both", expand=True)
-
-            v_scrollbar = ttk.Scrollbar(log_frame, orient="vertical", command=log_text.yview)
-            v_scrollbar.pack(side="right", fill="y")
-            log_text.config(yscrollcommand=v_scrollbar.set)
-
-            h_scrollbar = ttk.Scrollbar(main_frame, orient="horizontal", command=log_text.xview)
-            h_scrollbar.pack(side="bottom", fill="x", before=log_frame)
-            log_text.config(xscrollcommand=h_scrollbar.set)
-
-            # Configure tags for log levels
-            log_text.tag_configure("VERBOSE", foreground="gray")
-            log_text.tag_configure("DEBUG", foreground="black")
-            log_text.tag_configure("INFO", foreground="green")
-            log_text.tag_configure("WARN", foreground="orange")
-            log_text.tag_configure("ERROR", foreground="red")
-            log_text.tag_configure("FATAL", foreground="purple", font=("Arial", 10, "bold"))
-            log_text.tag_configure("timestamp", foreground="blue")
-
-            # Button frame
-            button_frame = ttk.Frame(main_frame)
-            button_frame.pack(fill="x", pady=(0, 5))
-
-            save_btn = ttk.Button(
-                button_frame, text="Save Log",
-                command=lambda: self._save_logcat(log_text)
-            )
-            save_btn.pack(side="left", padx=5)
-
-            close_btn = ttk.Button(
-                button_frame, text="Close",
-                command=lambda: self._close_logcat(logcat_window, serial, adb_cmd)
-            )
-            close_btn.pack(side="right", padx=5)
-
-            # Initial state
-            log_text.insert(tk.END, "Loading logcat... Please wait.\n")
-            log_text.config(state="disabled")
-
-            # Store references
             logcat_window.log_text = log_text
-            logcat_window.filter_var = filter_var
-            logcat_window.level_var = level_var
+            logcat_window.filter_entry = filter_entry
+            logcat_window.level_combo = level_combo
 
             # Start logcat thread
             logcat_thread = threading.Thread(
                 target=self._run_logcat,
-                args=(serial, adb_cmd, logcat_window, log_text, filter_var, level_var)
+                args=(serial, adb_cmd, logcat_window, log_text, filter_entry, level_combo)
             )
             logcat_thread.daemon = True
             logcat_window.logcat_thread = logcat_thread
             logcat_thread.start()
 
             # Configure buttons
-            clear_btn.config(command=lambda: self._clear_logcat(log_text))
-            apply_btn.config(command=lambda: self._apply_logcat_filter(serial, adb_cmd, logcat_window))
+            clear_btn.clicked.connect(lambda: self._clear_logcat(log_text))
+            apply_btn.clicked.connect(lambda: self._apply_logcat_filter(serial, adb_cmd, logcat_window))
+            save_btn.clicked.connect(lambda: self._save_logcat(log_text))
+            close_btn.clicked.connect(lambda: self._close_logcat(logcat_window, serial, adb_cmd))
 
             # Update title with device info
             model = self.device_info.get('model', 'Unknown')
-            logcat_window.title(f"Android Logcat - {model} ({serial})")
-
-            logcat_window.protocol("WM_DELETE_WINDOW", lambda: self._close_logcat(logcat_window, serial, adb_cmd))
+            logcat_window.setWindowTitle(f"Android Logcat - {model} ({serial})")
+            logcat_window.finished.connect(lambda _: self._close_logcat(logcat_window, serial, adb_cmd))
+            logcat_window.show()
 
         except Exception as e:
             self.log_message(f"Error showing logcat window: {str(e)}")
-            messagebox.showerror("Logcat Error", f"Failed to show logcat window: {str(e)}")
+            QtWidgets.QMessageBox.critical(
+                self, "Logcat Error", f"Failed to show logcat window: {str(e)}"
+            )
 
-    def _run_logcat(self, serial, adb_cmd, window, log_text, filter_var, level_var):
+    def _run_logcat(self, serial, adb_cmd, window, log_text, filter_entry, level_combo):
         """Run logcat in a separate thread"""
         try:
             process = None
 
-            current_filter = filter_var.get()
-            current_level = level_var.get()
+            current_filter = filter_entry.text()
+            current_level = level_combo.currentText()
 
             level_map = {
                 "VERBOSE": "V",
@@ -197,10 +162,10 @@ class LogcatMixin:
 
             window.logcat_process = process
 
-            self.after(0, lambda: self._clear_logcat(log_text))
+            QtCore.QTimer.singleShot(0, lambda: self._clear_logcat(log_text))
 
             for line in iter(process.stdout.readline, ''):
-                if not hasattr(window, 'winfo_exists') or not window.winfo_exists():
+                if not window.isVisible():
                     break
 
                 tag = "DEBUG"
@@ -221,23 +186,30 @@ class LogcatMixin:
                     elif level_char == 'F' or level_char == 'A':
                         tag = "FATAL"
 
-                if hasattr(window, 'winfo_exists') and window.winfo_exists():
-                    window.after(0, lambda l=line, t=tag: self._append_logcat_line(log_text, l, t))
+                if window.isVisible():
+                    QtCore.QTimer.singleShot(
+                        0, lambda l=line, t=tag: self._append_logcat_line(log_text, l, t)
+                    )
 
             if process.poll() is not None:
                 status = process.poll()
-                if hasattr(window, 'winfo_exists') and window.winfo_exists():
-                    window.after(0, lambda: self._append_logcat_line(
-                        log_text, f"\nLogcat process ended (status {status}). Please close and reopen the viewer.\n", "ERROR"
-                    ))
+                if window.isVisible():
+                    QtCore.QTimer.singleShot(
+                        0,
+                        lambda: self._append_logcat_line(
+                            log_text,
+                            f"\nLogcat process ended (status {status}). Please close and reopen the viewer.\n",
+                            "ERROR",
+                        ),
+                    )
 
         except Exception as e:
             self.log_message(f"Error in logcat thread: {str(e)}")
 
-            if hasattr(window, 'winfo_exists') and window.winfo_exists():
-                window.after(0, lambda: self._append_logcat_line(
-                    log_text, f"\nError: {str(e)}\n", "ERROR"
-                ))
+            if window.isVisible():
+                QtCore.QTimer.singleShot(
+                    0, lambda: self._append_logcat_line(log_text, f"\nError: {str(e)}\n", "ERROR")
+                )
 
         finally:
             if process and process.poll() is None:
@@ -249,13 +221,10 @@ class LogcatMixin:
     def _append_logcat_line(self, log_text, line, tag):
         """Append a line to the logcat text widget"""
         try:
-            if not log_text.winfo_exists():
+            if not log_text.isVisible():
                 return
-
-            log_text.config(state="normal")
-            log_text.insert(tk.END, line, tag)
-            log_text.see(tk.END)
-            log_text.config(state="disabled")
+            log_text.appendPlainText(line.rstrip("\n"))
+            log_text.verticalScrollBar().setValue(log_text.verticalScrollBar().maximum())
 
         except Exception as e:
             self.log_message(f"Error appending to logcat: {str(e)}")
@@ -263,9 +232,7 @@ class LogcatMixin:
     def _clear_logcat(self, log_text):
         """Clear the logcat display"""
         try:
-            log_text.config(state="normal")
-            log_text.delete(1.0, tk.END)
-            log_text.config(state="disabled")
+            log_text.clear()
         except Exception as e:
             self.log_message(f"Error clearing logcat: {str(e)}")
 
@@ -278,7 +245,7 @@ class LogcatMixin:
 
             new_thread = threading.Thread(
                 target=self._run_logcat,
-                args=(serial, adb_cmd, window, window.log_text, window.filter_var, window.level_var)
+                args=(serial, adb_cmd, window, window.log_text, window.filter_entry, window.level_combo)
             )
             new_thread.daemon = True
 
@@ -293,28 +260,31 @@ class LogcatMixin:
     def _save_logcat(self, log_text):
         """Save logcat contents to a file"""
         try:
-            file_path = filedialog.asksaveasfilename(
-                defaultextension=".txt",
-                filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
-                title="Save Logcat Output"
+            file_path, _ = QtWidgets.QFileDialog.getSaveFileName(
+                self,
+                "Save Logcat Output",
+                "",
+                "Text files (*.txt);;All files (*.*)",
             )
 
             if not file_path:
                 return
 
-            log_text.config(state="normal")
-            contents = log_text.get(1.0, tk.END)
-            log_text.config(state="disabled")
+            contents = log_text.toPlainText()
 
             with open(file_path, 'w', encoding='utf-8') as f:
                 f.write(contents)
 
             self.log_message(f"Logcat saved to {file_path}")
-            messagebox.showinfo("Save Complete", f"Logcat output saved to:\n{file_path}")
+            QtWidgets.QMessageBox.information(
+                self, "Save Complete", f"Logcat output saved to:\n{file_path}"
+            )
 
         except Exception as e:
             self.log_message(f"Error saving logcat: {str(e)}")
-            messagebox.showerror("Save Error", f"Failed to save logcat: {str(e)}")
+            QtWidgets.QMessageBox.critical(
+                self, "Save Error", f"Failed to save logcat: {str(e)}"
+            )
 
     def _close_logcat(self, window, serial, adb_cmd):
         """Close the logcat window and terminate the logcat process"""
@@ -322,6 +292,6 @@ class LogcatMixin:
             if hasattr(window, 'logcat_process') and window.logcat_process:
                 if window.logcat_process.poll() is None:
                     window.logcat_process.terminate()
-            window.destroy()
+            window.close()
         except Exception as e:
             self.log_message(f"Error closing logcat: {str(e)}")
