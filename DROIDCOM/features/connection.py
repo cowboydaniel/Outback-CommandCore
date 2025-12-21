@@ -80,8 +80,15 @@ class ConnectionMixin:
                         ip_address = ip
                         update_output(f"Found IP: {ip_address}")
                         break
-            except subprocess.CalledProcessError:
-                pass
+            except subprocess.CalledProcessError as e:
+                error_output = ""
+                if e.output:
+                    error_output = e.output.decode('utf-8', errors='replace').strip()
+                if error_output:
+                    update_output(f"ip addr fallback failed: {error_output}")
+                else:
+                    update_output(f"ip addr fallback failed: {e}")
+                logging.warning("ip addr fallback failed: %s", error_output or e)
 
         if not ip_address:
             update_output("Error: Could not find IP address.")
