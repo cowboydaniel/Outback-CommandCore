@@ -868,6 +868,24 @@ class DebuggingMixin:
                 output_path = os.path.join(
                     folder_entry.text(), filename_entry.text()
                 )
+                bitrate_text = bitrate_combo.currentText()
+                bitrate_bps = None
+                if bitrate_text:
+                    bitrate_value = bitrate_text.lower().replace("mbps", "").strip()
+                    try:
+                        parsed_bitrate = float(bitrate_value)
+                        if parsed_bitrate <= 0:
+                            raise ValueError("Bitrate must be positive")
+                        bitrate_bps = int(parsed_bitrate * 1000000)
+                    except ValueError:
+                        QtWidgets.QMessageBox.warning(
+                            self,
+                            "Invalid Bitrate",
+                            (
+                                f"Invalid bitrate '{bitrate_text}'. "
+                                "Default bitrate will be used."
+                            ),
+                        )
                 self._do_screen_recording(
                     dialog,
                     serial,
@@ -875,7 +893,7 @@ class DebuggingMixin:
                     output_path,
                     int(time_spin.value()),
                     res_combo.currentText(),
-                    bitrate_combo.currentText(),
+                    bitrate_bps,
                     audio_check.isChecked(),
                     touch_check.isChecked(),
                     progress_check.isChecked(),
@@ -898,7 +916,7 @@ class DebuggingMixin:
         output_path,
         time_limit,
         resolution,
-        bitrate,
+        bitrate_bps,
         record_audio,
         show_touches,
         show_progress,
@@ -916,13 +934,8 @@ class DebuggingMixin:
             if resolution != "Default":
                 cmd.extend(["--size", resolution])
 
-            if bitrate:
-                bitrate_value = bitrate.lower().replace("mbps", "").strip()
-                try:
-                    bitrate_bps = int(float(bitrate_value) * 1000000)
-                    cmd.extend(["--bit-rate", str(bitrate_bps)])
-                except ValueError:
-                    pass
+            if bitrate_bps:
+                cmd.extend(["--bit-rate", str(bitrate_bps)])
 
             cmd.extend(["--time-limit", str(time_limit)])
 
