@@ -9,6 +9,8 @@ import logging
 
 from PySide6 import QtCore, QtGui, QtWidgets
 
+from ..utils.qt_dispatcher import emit_ui
+
 
 
 class ListBox(QtWidgets.QListWidget):
@@ -816,7 +818,7 @@ class WidgetsMixin:
                 import traceback
                 traceback.print_exc()
                 if hasattr(self, 'log_message'):
-                    QtCore.QTimer.singleShot(0, lambda: self.log_message(f"Error in thread: {str(e)}"))
+                    emit_ui(self, lambda: self.log_message(f"Error in thread: {str(e)}"))
 
         thread = threading.Thread(target=thread_wrapper)
         thread.daemon = True

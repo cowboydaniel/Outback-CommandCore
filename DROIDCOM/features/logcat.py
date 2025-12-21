@@ -47,7 +47,7 @@ class LogcatMixin:
                 emit_ui(self, lambda: self.update_status("Failed to open logcat"))
                 return
 
-            QtCore.QTimer.singleShot(0, lambda: self._show_logcat_window(serial, adb_cmd))
+            emit_ui(self, lambda: self._show_logcat_window(serial, adb_cmd))
 
         except Exception as e:
             emit_ui(self, lambda: self.log_message(f"Error opening logcat: {str(e)}"))
@@ -163,7 +163,7 @@ class LogcatMixin:
 
             window.logcat_process = process
 
-            QtCore.QTimer.singleShot(0, lambda: self._clear_logcat(log_text))
+            emit_ui(self, lambda: self._clear_logcat(log_text))
 
             for line in iter(process.stdout.readline, ''):
                 if not window.isVisible():
@@ -188,15 +188,15 @@ class LogcatMixin:
                         tag = "FATAL"
 
                 if window.isVisible():
-                    QtCore.QTimer.singleShot(
-                        0, lambda l=line, t=tag: self._append_logcat_line(log_text, l, t)
+                    emit_ui(
+                        self, lambda l=line, t=tag: self._append_logcat_line(log_text, l, t)
                     )
 
             if process.poll() is not None:
                 status = process.poll()
                 if window.isVisible():
-                    QtCore.QTimer.singleShot(
-                        0,
+                    emit_ui(
+                        self,
                         lambda: self._append_logcat_line(
                             log_text,
                             f"\nLogcat process ended (status {status}). Please close and reopen the viewer.\n",
@@ -208,8 +208,8 @@ class LogcatMixin:
             emit_ui(self, lambda: self.log_message(f"Error in logcat thread: {str(e)}"))
 
             if window.isVisible():
-                QtCore.QTimer.singleShot(
-                    0, lambda: self._append_logcat_line(log_text, f"\nError: {str(e)}\n", "ERROR")
+                emit_ui(
+                    self, lambda: self._append_logcat_line(log_text, f"\nError: {str(e)}\n", "ERROR")
                 )
 
         finally:

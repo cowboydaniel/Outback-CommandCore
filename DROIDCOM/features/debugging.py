@@ -10,6 +10,7 @@ import os
 import time
 
 from ..constants import IS_WINDOWS
+from ..utils.qt_dispatcher import emit_ui
 
 
 class DebuggingMixin:
@@ -89,7 +90,7 @@ class DebuggingMixin:
                             capture_output=True, text=True, timeout=600
                         )
 
-                        QtCore.QTimer.singleShot(0, lambda: progress_bar.setVisible(False))
+                        emit_ui(self, lambda: progress_bar.setVisible(False))
 
                         if result.returncode == 0:
                             def on_success():
@@ -98,7 +99,7 @@ class DebuggingMixin:
                                     self, "Success", f"Bug report saved to:\n{filename}"
                                 )
 
-                            QtCore.QTimer.singleShot(0, on_success)
+                            emit_ui(self, on_success)
                         else:
                             def on_failure():
                                 status_label.setText("Failed to generate bug report")
@@ -108,7 +109,7 @@ class DebuggingMixin:
                                     f"Failed to generate bug report:\n{result.stderr}",
                                 )
 
-                            QtCore.QTimer.singleShot(0, on_failure)
+                            emit_ui(self, on_failure)
 
                     except subprocess.TimeoutExpired:
                         def on_timeout():
@@ -118,14 +119,14 @@ class DebuggingMixin:
                                 self, "Timeout", "Bug report generation timed out"
                             )
 
-                        QtCore.QTimer.singleShot(0, on_timeout)
+                        emit_ui(self, on_timeout)
                     except Exception as e:
                         def on_error():
                             progress_bar.setVisible(False)
                             status_label.setText(f"Error: {str(e)}")
                             QtWidgets.QMessageBox.critical(self, "Error", str(e))
 
-                        QtCore.QTimer.singleShot(0, on_error)
+                        emit_ui(self, on_error)
 
                 threading.Thread(target=report_thread, daemon=True).start()
 
@@ -178,7 +179,7 @@ class DebuggingMixin:
                         capture_output=True, text=True, timeout=30
                     )
 
-                    QtCore.QTimer.singleShot(0, lambda: text_widget.clear())
+                    emit_ui(self, lambda: text_widget.clear())
 
                     if result.returncode == 0 and result.stdout.strip():
                         def set_traces():
@@ -186,7 +187,7 @@ class DebuggingMixin:
                             text_widget.appendPlainText(result.stdout[:50000])
                             status_label.setText("ANR traces loaded")
 
-                        QtCore.QTimer.singleShot(0, set_traces)
+                        emit_ui(self, set_traces)
                     else:
                         # Try alternative location
                         result = subprocess.run(
@@ -200,7 +201,7 @@ class DebuggingMixin:
                                 text_widget.appendPlainText(result.stdout)
                                 status_label.setText("ANR files found")
 
-                            QtCore.QTimer.singleShot(0, set_files)
+                            emit_ui(self, set_files)
                         else:
                             def set_none():
                                 text_widget.appendPlainText(
@@ -209,14 +210,14 @@ class DebuggingMixin:
                                 )
                                 status_label.setText("No traces found")
 
-                            QtCore.QTimer.singleShot(0, set_none)
+                            emit_ui(self, set_none)
 
                 except Exception as e:
                     def set_error():
                         text_widget.appendPlainText(f"Error: {str(e)}")
                         status_label.setText("Error loading traces")
 
-                    QtCore.QTimer.singleShot(0, set_error)
+                    emit_ui(self, set_error)
 
             threading.Thread(target=load_traces, daemon=True).start()
 
@@ -308,16 +309,16 @@ class DebuggingMixin:
                         capture_output=True, text=True, timeout=10
                     )
 
-                    QtCore.QTimer.singleShot(0, lambda: crash_listbox.clear())
+                    emit_ui(self, lambda: crash_listbox.clear())
 
                     if result.returncode == 0 and result.stdout.strip():
                         files = result.stdout.strip().split('\n')
                         for f in files:
-                            QtCore.QTimer.singleShot(
-                                0, lambda file=f: crash_listbox.addItem(file)
+                            emit_ui(
+                                self, lambda file=f: crash_listbox.addItem(file)
                             )
-                        QtCore.QTimer.singleShot(
-                            0, lambda: status_label.setText(f"Found {len(files)} crash files")
+                        emit_ui(
+                            self, lambda: status_label.setText(f"Found {len(files)} crash files")
                         )
                     else:
                         # Try tombstones
@@ -329,19 +330,19 @@ class DebuggingMixin:
                         if result.returncode == 0 and result.stdout.strip():
                             files = result.stdout.strip().split('\n')
                             for f in files:
-                                QtCore.QTimer.singleShot(
-                                    0,
+                                emit_ui(
+                                    self,
                                     lambda file=f: crash_listbox.addItem(f"tombstones/{file}"),
                                 )
-                            QtCore.QTimer.singleShot(
-                                0, lambda: status_label.setText(f"Found {len(files)} tombstone files")
+                            emit_ui(
+                                self, lambda: status_label.setText(f"Found {len(files)} tombstone files")
                             )
                         else:
-                            QtCore.QTimer.singleShot(0, lambda: status_label.setText("No crash files found"))
+                            emit_ui(self, lambda: status_label.setText("No crash files found"))
 
                 except Exception as e:
-                    QtCore.QTimer.singleShot(
-                        0, lambda: status_label.setText(f"Error: {str(e)}")
+                    emit_ui(
+                        self, lambda: status_label.setText(f"Error: {str(e)}")
                     )
 
             def on_crash_select():
@@ -369,11 +370,11 @@ class DebuggingMixin:
                                 result.stdout if result.stdout else "Unable to read file"
                             )
 
-                        QtCore.QTimer.singleShot(0, set_detail)
+                        emit_ui(self, set_detail)
 
                     except Exception as e:
-                        QtCore.QTimer.singleShot(
-                            0, lambda: detail_widget.appendPlainText(f"Error: {str(e)}")
+                        emit_ui(
+                            self, lambda: detail_widget.appendPlainText(f"Error: {str(e)}")
                         )
 
                 threading.Thread(target=load_detail, daemon=True).start()
@@ -556,8 +557,8 @@ class DebuggingMixin:
     ):
         """Refresh system log in the text widget"""
         if not append_mode:
-            QtCore.QTimer.singleShot(
-                0, lambda: text_widget.setPlainText(f"Loading {log_type} logs...\n\n")
+            emit_ui(
+                self, lambda: text_widget.setPlainText(f"Loading {log_type} logs...\n\n")
             )
 
         try:
@@ -579,8 +580,8 @@ class DebuggingMixin:
                 cmd = [adb_cmd, "-s", serial, "shell", "dumpsys", "events"]
             else:
                 if status_label:
-                    QtCore.QTimer.singleShot(
-                        0, lambda: status_label.setText(f"Unknown log type: {log_type}")
+                    emit_ui(
+                        self, lambda: status_label.setText(f"Unknown log type: {log_type}")
                     )
                 return
 
@@ -599,7 +600,7 @@ class DebuggingMixin:
                     if status_label:
                         status_label.setText("Error retrieving logs")
 
-                QtCore.QTimer.singleShot(0, set_error)
+                emit_ui(self, set_error)
                 return
 
             output = result.stdout or ""
@@ -630,7 +631,7 @@ class DebuggingMixin:
                         f"Loaded {log_type} logs at {time.strftime('%H:%M:%S')}"
                     )
 
-            QtCore.QTimer.singleShot(0, set_logs)
+            emit_ui(self, set_logs)
 
         except subprocess.TimeoutExpired:
             def set_timeout():
@@ -640,7 +641,7 @@ class DebuggingMixin:
                 if status_label:
                     status_label.setText("Command timed out")
 
-            QtCore.QTimer.singleShot(0, set_timeout)
+            emit_ui(self, set_timeout)
         except Exception as e:
             def set_error():
                 if not append_mode:
@@ -649,7 +650,7 @@ class DebuggingMixin:
                 if status_label:
                     status_label.setText(f"Error: {str(e)}")
 
-            QtCore.QTimer.singleShot(0, set_error)
+            emit_ui(self, set_error)
 
     def _insert_colorized_logs(self, text_widget, log_output, log_type):
         """Insert logs with proper colorization based on log type"""
@@ -1048,7 +1049,7 @@ class DebuggingMixin:
                         self, "Error", f"Screen recording failed: {error}"
                     )
 
-                QtCore.QTimer.singleShot(0, show_error)
+                emit_ui(self, show_error)
 
         except Exception as e:
             def show_error():
@@ -1058,7 +1059,7 @@ class DebuggingMixin:
                     self, "Error", f"Recording error: {e}"
                 )
 
-            QtCore.QTimer.singleShot(0, show_error)
+            emit_ui(self, show_error)
 
     def _stop_recording(
         self,
@@ -1085,8 +1086,8 @@ class DebuggingMixin:
                 progress_dialog,
             )
         except Exception as e:
-            QtCore.QTimer.singleShot(
-                0,
+            emit_ui(
+                self,
                 lambda: QtWidgets.QMessageBox.critical(
                     self, "Error", f"Failed to stop recording: {e}"
                 ),
@@ -1133,11 +1134,11 @@ class DebuggingMixin:
                         self, "Error", f"Failed to save recording: {error}"
                     )
 
-            QtCore.QTimer.singleShot(0, finalize)
+            emit_ui(self, finalize)
 
         except Exception as e:
-            QtCore.QTimer.singleShot(
-                0,
+            emit_ui(
+                self,
                 lambda: QtWidgets.QMessageBox.critical(
                     self, "Error", f"Failed to finish recording: {e}"
                 ),

@@ -10,6 +10,7 @@ import json
 import time
 
 from ..constants import IS_WINDOWS
+from ..utils.qt_dispatcher import emit_ui
 
 
 class BackupMixin:
@@ -135,15 +136,12 @@ class BackupMixin:
             self.log_message("Starting ADB backup (you may need to confirm on your device)")
             self.update_status("Backup in progress...")
 
-            QtCore.QTimer.singleShot(
-                0,
-                lambda: QtWidgets.QMessageBox.information(
-                    self,
-                    "Backup Started",
-                    "The backup process has started. You may need to unlock your device and confirm the backup.\n\n"
-                    "Please DO NOT disconnect your device until the backup is complete.",
-                ),
-            )
+            emit_ui(self, lambda: QtWidgets.QMessageBox.information(
+                self,
+                "Backup Started",
+                "The backup process has started. You may need to unlock your device and confirm the backup.\n\n"
+                "Please DO NOT disconnect your device until the backup is complete.",
+            ))
 
             result = subprocess.run(
                 cmd,

@@ -9,6 +9,7 @@ import os
 import threading
 
 from ..constants import IS_WINDOWS
+from ..utils.qt_dispatcher import emit_ui
 
 
 class AppManagerMixin:
@@ -143,7 +144,7 @@ class AppManagerMixin:
             self.update_status(f"Found {len(packages)} apps")
             self.log_message(f"Found {len(packages)} user-installed applications")
 
-            QtCore.QTimer.singleShot(0, lambda: self._show_app_manager(packages, serial, adb_cmd))
+            emit_ui(self, lambda: self._show_app_manager(packages, serial, adb_cmd))
 
         except Exception as e:
             self.log_message(f"Error loading app list: {str(e)}")
@@ -263,21 +264,14 @@ class AppManagerMixin:
                             elif line.strip() and not line.startswith(' '):
                                 in_permissions = False
 
-                    QtCore.QTimer.singleShot(
-                        0,
-                        lambda: self._display_permissions(
-                            text_widget, status_label, package_name, permissions
-                        ),
-                    )
+                    emit_ui(self, lambda: self._display_permissions(
+                        text_widget, status_label, package_name, permissions
+                    ))
                 else:
-                    QtCore.QTimer.singleShot(
-                        0, lambda: self._show_permission_error(status_label, result.stderr)
-                    )
+                    emit_ui(self, lambda: self._show_permission_error(status_label, result.stderr))
 
             except Exception as e:
-                QtCore.QTimer.singleShot(
-                    0, lambda: self._show_permission_error(status_label, str(e))
-                )
+                emit_ui(self, lambda: self._show_permission_error(status_label, str(e)))
 
         threading.Thread(target=load_permissions, daemon=True).start()
         perm_window.show()

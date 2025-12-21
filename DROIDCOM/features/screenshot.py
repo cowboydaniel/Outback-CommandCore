@@ -11,6 +11,7 @@ import time
 import platform
 
 from ..constants import IS_WINDOWS
+from ..utils.qt_dispatcher import emit_ui
 
 
 class ScreenshotMixin:
@@ -97,7 +98,7 @@ class ScreenshotMixin:
             self.update_status("Screenshot saved")
 
             # Show the screenshot
-            QtCore.QTimer.singleShot(0, lambda: self._show_screenshot(screenshot_file))
+            emit_ui(self, lambda: self._show_screenshot(screenshot_file))
 
         except Exception as e:
             self.log_message(f"Error taking screenshot: {str(e)}")
