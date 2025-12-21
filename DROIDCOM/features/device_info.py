@@ -12,6 +12,7 @@ import logging
 import threading
 
 from ..constants import IS_WINDOWS
+from ..utils.qt_dispatcher import emit_ui
 
 
 class DeviceInfoMixin:
@@ -181,7 +182,7 @@ class DeviceInfoMixin:
             return device_info
 
         except Exception as e:
-            self.log_message(f"Error getting device info: {str(e)}")
+            emit_ui(self, lambda e=e: self.log_message(f"Error getting device info: {str(e)}"))
             return None
 
     def _check_tesseract_installed(self):
@@ -317,9 +318,9 @@ class DeviceInfoMixin:
             # Method 1: Using dialer method with OCR (run in thread with timeout)
             # Only try this method if tesseract is installed
             if self._check_tesseract_installed():
-                self.log_message("Trying dialer code method to get IMEI...")
+                emit_ui(self, lambda: self.log_message("Trying dialer code method to get IMEI..."))
             else:
-                self.log_message("Skipping dialer method - tesseract OCR not installed, using alternative methods...")
+                emit_ui(self, lambda: self.log_message("Skipping dialer method - tesseract OCR not installed, using alternative methods..."))
 
             result_list = []
             dialer_thread = threading.Thread(
@@ -331,16 +332,16 @@ class DeviceInfoMixin:
             dialer_thread.join(timeout=35)  # Wait max 35 seconds
 
             if dialer_thread.is_alive():
-                self.log_message("Dialer method timed out")
+                emit_ui(self, lambda: self.log_message("Dialer method timed out"))
             elif result_list:
                 imei = result_list[0]
                 if imei:
-                    self.log_message("IMEI found in OCR text!")
+                    emit_ui(self, lambda: self.log_message("IMEI found in OCR text!"))
                     device_info['imei'] = imei
 
             # Method 2: service call iphonesubinfo
             if 'imei' not in device_info:
-                self.log_message("Trying service call method for IMEI...")
+                emit_ui(self, lambda: self.log_message("Trying service call method for IMEI..."))
                 try:
                     imei_proc = subprocess.Popen(
                         [adb_cmd, '-s', serial, 'shell', 'service', 'call', 'iphonesubinfo', '1'],
@@ -379,13 +380,13 @@ class DeviceInfoMixin:
                     except subprocess.TimeoutExpired:
                         imei_proc.kill()
                         imei_proc.wait()
-                        self.log_message("Service call IMEI query timed out")
+                        emit_ui(self, lambda: self.log_message("Service call IMEI query timed out"))
                 except Exception as e:
-                    self.log_message(f"Service call method error: {str(e)}")
+                    emit_ui(self, lambda e=e: self.log_message(f"Service call method error: {str(e)}"))
 
             # Method 3: dumpsys iphonesubinfo
             if 'imei' not in device_info:
-                self.log_message("Trying dumpsys method for IMEI...")
+                emit_ui(self, lambda: self.log_message("Trying dumpsys method for IMEI..."))
                 try:
                     dumpsys_proc = subprocess.Popen(
                         [adb_cmd, '-s', serial, 'shell', 'dumpsys', 'iphonesubinfo'],
@@ -408,12 +409,12 @@ class DeviceInfoMixin:
                     except subprocess.TimeoutExpired:
                         dumpsys_proc.kill()
                         dumpsys_proc.wait()
-                        self.log_message("Dumpsys IMEI query timed out")
+                        emit_ui(self, lambda: self.log_message("Dumpsys IMEI query timed out"))
                 except Exception as e:
-                    self.log_message(f"Dumpsys method error: {str(e)}")
+                    emit_ui(self, lambda e=e: self.log_message(f"Dumpsys method error: {str(e)}"))
 
         except Exception as e:
-            self.log_message(f"Error getting IMEI: {str(e)}")
+            emit_ui(self, lambda e=e: self.log_message(f"Error getting IMEI: {str(e)}"))
 
         # Fallback to Android ID
         if 'imei' not in device_info:
