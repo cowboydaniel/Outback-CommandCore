@@ -186,87 +186,9 @@ class DeviceInfoMixin:
     def _get_device_imei(self, device_info, serial, adb_cmd):
         """Try to get device IMEI using multiple methods"""
         try:
-            # Method 1: Using dialer method with OCR
-            self.log_message("Trying dialer code method to get IMEI...")
-
-            temp_dir = tempfile.mkdtemp()
-            screenshot_path = os.path.join(temp_dir, "imei_screen.png")
-
-            # Launch the dialer with *#06# code
-            subprocess.run(
-                [adb_cmd, '-s', serial, 'shell', 'am', 'start', '-a', 'android.intent.action.DIAL'],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                timeout=10
-            )
-
-            time.sleep(2)
-
-            dial_cmd = subprocess.run(
-                [adb_cmd, '-s', serial, 'shell', 'am', 'start', '-a', 'android.intent.action.DIAL', '-d', 'tel:*#06#'],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                timeout=10
-            )
-
-            if dial_cmd.returncode == 0:
-                time.sleep(2)
-
-                screenshot_cmd = subprocess.run(
-                    [adb_cmd, '-s', serial, 'exec-out', 'screencap', '-p'],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    timeout=10
-                )
-
-                if screenshot_cmd.returncode == 0 and screenshot_cmd.stdout:
-                    with open(screenshot_path, 'wb') as f:
-                        f.write(screenshot_cmd.stdout)
-
-                    try:
-                        ocr_cmd = subprocess.run(
-                            ['tesseract', screenshot_path, 'stdout'],
-                            stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE,
-                            text=True,
-                            timeout=15
-                        )
-
-                        if ocr_cmd.returncode == 0:
-                            ocr_text = ocr_cmd.stdout.strip()
-                            self.log_message("OCR text extracted from dialer screen.")
-
-                            imei = None
-
-                            for line in ocr_text.split('\n'):
-                                if 'IMEI' in line.upper() or 'Device ID' in line:
-                                    digits = ''.join(c for c in line if c.isdigit())
-                                    if len(digits) >= 14:
-                                        imei = digits
-                                        break
-
-                            if not imei:
-                                imei_matches = re.findall(r'\b\d{14,16}\b', ocr_text)
-                                if imei_matches:
-                                    for match in imei_matches:
-                                        if 14 <= len(match) <= 16:
-                                            imei = match
-                                            break
-
-                            if imei:
-                                self.log_message("IMEI found in OCR text!")
-                                device_info['imei'] = imei
-
-                    except Exception as e:
-                        self.log_message(f"OCR processing error: {str(e)}")
-
-                    try:
-                        os.remove(screenshot_path)
-                        os.rmdir(temp_dir)
-                    except:
-                        pass
+            # Method 1: Skip dialer/OCR method - causes memory corruption with screencap subprocess
+            # This method requires a display and tesseract, and causes adb crashes
+            pass
 
             # Method 2: service call iphonesubinfo
             if 'imei' not in device_info:
