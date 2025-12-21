@@ -305,26 +305,8 @@ class DeviceInfoMixin:
                         if len(imei) >= 14:
                             device_info['imei'] = imei
 
-            # Method 3: dumpsys iphonesubinfo
-            if 'imei' not in device_info:
-                self.log_message("Trying dumpsys method for IMEI...")
-                imei_cmd2 = subprocess.run(
-                    [adb_cmd, '-s', serial, 'shell', 'dumpsys', 'iphonesubinfo'],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                    timeout=5
-                )
-                if imei_cmd2.returncode == 0:
-                    imei_output = imei_cmd2.stdout.strip()
-                    for line in imei_output.split('\n'):
-                        if 'Device ID' in line or 'IMEI' in line:
-                            parts = line.split('=' if '=' in line else ':')
-                            if len(parts) > 1:
-                                imei = parts[1].strip()
-                                if imei and len(imei) >= 14 and imei.isdigit():
-                                    device_info['imei'] = imei
-                                    break
+            # Method 3: Skip dumpsys iphonesubinfo - causes adb crashes on some devices
+            # Use Android ID fallback instead
 
         except Exception as e:
             self.log_message(f"Error getting IMEI: {str(e)}")
