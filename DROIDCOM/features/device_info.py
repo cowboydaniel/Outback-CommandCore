@@ -185,7 +185,7 @@ class DeviceInfoMixin:
             return None
 
     def _check_tesseract_installed(self):
-        """Check if tesseract is installed without causing a segfault"""
+        """Check if tesseract is installed"""
         try:
             result = subprocess.run(
                 ['tesseract', '--version'],
@@ -256,7 +256,7 @@ class DeviceInfoMixin:
                             try:
                                 # OCR with Popen
                                 ocr_proc = subprocess.Popen(
-                                    ['tesseract', screenshot_path, 'stdout'],
+                                    ['tesseract', screenshot_path, '-'],
                                     stdout=subprocess.PIPE,
                                     stderr=subprocess.PIPE,
                                     text=True
