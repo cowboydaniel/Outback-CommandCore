@@ -200,7 +200,7 @@ class DeviceInfoMixin:
         except Exception:
             return False
 
-    def _dialer_method_worker(self, device_info, serial, adb_cmd, result_list):
+    def _dialer_method_worker(self, device_info, serial, adb_cmd, result_list, dialer_status):
         """Worker function for dialer IMEI method - runs in thread with timeout"""
         try:
             # Skip dialer method if tesseract is not available
@@ -213,57 +213,125 @@ class DeviceInfoMixin:
             try:
                 # Launch the dialer with *#06# code
                 try:
-                    subprocess.run(
-                        [adb_cmd, '-s', serial, 'shell', 'am', 'start', '-a', 'android.intent.action.DIAL'],
+                    dialer_launch_cmd = [
+                        adb_cmd,
+                        '-s',
+                        serial,
+                        'shell',
+                        'am',
+                        'start',
+                        '-a',
+                        'android.intent.action.DIAL'
+                    ]
+                    dialer_launch = subprocess.run(
+                        dialer_launch_cmd,
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
+                        text=True,
                         timeout=10
                     )
-                except Exception:
-                    pass
+                    if dialer_launch.returncode != 0:
+                        stderr_msg = dialer_launch.stderr.strip()
+                        emit_ui(
+                            self,
+                            lambda cmd=dialer_launch_cmd, stderr_msg=stderr_msg: self.log_message(
+                                f"Dialer launch failed for command {cmd}: {stderr_msg or 'no stderr output'}"
+                            )
+                        )
+                        dialer_status['failed'] = True
+                        dialer_status['reason'] = stderr_msg or 'Dialer launch command failed'
+                except Exception as e:
+                    emit_ui(
+                        self,
+                        lambda cmd=[adb_cmd, '-s', serial, 'shell', 'am', 'start', '-a', 'android.intent.action.DIAL'], e=e: self.log_message(
+                            f"Dialer launch exception for command {cmd}: {str(e)}"
+                        )
+                    )
+                    dialer_status['failed'] = True
+                    dialer_status['reason'] = str(e)
 
                 time.sleep(2)
 
                 # Use Popen with communicate for better subprocess handling
                 try:
+                    dial_cmd = [
+                        adb_cmd,
+                        '-s',
+                        serial,
+                        'shell',
+                        'am',
+                        'start',
+                        '-a',
+                        'android.intent.action.DIAL',
+                        '-d',
+                        'tel:*#06#'
+                    ]
                     dial_proc = subprocess.Popen(
-                        [adb_cmd, '-s', serial, 'shell', 'am', 'start', '-a', 'android.intent.action.DIAL', '-d', 'tel:*#06#'],
+                        dial_cmd,
                         stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE
+                        stderr=subprocess.PIPE,
+                        text=True
                     )
                     try:
-                        dial_proc.communicate(timeout=10)
+                        _, dial_stderr = dial_proc.communicate(timeout=10)
+                        if dial_proc.returncode != 0:
+                            stderr_msg = (dial_stderr or '').strip()
+                            emit_ui(
+                                self,
+                                lambda cmd=dial_cmd, stderr_msg=stderr_msg: self.log_message(
+                                    f"Dialer code launch failed for command {cmd}: {stderr_msg or 'no stderr output'}"
+                                )
+                            )
+                            dialer_status['failed'] = True
+                            dialer_status['reason'] = stderr_msg or 'Dialer code launch failed'
                     except subprocess.TimeoutExpired:
                         dial_proc.kill()
                         dial_proc.wait()
-                except Exception:
-                    pass
+                        emit_ui(
+                            self,
+                            lambda cmd=dial_cmd: self.log_message(
+                                f"Dialer code launch timed out for command {cmd}"
+                            )
+                        )
+                        dialer_status['failed'] = True
+                        dialer_status['reason'] = 'Dialer code launch timed out'
+                except Exception as e:
+                    emit_ui(
+                        self,
+                        lambda cmd=[adb_cmd, '-s', serial, 'shell', 'am', 'start', '-a', 'android.intent.action.DIAL', '-d', 'tel:*#06#'], e=e: self.log_message(
+                            f"Dialer code launch exception for command {cmd}: {str(e)}"
+                        )
+                    )
+                    dialer_status['failed'] = True
+                    dialer_status['reason'] = str(e)
 
                 time.sleep(2)
 
                 # Capture screenshot using Popen with communicate for binary data handling
                 try:
+                    screencap_cmd = [adb_cmd, '-s', serial, 'exec-out', 'screencap', '-p']
                     screencap_proc = subprocess.Popen(
-                        [adb_cmd, '-s', serial, 'exec-out', 'screencap', '-p'],
+                        screencap_cmd,
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE
                     )
                     try:
-                        stdout_data, _ = screencap_proc.communicate(timeout=10)
+                        stdout_data, screencap_stderr = screencap_proc.communicate(timeout=10)
                         if screencap_proc.returncode == 0 and stdout_data:
                             with open(screenshot_path, 'wb') as f:
                                 f.write(stdout_data)
 
                             try:
                                 # OCR with Popen
+                                ocr_cmd = ['tesseract', screenshot_path, '-']
                                 ocr_proc = subprocess.Popen(
-                                    ['tesseract', screenshot_path, '-'],
+                                    ocr_cmd,
                                     stdout=subprocess.PIPE,
                                     stderr=subprocess.PIPE,
                                     text=True
                                 )
                                 try:
-                                    ocr_stdout, _ = ocr_proc.communicate(timeout=15)
+                                    ocr_stdout, ocr_stderr = ocr_proc.communicate(timeout=15)
                                     if ocr_proc.returncode == 0:
                                         ocr_text = ocr_stdout.strip()
 
@@ -286,16 +354,66 @@ class DeviceInfoMixin:
 
                                         if imei:
                                             result_list.append(imei)
+                                    else:
+                                        stderr_msg = (ocr_stderr or '').strip()
+                                        emit_ui(
+                                            self,
+                                            lambda cmd=ocr_cmd, stderr_msg=stderr_msg: self.log_message(
+                                                f"OCR failed for command {cmd}: {stderr_msg or 'no stderr output'}"
+                                            )
+                                        )
+                                        dialer_status['failed'] = True
+                                        dialer_status['reason'] = stderr_msg or 'OCR failed'
                                 except subprocess.TimeoutExpired:
                                     ocr_proc.kill()
                                     ocr_proc.wait()
-                            except Exception:
-                                pass
+                                    emit_ui(
+                                        self,
+                                        lambda cmd=ocr_cmd: self.log_message(
+                                            f"OCR timed out for command {cmd}"
+                                        )
+                                    )
+                                    dialer_status['failed'] = True
+                                    dialer_status['reason'] = 'OCR timed out'
+                            except Exception as e:
+                                emit_ui(
+                                    self,
+                                    lambda cmd=ocr_cmd, e=e: self.log_message(
+                                        f"OCR exception for command {cmd}: {str(e)}"
+                                    )
+                                )
+                                dialer_status['failed'] = True
+                                dialer_status['reason'] = str(e)
+                        elif screencap_proc.returncode != 0:
+                            stderr_msg = (screencap_stderr or '').strip()
+                            emit_ui(
+                                self,
+                                lambda cmd=screencap_cmd, stderr_msg=stderr_msg: self.log_message(
+                                    f"Screencap failed for command {cmd}: {stderr_msg or 'no stderr output'}"
+                                )
+                            )
+                            dialer_status['failed'] = True
+                            dialer_status['reason'] = stderr_msg or 'Screencap failed'
                     except subprocess.TimeoutExpired:
                         screencap_proc.kill()
                         screencap_proc.wait()
-                except Exception:
-                    pass
+                        emit_ui(
+                            self,
+                            lambda cmd=screencap_cmd: self.log_message(
+                                f"Screencap timed out for command {cmd}"
+                            )
+                        )
+                        dialer_status['failed'] = True
+                        dialer_status['reason'] = 'Screencap timed out'
+                except Exception as e:
+                    emit_ui(
+                        self,
+                        lambda cmd=[adb_cmd, '-s', serial, 'exec-out', 'screencap', '-p'], e=e: self.log_message(
+                            f"Screencap exception for command {cmd}: {str(e)}"
+                        )
+                    )
+                    dialer_status['failed'] = True
+                    dialer_status['reason'] = str(e)
 
             finally:
                 # Clean up temp files properly
@@ -303,14 +421,16 @@ class DeviceInfoMixin:
                     if os.path.exists(screenshot_path):
                         os.remove(screenshot_path)
                 except Exception:
-                    pass
+                    emit_ui(self, lambda: self.log_message("Failed to remove IMEI screenshot temp file"))
                 try:
                     if os.path.exists(temp_dir):
                         os.rmdir(temp_dir)
                 except Exception:
-                    pass
-        except Exception:
-            pass
+                    emit_ui(self, lambda: self.log_message("Failed to remove IMEI temp directory"))
+        except Exception as e:
+            emit_ui(self, lambda e=e: self.log_message(f"Dialer method worker error: {str(e)}"))
+            dialer_status['failed'] = True
+            dialer_status['reason'] = str(e)
 
     def _get_device_imei(self, device_info, serial, adb_cmd):
         """Try to get device IMEI using multiple methods"""
@@ -323,9 +443,10 @@ class DeviceInfoMixin:
                 emit_ui(self, lambda: self.log_message("Skipping dialer method - tesseract OCR not installed, using alternative methods..."))
 
             result_list = []
+            dialer_status = {'failed': False, 'reason': None}
             dialer_thread = threading.Thread(
                 target=self._dialer_method_worker,
-                args=(device_info, serial, adb_cmd, result_list),
+                args=(device_info, serial, adb_cmd, result_list, dialer_status),
                 daemon=True
             )
             dialer_thread.start()
@@ -338,6 +459,9 @@ class DeviceInfoMixin:
                 if imei:
                     emit_ui(self, lambda: self.log_message("IMEI found in OCR text!"))
                     device_info['imei'] = imei
+            elif dialer_status['failed']:
+                reason = dialer_status['reason'] or 'unknown error'
+                emit_ui(self, lambda reason=reason: self.log_message(f"Dialer method failed: {reason}"))
 
             # Method 2: service call iphonesubinfo
             if 'imei' not in device_info:
