@@ -3,13 +3,97 @@ DROIDCOM - Widgets Module
 Contains widget creation and UI-related functionality.
 """
 
-import tkinter as tk
-from tkinter import ttk
 import threading
 import time
 import logging
 
-from ..constants import IS_WINDOWS
+from PySide6 import QtCore, QtGui, QtWidgets
+
+
+
+class ListBox(QtWidgets.QListWidget):
+    """QListWidget adapter with Tkinter-like listbox methods."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
+
+    def curselection(self):
+        return [self.row(item) for item in self.selectedItems()]
+
+    def get(self, index):
+        index = self._normalize_index(index)
+        if index is None:
+            return ""
+        item = self.item(index)
+        return item.text() if item else ""
+
+    def delete(self, first, last=None):
+        if last is None:
+            last = first
+        first_index = self._normalize_index(first)
+        last_index = self._normalize_index(last)
+        if first_index is None:
+            return
+        if last_index is None:
+            last_index = first_index
+        for index in range(last_index, first_index - 1, -1):
+            self.takeItem(index)
+
+    def insert(self, index, text):
+        text = str(text)
+        if isinstance(index, str) and index.lower() == "end":
+            self.addItem(text)
+            return
+        normalized = self._normalize_index(index)
+        if normalized is None:
+            self.addItem(text)
+            return
+        self.insertItem(normalized, text)
+
+    def size(self):
+        return self.count()
+
+    def selection_set(self, first, last=None):
+        first_index = self._normalize_index(first)
+        last_index = self._normalize_index(last) if last is not None else first_index
+        if first_index is None:
+            return
+        if last_index is None:
+            last_index = first_index
+        for index in range(first_index, last_index + 1):
+            item = self.item(index)
+            if item:
+                item.setSelected(True)
+        self.setCurrentRow(first_index)
+
+    def selection_clear(self, first=None, last=None):
+        self.clearSelection()
+
+    def see(self, index):
+        normalized = self._normalize_index(index)
+        if normalized is None:
+            return
+        item = self.item(normalized)
+        if item:
+            self.scrollToItem(item)
+
+    def _normalize_index(self, index):
+        if isinstance(index, (list, tuple)):
+            if not index:
+                return None
+            index = index[0]
+        if isinstance(index, str):
+            if index.lower() == "end":
+                return max(self.count() - 1, 0)
+            try:
+                return int(index)
+            except ValueError:
+                return None
+        try:
+            return int(index)
+        except (TypeError, ValueError):
+            return None
 
 
 class WidgetsMixin:
@@ -17,317 +101,288 @@ class WidgetsMixin:
 
     def create_widgets(self):
         """Create the main UI widgets"""
-        # Create main container frame that fills the entire window
-        main_container = ttk.Frame(self)
-        main_container.pack(fill="both", expand=True)
+        main_layout = QtWidgets.QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(8)
 
-        # Ensure the main container uses all available space
-        self.pack_propagate(False)
+        # Create main container widget
+        main_container = QtWidgets.QWidget(self)
+        main_layout.addWidget(main_container, 1)
 
-        # Create a simple frame for content (no scrolling)
-        content_frame = ttk.Frame(main_container)
-        content_frame.pack(fill="both", expand=True)
-
-        # Set minimum size for the container
-        self.update_idletasks()  # Force geometry update
-        min_width = max(1024, main_container.winfo_width())  # Ensure minimum width
+        content_layout = QtWidgets.QVBoxLayout(main_container)
+        content_layout.setContentsMargins(10, 10, 10, 10)
+        content_layout.setSpacing(8)
 
         # Main header with logo
-        header_frame = ttk.Frame(content_frame)
-        header_frame.pack(fill="x", padx=10, pady=5)
+        header_frame = QtWidgets.QWidget(main_container)
+        header_layout = QtWidgets.QHBoxLayout(header_frame)
+        header_layout.setContentsMargins(0, 0, 0, 0)
 
-        header_label = ttk.Label(
-            header_frame, text="Android Device Management", font=("Arial", 14, "bold")
-        )
-        header_label.pack(side="left", pady=10)
+        header_label = QtWidgets.QLabel("Android Device Management", header_frame)
+        header_font = QtGui.QFont("Arial", 14, QtGui.QFont.Bold)
+        header_label.setFont(header_font)
+        header_layout.addWidget(header_label)
+        header_layout.addStretch()
+        content_layout.addWidget(header_frame)
 
         # Setup status frame for tools
-        self.setup_status_frame = ttk.LabelFrame(content_frame, text="Tools Status")
-        self.setup_status_frame.pack(fill="x", padx=10, pady=5, expand=False)
+        self.setup_status_frame = QtWidgets.QGroupBox("Tools Status", main_container)
+        setup_layout = QtWidgets.QVBoxLayout(self.setup_status_frame)
+        setup_layout.setContentsMargins(8, 8, 8, 8)
 
-        # Check Platform Tools (ADB)
         tools_status = "✅ Installed" if self.platform_tools_installed else "❌ Not Installed"
-        self.tools_label = ttk.Label(
-            self.setup_status_frame, text=f"Android Platform Tools: {tools_status}", font=("Arial", 10)
+        self.tools_label = QtWidgets.QLabel(
+            f"Android Platform Tools: {tools_status}", self.setup_status_frame
         )
-        self.tools_label.pack(anchor="w", padx=5, pady=2)
+        tools_label_font = QtGui.QFont("Arial", 10)
+        self.tools_label.setFont(tools_label_font)
+        setup_layout.addWidget(self.tools_label)
 
-        # Tools installation button
         if not self.platform_tools_installed:
-            tools_frame = ttk.Frame(self.setup_status_frame)
-            tools_frame.pack(fill="x", padx=5, pady=5)
+            tools_frame = QtWidgets.QWidget(self.setup_status_frame)
+            tools_frame_layout = QtWidgets.QHBoxLayout(tools_frame)
+            tools_frame_layout.setContentsMargins(0, 0, 0, 0)
 
-            tools_btn = ttk.Button(
-                tools_frame, text="Install Android Platform Tools", command=self.install_platform_tools,
-                width=30  # Explicitly set width to ensure text fits
-            )
-            tools_btn.pack(side="left", padx=5, pady=5)
+            tools_btn = QtWidgets.QPushButton("Install Android Platform Tools", tools_frame)
+            tools_btn.clicked.connect(self.install_platform_tools)
+            tools_btn.setMinimumWidth(260)
+            tools_frame_layout.addWidget(tools_btn)
+            tools_frame_layout.addStretch()
+            setup_layout.addWidget(tools_frame)
+
+        content_layout.addWidget(self.setup_status_frame)
 
         # Main content area with tabs
-        self.notebook = ttk.Notebook(content_frame)
-        self.notebook.pack(fill="both", expand=True, padx=10, pady=5)
+        self.notebook = QtWidgets.QTabWidget(main_container)
+        content_layout.addWidget(self.notebook, 1)
 
         # Device Info Tab
-        self.device_frame = ttk.Frame(self.notebook)
-        self.notebook.add(self.device_frame, text="Device Info")
+        self.device_frame = QtWidgets.QWidget(self.notebook)
+        device_layout = QtWidgets.QVBoxLayout(self.device_frame)
+        device_layout.setContentsMargins(10, 10, 10, 10)
+        device_layout.setSpacing(10)
+        self.notebook.addTab(self.device_frame, "Device Info")
 
         # Device connection frame
-        connection_frame = ttk.LabelFrame(self.device_frame, text="Device Connection")
-        connection_frame.pack(fill="x", padx=10, pady=10, expand=False)
+        connection_frame = QtWidgets.QGroupBox("Device Connection", self.device_frame)
+        connection_layout = QtWidgets.QVBoxLayout(connection_frame)
+        connection_layout.setSpacing(8)
+        device_layout.addWidget(connection_frame)
 
         # Connection buttons frame
-        conn_buttons_frame = ttk.Frame(connection_frame)
-        conn_buttons_frame.pack(fill="x", padx=5, pady=5)
+        conn_buttons_frame = QtWidgets.QWidget(connection_frame)
+        conn_buttons_layout = QtWidgets.QHBoxLayout(conn_buttons_frame)
+        conn_buttons_layout.setContentsMargins(0, 0, 0, 0)
+        conn_buttons_layout.setSpacing(6)
 
-        # Connect button
-        self.connect_btn = ttk.Button(
-            conn_buttons_frame, text="Connect Device", command=self.connect_device,
-            width=20  # Explicitly set width to ensure text fits
-        )
-        self.connect_btn.pack(side="left", padx=5, pady=5)
+        self.connect_btn = QtWidgets.QPushButton("Connect Device", conn_buttons_frame)
+        self.connect_btn.clicked.connect(self.connect_device)
+        self.connect_btn.setMinimumWidth(160)
+        conn_buttons_layout.addWidget(self.connect_btn)
 
-        # WiFi ADB button
-        self.wifi_adb_btn = ttk.Button(
-            conn_buttons_frame, text="WiFi ADB", command=self.setup_wifi_adb,
-            width=20  # Explicitly set width to ensure text fits
-        )
-        self.wifi_adb_btn.pack(side="left", padx=5, pady=5)
+        self.wifi_adb_btn = QtWidgets.QPushButton("WiFi ADB", conn_buttons_frame)
+        self.wifi_adb_btn.clicked.connect(self.setup_wifi_adb)
+        self.wifi_adb_btn.setMinimumWidth(160)
+        conn_buttons_layout.addWidget(self.wifi_adb_btn)
 
-        # Refresh button
-        self.refresh_btn = ttk.Button(
-            conn_buttons_frame, text="Refresh Devices", command=self.refresh_device_list,
-            width=20  # Explicitly set width to ensure text fits
-        )
-        self.refresh_btn.pack(side="left", padx=5, pady=5)
+        self.refresh_btn = QtWidgets.QPushButton("Refresh Devices", conn_buttons_frame)
+        self.refresh_btn.clicked.connect(self.refresh_device_list)
+        self.refresh_btn.setMinimumWidth(160)
+        conn_buttons_layout.addWidget(self.refresh_btn)
 
-        # Remove Offline Devices button
-        self.remove_offline_btn = ttk.Button(
-            conn_buttons_frame, text="Remove Offline", command=self.remove_offline_devices,
-            width=20  # Explicitly set width to ensure text fits
-        )
-        self.remove_offline_btn.pack(side="left", padx=5, pady=5)
+        self.remove_offline_btn = QtWidgets.QPushButton("Remove Offline", conn_buttons_frame)
+        self.remove_offline_btn.clicked.connect(self.remove_offline_devices)
+        self.remove_offline_btn.setMinimumWidth(160)
+        conn_buttons_layout.addWidget(self.remove_offline_btn)
+
+        conn_buttons_layout.addStretch()
+        connection_layout.addWidget(conn_buttons_frame)
 
         # Device list frame
-        list_frame = ttk.Frame(connection_frame)
-        list_frame.pack(fill="x", padx=5, pady=5)
+        list_frame = QtWidgets.QWidget(connection_frame)
+        list_layout = QtWidgets.QVBoxLayout(list_frame)
+        list_layout.setContentsMargins(0, 0, 0, 0)
+        list_layout.setSpacing(4)
 
-        # Device list label
-        list_label = ttk.Label(list_frame, text="Available Devices:")
-        list_label.pack(anchor="w", padx=5, pady=2)
+        list_label = QtWidgets.QLabel("Available Devices:", list_frame)
+        list_layout.addWidget(list_label)
 
-        # Device listbox without scrollbar
-        list_subframe = ttk.Frame(list_frame)
-        list_subframe.pack(fill="x", padx=5, pady=2)
+        list_subframe = QtWidgets.QWidget(list_frame)
+        list_sub_layout = QtWidgets.QHBoxLayout(list_subframe)
+        list_sub_layout.setContentsMargins(0, 0, 0, 0)
 
-        self.device_listbox = tk.Listbox(list_subframe, height=3)
-        self.device_listbox.pack(side="left", fill="x", expand=True)
+        self.device_listbox = ListBox(list_subframe)
+        self.device_listbox.setMinimumHeight(80)
+        list_sub_layout.addWidget(self.device_listbox)
+        list_layout.addWidget(list_subframe)
+
+        connection_layout.addWidget(list_frame)
 
         # Device info display
-        device_info_frame = ttk.LabelFrame(self.device_frame, text="Device Information")
-        device_info_frame.pack(fill="both", padx=10, pady=10, expand=True)
+        device_info_frame = QtWidgets.QGroupBox("Device Information", self.device_frame)
+        device_info_layout = QtWidgets.QVBoxLayout(device_info_frame)
+        device_layout.addWidget(device_info_frame, 1)
 
-        # Device info content - simple grid layout instead of columns
-        info_content = ttk.Frame(device_info_frame)
-        info_content.pack(fill="both", expand=True, padx=10, pady=10)
+        info_content = QtWidgets.QWidget(device_info_frame)
+        info_layout = QtWidgets.QGridLayout(info_content)
+        info_layout.setContentsMargins(0, 0, 0, 0)
+        info_layout.setHorizontalSpacing(12)
+        info_layout.setVerticalSpacing(6)
+        device_info_layout.addWidget(info_content)
 
         # Basic device info fields (left column)
         self.info_fields = {
-            "Model": tk.StringVar(value="N/A"),
-            "Manufacturer": tk.StringVar(value="N/A"),
-            "Android Version": tk.StringVar(value="N/A"),
-            "Serial Number": tk.StringVar(value="N/A"),
-            "IMEI": tk.StringVar(value="N/A"),
-            "Battery Level": tk.StringVar(value="N/A"),
+            "Model": QtWidgets.QLabel("N/A", info_content),
+            "Manufacturer": QtWidgets.QLabel("N/A", info_content),
+            "Android Version": QtWidgets.QLabel("N/A", info_content),
+            "Serial Number": QtWidgets.QLabel("N/A", info_content),
+            "IMEI": QtWidgets.QLabel("N/A", info_content),
+            "Battery Level": QtWidgets.QLabel("N/A", info_content),
         }
 
         # Advanced device info fields (right column)
         self.adv_info_fields = {
-            "Storage": tk.StringVar(value="N/A"),
-            "RAM": tk.StringVar(value="N/A"),
-            "Screen Resolution": tk.StringVar(value="N/A"),
-            "CPU": tk.StringVar(value="N/A"),
-            "Kernel": tk.StringVar(value="N/A"),
+            "Storage": QtWidgets.QLabel("N/A", info_content),
+            "RAM": QtWidgets.QLabel("N/A", info_content),
+            "Screen Resolution": QtWidgets.QLabel("N/A", info_content),
+            "CPU": QtWidgets.QLabel("N/A", info_content),
+            "Kernel": QtWidgets.QLabel("N/A", info_content),
         }
 
-        # Create a simple grid layout with 2 columns for all fields
-        # Configure grid columns to have consistent width
-        info_content.columnconfigure(0, minsize=150)  # Label column
-        info_content.columnconfigure(1, minsize=150)  # Value column
-        info_content.columnconfigure(2, minsize=150)  # Label column 2
-        info_content.columnconfigure(3, minsize=150)  # Value column 2
+        info_layout.setColumnMinimumWidth(0, 150)
+        info_layout.setColumnMinimumWidth(1, 150)
+        info_layout.setColumnMinimumWidth(2, 150)
+        info_layout.setColumnMinimumWidth(3, 150)
 
-        # Add a heading for basic info
-        ttk.Label(
-            info_content, text="Basic Information", font=("Arial", 10, "bold")
-        ).grid(row=0, column=0, columnspan=2, sticky="w", padx=5, pady=(5, 10))
+        heading_font = QtGui.QFont("Arial", 10, QtGui.QFont.Bold)
+        basic_heading = QtWidgets.QLabel("Basic Information", info_content)
+        basic_heading.setFont(heading_font)
+        info_layout.addWidget(basic_heading, 0, 0, 1, 2, QtCore.Qt.AlignLeft)
 
-        # Add a heading for advanced info
-        ttk.Label(
-            info_content, text="Advanced Information", font=("Arial", 10, "bold")
-        ).grid(row=0, column=2, columnspan=2, sticky="w", padx=5, pady=(5, 10))
+        advanced_heading = QtWidgets.QLabel("Advanced Information", info_content)
+        advanced_heading.setFont(heading_font)
+        info_layout.addWidget(advanced_heading, 0, 2, 1, 2, QtCore.Qt.AlignLeft)
 
-        # Add a heading for debug info (at the bottom of the grid)
         max_rows = max(len(self.info_fields), len(self.adv_info_fields)) + 2
-        ttk.Label(
-            info_content, text="Debug Information", font=("Arial", 10, "bold")
-        ).grid(row=max_rows, column=0, columnspan=4, sticky="w", padx=5, pady=(15, 5))
+        debug_heading = QtWidgets.QLabel("Debug Information", info_content)
+        debug_heading.setFont(heading_font)
+        info_layout.addWidget(debug_heading, max_rows, 0, 1, 4, QtCore.Qt.AlignLeft)
 
-        # Add the debug text area
-        debug_frame = ttk.Frame(info_content)
-        debug_frame.grid(row=max_rows+1, column=0, columnspan=4, sticky="nsew", padx=5, pady=5)
+        debug_frame = QtWidgets.QWidget(info_content)
+        debug_layout = QtWidgets.QVBoxLayout(debug_frame)
+        debug_layout.setContentsMargins(0, 0, 0, 0)
+        self.debug_text = QtWidgets.QTextEdit(debug_frame)
+        self.debug_text.setReadOnly(True)
+        self.debug_text.setMinimumHeight(110)
+        debug_layout.addWidget(self.debug_text)
+        info_layout.addWidget(debug_frame, max_rows + 1, 0, 1, 4)
 
-        # Create a text widget for debug info (no scrollbar)
-        self.debug_text = tk.Text(debug_frame, height=5, width=80, wrap=tk.WORD)
-        self.debug_text.pack(fill="both", expand=True)
-
-        # Make text read-only
-        self.debug_text.config(state="disabled")
-
-        # Add basic info fields - first column
+        label_font = QtGui.QFont("Arial", 9, QtGui.QFont.Bold)
         row = 1
-        for label_text, var in self.info_fields.items():
-            ttk.Label(
-                info_content, text=f"{label_text}:", font=("Arial", 9, "bold")
-            ).grid(row=row, column=0, sticky="w", padx=5, pady=5)
-
-            ttk.Label(
-                info_content, textvariable=var
-            ).grid(row=row, column=1, sticky="w", padx=5, pady=5)
-
+        for label_text, value_label in self.info_fields.items():
+            label = QtWidgets.QLabel(f"{label_text}:", info_content)
+            label.setFont(label_font)
+            info_layout.addWidget(label, row, 0, QtCore.Qt.AlignLeft)
+            info_layout.addWidget(value_label, row, 1, QtCore.Qt.AlignLeft)
             row += 1
 
-        # Add advanced info fields - second column
         row = 1
-        for label_text, var in self.adv_info_fields.items():
-            ttk.Label(
-                info_content, text=f"{label_text}:", font=("Arial", 9, "bold")
-            ).grid(row=row, column=2, sticky="w", padx=5, pady=5)
-
-            ttk.Label(
-                info_content, textvariable=var
-            ).grid(row=row, column=3, sticky="w", padx=5, pady=5)
-
+        for label_text, value_label in self.adv_info_fields.items():
+            label = QtWidgets.QLabel(f"{label_text}:", info_content)
+            label.setFont(label_font)
+            info_layout.addWidget(label, row, 2, QtCore.Qt.AlignLeft)
+            info_layout.addWidget(value_label, row, 3, QtCore.Qt.AlignLeft)
             row += 1
-
-        # Status bar
-        self.status_var = tk.StringVar(value="Ready")
-        status_bar = ttk.Label(self, textvariable=self.status_var, relief="sunken", anchor="w")
-        status_bar.pack(side="bottom", fill="x", padx=10, pady=5)
 
         # Device actions frame
-        actions_frame = ttk.LabelFrame(self.device_frame, text="Device Actions")
-        actions_frame.pack(fill="x", padx=10, pady=(5, 10), expand=False)
+        actions_frame = QtWidgets.QGroupBox("Device Actions", self.device_frame)
+        actions_layout = QtWidgets.QGridLayout(actions_frame)
+        actions_layout.setHorizontalSpacing(8)
+        actions_layout.setVerticalSpacing(8)
+        device_layout.addWidget(actions_frame)
 
-        # Action buttons
-        actions_buttons_frame = ttk.Frame(actions_frame)
-        actions_buttons_frame.pack(fill="x", padx=5, pady=5)
+        self.screenshot_btn = QtWidgets.QPushButton("Take Screenshot", actions_frame)
+        self.screenshot_btn.clicked.connect(self.take_screenshot)
+        self.screenshot_btn.setEnabled(False)
+        actions_layout.addWidget(self.screenshot_btn, 0, 0)
 
-        # Row 1 of buttons
-        self.screenshot_btn = ttk.Button(
-            actions_buttons_frame, text="Take Screenshot", command=self.take_screenshot, state="disabled",
-            width=18  # Explicitly set width to ensure text fits
-        )
-        self.screenshot_btn.grid(row=0, column=0, padx=5, pady=5)
+        self.backup_btn = QtWidgets.QPushButton("Backup Device", actions_frame)
+        self.backup_btn.clicked.connect(self.backup_device)
+        self.backup_btn.setEnabled(False)
+        actions_layout.addWidget(self.backup_btn, 0, 1)
 
-        self.backup_btn = ttk.Button(
-            actions_buttons_frame, text="Backup Device", command=self.backup_device, state="disabled",
-            width=18  # Explicitly set width to ensure text fits
-        )
-        self.backup_btn.grid(row=0, column=1, padx=5, pady=5)
+        self.files_btn = QtWidgets.QPushButton("Manage Files", actions_frame)
+        self.files_btn.clicked.connect(self.manage_files)
+        self.files_btn.setEnabled(False)
+        actions_layout.addWidget(self.files_btn, 0, 2)
 
-        self.files_btn = ttk.Button(
-            actions_buttons_frame, text="Manage Files", command=self.manage_files, state="disabled",
-            width=18  # Explicitly set width to ensure text fits
-        )
-        self.files_btn.grid(row=0, column=2, padx=5, pady=5)
+        self.install_apk_btn = QtWidgets.QPushButton("Install APK", actions_frame)
+        self.install_apk_btn.clicked.connect(self.install_apk)
+        self.install_apk_btn.setEnabled(False)
+        actions_layout.addWidget(self.install_apk_btn, 1, 0)
 
-        # Row 2 of buttons
-        self.install_apk_btn = ttk.Button(
-            actions_buttons_frame, text="Install APK", command=self.install_apk, state="disabled",
-            width=18  # Explicitly set width to ensure text fits
-        )
-        self.install_apk_btn.grid(row=1, column=0, padx=5, pady=5)
+        self.app_manager_btn = QtWidgets.QPushButton("App Manager", actions_frame)
+        self.app_manager_btn.clicked.connect(self.app_manager)
+        self.app_manager_btn.setEnabled(False)
+        actions_layout.addWidget(self.app_manager_btn, 1, 1)
 
-        self.app_manager_btn = ttk.Button(
-            actions_buttons_frame, text="App Manager", command=self.app_manager, state="disabled",
-            width=18  # Explicitly set width to ensure text fits
-        )
-        self.app_manager_btn.grid(row=1, column=1, padx=5, pady=5)
-
-        self.logcat_btn = ttk.Button(
-            actions_buttons_frame, text="View Logcat", command=self.view_logcat, state="disabled",
-            width=18  # Explicitly set width to ensure text fits
-        )
-        self.logcat_btn.grid(row=1, column=2, padx=5, pady=5)
+        self.logcat_btn = QtWidgets.QPushButton("View Logcat", actions_frame)
+        self.logcat_btn.clicked.connect(self.view_logcat)
+        self.logcat_btn.setEnabled(False)
+        actions_layout.addWidget(self.logcat_btn, 1, 2)
 
         # Create the Android Tools tab
-        self._create_tools_tab(content_frame)
+        self._create_tools_tab()
 
         # Add log frame
-        self.log_frame = ttk.LabelFrame(self, text="Log")
-        self.log_frame.pack(fill="x", padx=10, pady=5, expand=False)
+        self.log_frame = QtWidgets.QGroupBox("Log", main_container)
+        log_layout = QtWidgets.QVBoxLayout(self.log_frame)
+        self.log_text = QtWidgets.QTextEdit(self.log_frame)
+        self.log_text.setReadOnly(True)
+        self.log_text.setMinimumHeight(130)
+        log_layout.addWidget(self.log_text)
+        content_layout.addWidget(self.log_frame)
 
-        # Create the log text widget
-        self.log_text = tk.Text(self.log_frame, height=6, width=80, state="disabled")
-        self.log_text.pack(fill="both", expand=True, padx=5, pady=5)
+        # Status bar
+        self.status_label = QtWidgets.QLabel("Ready", self)
+        self.status_label.setFrameStyle(QtWidgets.QFrame.Panel | QtWidgets.QFrame.Sunken)
+        self.status_label.setAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
+        self.status_var = self.status_label
+        main_layout.addWidget(self.status_label)
 
         # Initialize log with a welcome message
         self.log_message("Android Tools module initialized")
 
-    def _create_tools_tab(self, content_frame):
+    def _create_tools_tab(self):
         """Create the Android Tools tab with all tool categories"""
-        # Android Tools Tab
-        self.tools_frame = ttk.Frame(self.notebook)
-        self.notebook.add(self.tools_frame, text="Android Tools")
+        self.tools_frame = QtWidgets.QWidget(self.notebook)
+        tools_layout = QtWidgets.QVBoxLayout(self.tools_frame)
+        tools_layout.setContentsMargins(5, 5, 5, 5)
+        self.notebook.addTab(self.tools_frame, "Android Tools")
 
-        # Create a scrollable frame for the entire tools tab
-        # Ensure the tools frame itself has fixed dimensions
-        self.tools_frame.configure(width=1024, height=600)
-        self.tools_frame.pack_propagate(False)
+        scroll_area = QtWidgets.QScrollArea(self.tools_frame)
+        scroll_area.setWidgetResizable(True)
+        tools_layout.addWidget(scroll_area)
 
-        # Main container with scrollbar
-        container_frame = ttk.Frame(self.tools_frame)
-        container_frame.pack(fill='both', expand=True, padx=5, pady=5)
+        categories_frame = QtWidgets.QWidget(scroll_area)
+        scroll_area.setWidget(categories_frame)
 
-        # Create canvas with fixed size for full-page scrolling
-        canvas = tk.Canvas(container_frame, borderwidth=0, highlightthickness=0, width=1000, height=580)
-        scrollbar = ttk.Scrollbar(container_frame, orient="vertical", command=canvas.yview)
+        categories_layout = QtWidgets.QVBoxLayout(categories_frame)
+        categories_layout.setContentsMargins(5, 5, 5, 5)
+        categories_layout.setSpacing(8)
 
-        # Configure canvas
-        canvas.configure(yscrollcommand=scrollbar.set)
+        instruction_label = QtWidgets.QLabel("Scroll down to see all tools", categories_frame)
+        instruction_font = QtGui.QFont("Arial", 10)
+        instruction_font.setItalic(True)
+        instruction_label.setFont(instruction_font)
+        categories_layout.addWidget(instruction_label)
 
-        # Pack scrollbar and canvas
-        scrollbar.pack(side="right", fill="y")
-        canvas.pack(side="left", fill="both", expand=True)
+        categories_container = QtWidgets.QWidget(categories_frame)
+        categories_grid = QtWidgets.QGridLayout(categories_container)
+        categories_grid.setHorizontalSpacing(8)
+        categories_grid.setVerticalSpacing(8)
+        categories_layout.addWidget(categories_container)
 
-        # Create frame inside canvas for content with fixed width
-        categories_frame = ttk.Frame(canvas, width=980)
-        canvas_window = canvas.create_window((0, 0), window=categories_frame, anchor="nw")
-
-        # Update scroll region when content size changes
-        def update_scroll_region(event=None):
-            canvas.update_idletasks()
-            canvas.configure(scrollregion=canvas.bbox("all"))
-
-        # Update canvas window width when canvas resizes
-        def update_canvas_width(event):
-            canvas.itemconfig(canvas_window, width=event.width)
-
-        # Bind events
-        categories_frame.bind("<Configure>", update_scroll_region)
-        canvas.bind("<Configure>", update_canvas_width)
-
-        # Add mousewheel scrolling
-        def _on_mousewheel(event):
-            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
-
-        canvas.bind_all("<MouseWheel>", _on_mousewheel)
-
-        # For Linux/Mac compatibility
-        canvas.bind_all("<Button-4>", lambda e: canvas.yview_scroll(-1, "units"))
-        canvas.bind_all("<Button-5>", lambda e: canvas.yview_scroll(1, "units"))
-
-        # Main tool categories section - will be arranged in a responsive grid
         categories = [
             {"name": "Device Control", "icon": "🔄"},
             {"name": "App Management", "icon": "📱"},
@@ -336,594 +391,421 @@ class WidgetsMixin:
             {"name": "File Operations", "icon": "📁"},
             {"name": "Security & Permissions", "icon": "🔒"},
             {"name": "Automation & Scripting", "icon": "🤖"},
-            {"name": "Advanced Tests", "icon": "🧪"}
+            {"name": "Advanced Tests", "icon": "🧪"},
         ]
 
-        # Create a vertical layout for categories - each category gets its own row
-        categories_container = ttk.Frame(categories_frame)
-        categories_container.pack(fill="both", expand=True, padx=5, pady=5)
-
-        # Set the layout for categories to be in a grid with 2 columns
-        categories_container.columnconfigure(0, weight=1)
-        categories_container.columnconfigure(1, weight=1)
-
-        # Base width for each category
-        category_width = 480  # Wider categories for better visibility
-
-        # Add an instruction label at the top
-        ttk.Label(categories_frame, text="Scroll down to see all tools", font=("Arial", 10, "italic")).pack(pady=(0, 5), anchor="w", fill="x")
-
-        # Add categories in a grid layout - 2 columns, 4 rows
         for idx, category in enumerate(categories):
-            # Calculate row and column position
-            row = idx // 2  # Integer division for row number
-            col = idx % 2   # Remainder for column (0 or 1)
+            row = idx // 2
+            col = idx % 2
 
-            # Create the category frame with grid placement
-            category_frame = ttk.LabelFrame(categories_container, text=f"{category['icon']} {category['name']}",
-                                            padding=3, relief="groove", borderwidth=1)
-            # Use grid layout to position categories in 2 columns
-            category_frame.grid(row=row, column=col, sticky="nsew", padx=5, pady=5)
-            # Set fixed dimensions for each category frame
-            category_frame.configure(height=360, width=130)
-            category_frame.pack_propagate(False)  # Prevent shrinking to content
+            category_frame = QtWidgets.QGroupBox(
+                f"{category['icon']} {category['name']}", categories_container
+            )
+            category_frame.setMinimumHeight(360)
+            category_frame.setMinimumWidth(440)
+            category_layout = QtWidgets.QVBoxLayout(category_frame)
+            content_frame = QtWidgets.QWidget(category_frame)
+            content_layout = QtWidgets.QGridLayout(content_frame)
+            content_layout.setHorizontalSpacing(6)
+            content_layout.setVerticalSpacing(6)
+            category_layout.addWidget(content_frame)
+            categories_grid.addWidget(category_frame, row, col)
 
-            # Simple content frame for buttons (no scrolling needed since we have page-level scrolling)
-            content_frame = ttk.Frame(category_frame)
-            content_frame.pack(fill="both", expand=True, padx=1, pady=1)
+            self._populate_category_buttons(category["name"], content_layout)
 
-            # Add tools based on category
-            self._populate_category_buttons(category["name"], content_frame)
+        categories_grid.setColumnStretch(0, 1)
+        categories_grid.setColumnStretch(1, 1)
 
-    def _populate_category_buttons(self, category_name, content_frame):
+    def _add_tool_button(self, layout, row, col, text, callback):
+        button = QtWidgets.QPushButton(text)
+        button.setMinimumWidth(160)
+        button.clicked.connect(callback)
+        layout.addWidget(button, row, col)
+
+    def _populate_category_buttons(self, category_name, layout):
         """Populate buttons for a given category"""
         if category_name == "Device Control":
-            # Device reboot options - single column layout
-            ttk.Button(
-                content_frame, text="Reboot Device",
-                command=lambda: self._run_in_thread(self._reboot_device_normal),
-                width=18
-            ).grid(row=0, column=0, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Reboot Recovery",
-                command=lambda: self._run_in_thread(self._reboot_device_recovery),
-                width=18
-            ).grid(row=1, column=0, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Reboot Bootloader",
-                command=lambda: self._run_in_thread(self._reboot_device_bootloader),
-                width=18
-            ).grid(row=2, column=0, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="WiFi Toggle",
-                command=lambda: self._run_in_thread(self._toggle_wifi),
-                width=18
-            ).grid(row=3, column=0, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Airplane Mode",
-                command=lambda: self._run_in_thread(self._toggle_airplane_mode),
-                width=18
-            ).grid(row=4, column=0, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Screen Toggle",
-                command=lambda: self._run_in_thread(self._toggle_screen),
-                width=18
-            ).grid(row=5, column=0, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Reboot EDL",
-                command=lambda: self._run_in_thread(self._reboot_device_edl),
-                width=18
-            ).grid(row=0, column=1, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Mobile Data",
-                command=lambda: self._run_in_thread(self._toggle_mobile_data),
-                width=18
-            ).grid(row=1, column=1, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Bluetooth",
-                command=lambda: self._run_in_thread(self._toggle_bluetooth),
-                width=18
-            ).grid(row=2, column=1, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Brightness",
-                command=lambda: self._run_in_thread(self._set_brightness_dialog),
-                width=18
-            ).grid(row=3, column=1, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Screen Timeout",
-                command=lambda: self._run_in_thread(self._set_screen_timeout_dialog),
-                width=18
-            ).grid(row=4, column=1, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Screenshot",
-                command=lambda: self._run_in_thread(self.take_screenshot),
-                width=18
-            ).grid(row=5, column=1, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="DND Toggle",
-                command=lambda: self._run_in_thread(self._toggle_do_not_disturb),
-                width=18
-            ).grid(row=0, column=2, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Power Button",
-                command=lambda: self._run_in_thread(self._simulate_power_button),
-                width=18
-            ).grid(row=1, column=2, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Flashlight",
-                command=lambda: self._run_in_thread(self._toggle_flashlight),
-                width=18
-            ).grid(row=2, column=2, padx=1, pady=1, sticky="ew")
+            self._add_tool_button(
+                layout, 0, 0, "Reboot Device",
+                lambda: self._run_in_thread(self._reboot_device_normal),
+            )
+            self._add_tool_button(
+                layout, 1, 0, "Reboot Recovery",
+                lambda: self._run_in_thread(self._reboot_device_recovery),
+            )
+            self._add_tool_button(
+                layout, 2, 0, "Reboot Bootloader",
+                lambda: self._run_in_thread(self._reboot_device_bootloader),
+            )
+            self._add_tool_button(
+                layout, 3, 0, "WiFi Toggle",
+                lambda: self._run_in_thread(self._toggle_wifi),
+            )
+            self._add_tool_button(
+                layout, 4, 0, "Airplane Mode",
+                lambda: self._run_in_thread(self._toggle_airplane_mode),
+            )
+            self._add_tool_button(
+                layout, 5, 0, "Screen Toggle",
+                lambda: self._run_in_thread(self._toggle_screen),
+            )
+            self._add_tool_button(
+                layout, 0, 1, "Reboot EDL",
+                lambda: self._run_in_thread(self._reboot_device_edl),
+            )
+            self._add_tool_button(
+                layout, 1, 1, "Mobile Data",
+                lambda: self._run_in_thread(self._toggle_mobile_data),
+            )
+            self._add_tool_button(
+                layout, 2, 1, "Bluetooth",
+                lambda: self._run_in_thread(self._toggle_bluetooth),
+            )
+            self._add_tool_button(
+                layout, 3, 1, "Brightness",
+                lambda: self._run_in_thread(self._set_brightness_dialog),
+            )
+            self._add_tool_button(
+                layout, 4, 1, "Screen Timeout",
+                lambda: self._run_in_thread(self._set_screen_timeout_dialog),
+            )
+            self._add_tool_button(
+                layout, 5, 1, "Screenshot",
+                lambda: self._run_in_thread(self.take_screenshot),
+            )
+            self._add_tool_button(
+                layout, 0, 2, "DND Toggle",
+                lambda: self._run_in_thread(self._toggle_do_not_disturb),
+            )
+            self._add_tool_button(
+                layout, 1, 2, "Power Button",
+                lambda: self._run_in_thread(self._simulate_power_button),
+            )
+            self._add_tool_button(
+                layout, 2, 2, "Flashlight",
+                lambda: self._run_in_thread(self._toggle_flashlight),
+            )
 
         elif category_name == "App Management":
-            ttk.Button(
-                content_frame, text="Install APK",
-                command=self.install_apk,
-                width=18
-            ).grid(row=0, column=0, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Uninstall App",
-                command=lambda: self._run_in_thread(self._uninstall_app_dialog),
-                width=18
-            ).grid(row=1, column=0, padx=2, pady=2)
-
-            ttk.Button(
-                content_frame, text="Clear App Data",
-                command=lambda: self._run_in_thread(self._clear_app_data_dialog),
-                width=18
-            ).grid(row=2, column=0, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Force Stop App",
-                command=lambda: self._run_in_thread(self._force_stop_app_dialog),
-                width=18
-            ).grid(row=3, column=0, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="List Installed Apps",
-                command=lambda: self._run_in_thread(self._list_installed_apps),
-                width=18
-            ).grid(row=4, column=0, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Open App",
-                command=lambda: self._run_in_thread(self._open_app_dialog),
-                width=18
-            ).grid(row=5, column=0, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Extract APK",
-                command=lambda: self._run_in_thread(self._extract_apk_dialog),
-                width=18
-            ).grid(row=0, column=1, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Freeze/Unfreeze",
-                command=lambda: self._run_in_thread(self._toggle_freeze_dialog),
-                width=18
-            ).grid(row=1, column=1, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="View Permissions",
-                command=lambda: self._run_in_thread(self._view_permissions_dialog),
-                width=18
-            ).grid(row=2, column=1, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="App Usage Stats",
-                command=lambda: self._run_in_thread(self._show_app_usage_stats),
-                width=18
-            ).grid(row=3, column=1, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="App Battery Usage",
-                command=lambda: self._run_in_thread(self._show_battery_usage),
-                width=18
-            ).grid(row=4, column=1, padx=1, pady=1, sticky="ew")
+            self._add_tool_button(layout, 0, 0, "Install APK", self.install_apk)
+            self._add_tool_button(
+                layout, 1, 0, "Uninstall App",
+                lambda: self._run_in_thread(self._uninstall_app_dialog),
+            )
+            self._add_tool_button(
+                layout, 2, 0, "Clear App Data",
+                lambda: self._run_in_thread(self._clear_app_data_dialog),
+            )
+            self._add_tool_button(
+                layout, 3, 0, "Force Stop App",
+                lambda: self._run_in_thread(self._force_stop_app_dialog),
+            )
+            self._add_tool_button(
+                layout, 4, 0, "List Installed Apps",
+                lambda: self._run_in_thread(self._list_installed_apps),
+            )
+            self._add_tool_button(
+                layout, 5, 0, "Open App",
+                lambda: self._run_in_thread(self._open_app_dialog),
+            )
+            self._add_tool_button(
+                layout, 0, 1, "Extract APK",
+                lambda: self._run_in_thread(self._extract_apk_dialog),
+            )
+            self._add_tool_button(
+                layout, 1, 1, "Freeze/Unfreeze",
+                lambda: self._run_in_thread(self._toggle_freeze_dialog),
+            )
+            self._add_tool_button(
+                layout, 2, 1, "View Permissions",
+                lambda: self._run_in_thread(self._view_permissions_dialog),
+            )
+            self._add_tool_button(
+                layout, 3, 1, "App Usage Stats",
+                lambda: self._run_in_thread(self._show_app_usage_stats),
+            )
+            self._add_tool_button(
+                layout, 4, 1, "App Battery Usage",
+                lambda: self._run_in_thread(self._show_battery_usage),
+            )
 
         elif category_name == "System Tools":
-            ttk.Button(
-                content_frame, text="Device Info",
-                command=lambda: self._run_in_thread(self._show_detailed_device_info),
-                width=18
-            ).grid(row=0, column=0, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Battery Stats",
-                command=lambda: self._run_in_thread(self._show_battery_stats),
-                width=18
-            ).grid(row=1, column=0, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Running Services",
-                command=lambda: self._run_in_thread(self._show_running_services),
-                width=18
-            ).grid(row=2, column=0, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Network Stats",
-                command=lambda: self._run_in_thread(self._show_network_stats),
-                width=18
-            ).grid(row=3, column=0, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Thermal Stats",
-                command=lambda: self._run_in_thread(self._show_thermal_stats),
-                width=18
-            ).grid(row=4, column=0, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Sensor Status",
-                command=lambda: self._run_in_thread(self._show_sensor_status),
-                width=18
-            ).grid(row=5, column=0, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Power Profile",
-                command=lambda: self._run_in_thread(self._show_power_profile),
-                width=18
-            ).grid(row=0, column=1, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Location Settings",
-                command=lambda: self._run_in_thread(self._show_location_settings),
-                width=18
-            ).grid(row=1, column=1, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Doze Mode Status",
-                command=lambda: self._run_in_thread(self._show_doze_mode_status),
-                width=18
-            ).grid(row=2, column=1, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="SELinux Status",
-                command=lambda: self._run_in_thread(self._show_selinux_status),
-                width=18
-            ).grid(row=3, column=1, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Time and Date",
-                command=lambda: self._run_in_thread(self._show_time_date_info),
-                width=18
-            ).grid(row=4, column=1, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="CPU Governor",
-                command=lambda: self._run_in_thread(self._show_cpu_governor_info),
-                width=18
-            ).grid(row=5, column=1, padx=1, pady=1, sticky="ew")
+            self._add_tool_button(
+                layout, 0, 0, "Device Info",
+                lambda: self._run_in_thread(self._show_detailed_device_info),
+            )
+            self._add_tool_button(
+                layout, 1, 0, "Battery Stats",
+                lambda: self._run_in_thread(self._show_battery_stats),
+            )
+            self._add_tool_button(
+                layout, 2, 0, "Running Services",
+                lambda: self._run_in_thread(self._show_running_services),
+            )
+            self._add_tool_button(
+                layout, 3, 0, "Network Stats",
+                lambda: self._run_in_thread(self._show_network_stats),
+            )
+            self._add_tool_button(
+                layout, 4, 0, "Thermal Stats",
+                lambda: self._run_in_thread(self._show_thermal_stats),
+            )
+            self._add_tool_button(
+                layout, 5, 0, "Sensor Status",
+                lambda: self._run_in_thread(self._show_sensor_status),
+            )
+            self._add_tool_button(
+                layout, 0, 1, "Power Profile",
+                lambda: self._run_in_thread(self._show_power_profile),
+            )
+            self._add_tool_button(
+                layout, 1, 1, "Location Settings",
+                lambda: self._run_in_thread(self._show_location_settings),
+            )
+            self._add_tool_button(
+                layout, 2, 1, "Doze Mode Status",
+                lambda: self._run_in_thread(self._show_doze_mode_status),
+            )
+            self._add_tool_button(
+                layout, 3, 1, "SELinux Status",
+                lambda: self._run_in_thread(self._show_selinux_status),
+            )
+            self._add_tool_button(
+                layout, 4, 1, "Time and Date",
+                lambda: self._run_in_thread(self._show_time_date_info),
+            )
+            self._add_tool_button(
+                layout, 5, 1, "CPU Governor",
+                lambda: self._run_in_thread(self._show_cpu_governor_info),
+            )
 
         elif category_name == "Debugging":
-            ttk.Button(
-                content_frame, text="ANR Traces",
-                command=lambda: self._run_in_thread(self._show_anr_traces),
-                width=18
-            ).grid(row=0, column=2, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Crash Dumps",
-                command=lambda: self._run_in_thread(self._show_crash_dumps),
-                width=18
-            ).grid(row=1, column=2, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Bug Report",
-                command=lambda: self._run_in_thread(self._generate_bug_report),
-                width=18
-            ).grid(row=2, column=2, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Screen Record",
-                command=lambda: self._run_in_thread(self._start_screen_recording),
-                width=18
-            ).grid(row=3, column=2, padx=1, pady=1, sticky="ew")
+            self._add_tool_button(
+                layout, 0, 2, "ANR Traces",
+                lambda: self._run_in_thread(self._show_anr_traces),
+            )
+            self._add_tool_button(
+                layout, 1, 2, "Crash Dumps",
+                lambda: self._run_in_thread(self._show_crash_dumps),
+            )
+            self._add_tool_button(
+                layout, 2, 2, "Bug Report",
+                lambda: self._run_in_thread(self._generate_bug_report),
+            )
+            self._add_tool_button(
+                layout, 3, 2, "Screen Record",
+                lambda: self._run_in_thread(self._start_screen_recording),
+            )
 
         elif category_name == "File Operations":
-            ttk.Button(
-                content_frame, text="File Manager",
-                command=self.manage_files,
-                width=18
-            ).grid(row=0, column=0, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Pull from Device",
-                command=lambda: self._run_in_thread(self._pull_from_device),
-                width=18
-            ).grid(row=1, column=0, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Push to Device",
-                command=lambda: self._run_in_thread(self._push_to_device),
-                width=18
-            ).grid(row=2, column=0, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Backup Device",
-                command=lambda: self._run_in_thread(self.backup_device),
-                width=18
-            ).grid(row=3, column=0, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="View Storage",
-                command=lambda: self._run_in_thread(self._show_storage_info),
-                width=18
-            ).grid(row=4, column=0, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Clean Caches",
-                command=lambda: self._run_in_thread(self._clean_app_caches),
-                width=18
-            ).grid(row=5, column=0, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Explore Protected",
-                command=lambda: self._run_in_thread(self._explore_protected_storage),
-                width=18
-            ).grid(row=0, column=1, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Search Files",
-                command=lambda: self._run_in_thread(self._search_files_on_device),
-                width=18
-            ).grid(row=1, column=1, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Export SQLite DBs",
-                command=lambda: self._run_in_thread(self._export_sqlite_databases),
-                width=18
-            ).grid(row=2, column=1, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Dir Size Calc",
-                command=lambda: self._run_in_thread(self._calculate_directory_size),
-                width=18
-            ).grid(row=3, column=1, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="File Checksum",
-                command=lambda: self._run_in_thread(self._calculate_file_checksum),
-                width=18
-            ).grid(row=4, column=1, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Edit Text File",
-                command=lambda: self._run_in_thread(self._edit_text_file_on_device),
-                width=18
-            ).grid(row=5, column=1, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Mount Info",
-                command=lambda: self._run_in_thread(self._show_mount_info),
-                width=18
-            ).grid(row=0, column=2, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Recent Files",
-                command=lambda: self._run_in_thread(self._list_recent_files),
-                width=18
-            ).grid(row=1, column=2, padx=1, pady=1, sticky="ew")
+            self._add_tool_button(layout, 0, 0, "File Manager", self.manage_files)
+            self._add_tool_button(
+                layout, 1, 0, "Pull from Device",
+                lambda: self._run_in_thread(self._pull_from_device),
+            )
+            self._add_tool_button(
+                layout, 2, 0, "Push to Device",
+                lambda: self._run_in_thread(self._push_to_device),
+            )
+            self._add_tool_button(
+                layout, 3, 0, "Backup Device",
+                lambda: self._run_in_thread(self.backup_device),
+            )
+            self._add_tool_button(
+                layout, 4, 0, "View Storage",
+                lambda: self._run_in_thread(self._show_storage_info),
+            )
+            self._add_tool_button(
+                layout, 5, 0, "Clean Caches",
+                lambda: self._run_in_thread(self._clean_app_caches),
+            )
+            self._add_tool_button(
+                layout, 0, 1, "Explore Protected",
+                lambda: self._run_in_thread(self._explore_protected_storage),
+            )
+            self._add_tool_button(
+                layout, 1, 1, "Search Files",
+                lambda: self._run_in_thread(self._search_files_on_device),
+            )
+            self._add_tool_button(
+                layout, 2, 1, "Export SQLite DBs",
+                lambda: self._run_in_thread(self._export_sqlite_databases),
+            )
+            self._add_tool_button(
+                layout, 3, 1, "Dir Size Calc",
+                lambda: self._run_in_thread(self._calculate_directory_size),
+            )
+            self._add_tool_button(
+                layout, 4, 1, "File Checksum",
+                lambda: self._run_in_thread(self._calculate_file_checksum),
+            )
+            self._add_tool_button(
+                layout, 5, 1, "Edit Text File",
+                lambda: self._run_in_thread(self._edit_text_file_on_device),
+            )
+            self._add_tool_button(
+                layout, 0, 2, "Mount Info",
+                lambda: self._run_in_thread(self._show_mount_info),
+            )
+            self._add_tool_button(
+                layout, 1, 2, "Recent Files",
+                lambda: self._run_in_thread(self._list_recent_files),
+            )
 
         elif category_name == "Security & Permissions":
-            ttk.Button(
-                content_frame, text="Check Root Status",
-                command=lambda: self._run_in_thread(self._check_root_status),
-                width=18
-            ).grid(row=0, column=0, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Check AppOps",
-                command=self._check_appops_dialog,
-                width=18
-            ).grid(row=1, column=0, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Change AppOps Permission",
-                command=self._change_appops_dialog,
-                width=18
-            ).grid(row=2, column=0, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Check Encryption",
-                command=lambda: self._run_in_thread(self._check_encryption_status),
-                width=18
-            ).grid(row=3, column=0, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Check Lock Screen",
-                command=lambda: self._run_in_thread(self._check_lock_screen_status),
-                width=18
-            ).grid(row=4, column=0, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Verify Boot",
-                command=lambda: self._run_in_thread(self._verify_boot_integrity),
-                width=18
-            ).grid(row=5, column=0, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Keystore Info",
-                command=lambda: self._run_in_thread(self._show_keystore_info),
-                width=18
-            ).grid(row=0, column=1, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Certificate Checker",
-                command=lambda: self._run_in_thread(self._check_certificates),
-                width=18
-            ).grid(row=1, column=1, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Security Patch Level",
-                command=lambda: self._run_in_thread(self._check_security_patch_level),
-                width=18
-            ).grid(row=2, column=1, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Permission Scanner",
-                command=lambda: self._run_in_thread(self._scan_dangerous_permissions),
-                width=18
-            ).grid(row=3, column=1, padx=1, pady=1, sticky="ew")
+            self._add_tool_button(
+                layout, 0, 0, "Check Root Status",
+                lambda: self._run_in_thread(self._check_root_status),
+            )
+            self._add_tool_button(
+                layout, 1, 0, "Check AppOps",
+                self._check_appops_dialog,
+            )
+            self._add_tool_button(
+                layout, 2, 0, "Change AppOps Permission",
+                self._change_appops_dialog,
+            )
+            self._add_tool_button(
+                layout, 3, 0, "Check Encryption",
+                lambda: self._run_in_thread(self._check_encryption_status),
+            )
+            self._add_tool_button(
+                layout, 4, 0, "Check Lock Screen",
+                lambda: self._run_in_thread(self._check_lock_screen_status),
+            )
+            self._add_tool_button(
+                layout, 5, 0, "Verify Boot",
+                lambda: self._run_in_thread(self._verify_boot_integrity),
+            )
+            self._add_tool_button(
+                layout, 0, 1, "Keystore Info",
+                lambda: self._run_in_thread(self._show_keystore_info),
+            )
+            self._add_tool_button(
+                layout, 1, 1, "Certificate Checker",
+                lambda: self._run_in_thread(self._check_certificates),
+            )
+            self._add_tool_button(
+                layout, 2, 1, "Security Patch Level",
+                lambda: self._run_in_thread(self._check_security_patch_level),
+            )
+            self._add_tool_button(
+                layout, 3, 1, "Permission Scanner",
+                lambda: self._run_in_thread(self._scan_dangerous_permissions),
+            )
 
         elif category_name == "Automation & Scripting":
-            ttk.Button(
-                content_frame, text="Run Shell Script",
-                command=lambda: self._run_in_thread(self._run_shell_script_dialog),
-                width=18
-            ).grid(row=0, column=0, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Batch App Manager",
-                command=lambda: self._run_in_thread(self._batch_app_manager_dialog),
-                width=18
-            ).grid(row=1, column=0, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Scheduled Tasks",
-                command=lambda: self._run_in_thread(self._scheduled_tasks_dialog),
-                width=18
-            ).grid(row=2, column=0, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Logcat + Screencap",
-                command=lambda: self._run_in_thread(self._logcat_screencap_dialog),
-                width=18
-            ).grid(row=3, column=0, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Monkey Testing",
-                command=lambda: self._run_in_thread(self._monkey_testing_dialog),
-                width=18
-            ).grid(row=4, column=0, padx=1, pady=1, sticky="ew")
+            self._add_tool_button(
+                layout, 0, 0, "Run Shell Script",
+                lambda: self._run_in_thread(self._run_shell_script_dialog),
+            )
+            self._add_tool_button(
+                layout, 1, 0, "Batch App Manager",
+                lambda: self._run_in_thread(self._batch_app_manager_dialog),
+            )
+            self._add_tool_button(
+                layout, 2, 0, "Scheduled Tasks",
+                lambda: self._run_in_thread(self._scheduled_tasks_dialog),
+            )
+            self._add_tool_button(
+                layout, 3, 0, "Logcat + Screencap",
+                lambda: self._run_in_thread(self._logcat_screencap_dialog),
+            )
+            self._add_tool_button(
+                layout, 4, 0, "Monkey Testing",
+                lambda: self._run_in_thread(self._monkey_testing_dialog),
+            )
 
         elif category_name == "Advanced Tests":
-            ttk.Button(
-                content_frame, text="Screen Lock Brute",
-                command=self.run_screen_lock_brute_forcer,
-                width=18
-            ).grid(row=0, column=0, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Screen Lock Duplicator",
-                command=self.run_screen_lock_duplicator,
-                width=18
-            ).grid(row=1, column=0, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Hardware Stress Test",
-                command=self.run_hardware_stress_test,
-                width=18
-            ).grid(row=2, column=0, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Looped Benchmarking",
-                command=self.run_looped_benchmarking,
-                width=18
-            ).grid(row=3, column=0, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Screen Mirror (scrcpy)",
-                command=self.run_scrcpy_mirror,
-                width=18
-            ).grid(row=4, column=0, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="I/O Spike Generator",
-                command=self.run_io_spike_generator,
-                width=18
-            ).grid(row=5, column=0, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="App Crash Forcer",
-                command=self.run_app_crash_forcer,
-                width=18
-            ).grid(row=0, column=1, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Dalvik Cache Stress",
-                command=self.run_dalvik_cache_stress_test,
-                width=18
-            ).grid(row=1, column=1, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="RAM Fill Test",
-                command=self.run_ram_fill_test,
-                width=18
-            ).grid(row=2, column=1, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="GPU Stress Test",
-                command=self.run_gpu_stress_test,
-                width=18
-            ).grid(row=3, column=1, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="CPU Max Load Test",
-                command=self.run_cpu_max_load_test,
-                width=18
-            ).grid(row=4, column=1, padx=1, pady=1, sticky="ew")
-
-            ttk.Button(
-                content_frame, text="Battery Drain Test",
-                command=self.run_battery_drain_test,
-                width=18
-            ).grid(row=5, column=1, padx=1, pady=1, sticky="ew")
+            self._add_tool_button(
+                layout, 0, 0, "Screen Lock Brute",
+                self.run_screen_lock_brute_forcer,
+            )
+            self._add_tool_button(
+                layout, 1, 0, "Screen Lock Duplicator",
+                self.run_screen_lock_duplicator,
+            )
+            self._add_tool_button(
+                layout, 2, 0, "Hardware Stress Test",
+                self.run_hardware_stress_test,
+            )
+            self._add_tool_button(
+                layout, 3, 0, "Looped Benchmarking",
+                self.run_looped_benchmarking,
+            )
+            self._add_tool_button(
+                layout, 4, 0, "Screen Mirror (scrcpy)",
+                self.run_scrcpy_mirror,
+            )
+            self._add_tool_button(
+                layout, 5, 0, "I/O Spike Generator",
+                self.run_io_spike_generator,
+            )
+            self._add_tool_button(
+                layout, 0, 1, "App Crash Forcer",
+                self.run_app_crash_forcer,
+            )
+            self._add_tool_button(
+                layout, 1, 1, "Dalvik Cache Stress",
+                self.run_dalvik_cache_stress_test,
+            )
+            self._add_tool_button(
+                layout, 2, 1, "RAM Fill Test",
+                self.run_ram_fill_test,
+            )
+            self._add_tool_button(
+                layout, 3, 1, "GPU Stress Test",
+                self.run_gpu_stress_test,
+            )
+            self._add_tool_button(
+                layout, 4, 1, "CPU Max Load Test",
+                self.run_cpu_max_load_test,
+            )
+            self._add_tool_button(
+                layout, 5, 1, "Battery Drain Test",
+                self.run_battery_drain_test,
+            )
 
     def log_message(self, message):
         """Add a message to the log console"""
-        # Log to console even if the UI element doesn't exist yet
         logging.info(f"[AndroidTools] {message}")
 
-        # Only update the UI if the log_text widget exists
         if self.log_text is not None:
             try:
-                self.log_text.configure(state="normal")
-                self.log_text.insert(tk.END, f"[{time.strftime('%H:%M:%S')}] {message}\n")
-                self.log_text.see(tk.END)
-                self.log_text.configure(state="disabled")
+                timestamp = time.strftime('%H:%M:%S')
+                self.log_text.append(f"[{timestamp}] {message}")
+                scrollbar = self.log_text.verticalScrollBar()
+                scrollbar.setValue(scrollbar.maximum())
             except Exception as e:
                 logging.error(f"Error updating log display: {str(e)}")
 
     def update_status(self, status_text):
         """Update the status bar text"""
         try:
-            if hasattr(self, 'status_var'):
-                self.status_var.set(status_text)
+            if hasattr(self, 'status_var') and hasattr(self.status_var, 'setText'):
+                self.status_var.setText(status_text)
+            elif hasattr(self, 'status_label'):
+                self.status_label.setText(status_text)
         except Exception as e:
             logging.error(f"Error updating status: {str(e)}")
 
     def enable_device_actions(self):
         """Enable device action buttons when a device is connected"""
-        self.screenshot_btn.configure(state="normal")
-        self.backup_btn.configure(state="normal")
-        self.files_btn.configure(state="normal")
-        self.install_apk_btn.configure(state="normal")
-        self.app_manager_btn.configure(state="normal")
-        self.logcat_btn.configure(state="normal")
+        self.screenshot_btn.setEnabled(True)
+        self.backup_btn.setEnabled(True)
+        self.files_btn.setEnabled(True)
+        self.install_apk_btn.setEnabled(True)
+        self.app_manager_btn.setEnabled(True)
+        self.logcat_btn.setEnabled(True)
 
     def disable_device_actions(self):
         """Disable device action buttons when no device is connected"""
-        self.screenshot_btn.configure(state="disabled")
-        self.backup_btn.configure(state="disabled")
-        self.files_btn.configure(state="disabled")
-        self.install_apk_btn.configure(state="disabled")
-        self.app_manager_btn.configure(state="disabled")
-        self.logcat_btn.configure(state="disabled")
+        self.screenshot_btn.setEnabled(False)
+        self.backup_btn.setEnabled(False)
+        self.files_btn.setEnabled(False)
+        self.install_apk_btn.setEnabled(False)
+        self.app_manager_btn.setEnabled(False)
+        self.logcat_btn.setEnabled(False)
 
     def _run_in_thread(self, target_function, *args, **kwargs):
         """Run a function in a separate thread with error handling"""
@@ -931,15 +813,13 @@ class WidgetsMixin:
             try:
                 target_function(*args, **kwargs)
             except Exception as e:
-                # Log the full traceback to the console
                 import traceback
                 traceback.print_exc()
-                # Also log to the GUI if available
                 if hasattr(self, 'log_message'):
-                    self.after(0, lambda: self.log_message(f"Error in thread: {str(e)}"))
+                    QtCore.QTimer.singleShot(0, lambda: self.log_message(f"Error in thread: {str(e)}"))
 
         thread = threading.Thread(target=thread_wrapper)
-        thread.daemon = True  # Thread will close when main app closes
+        thread.daemon = True
         self.threads.append(thread)
         thread.start()
         return thread
@@ -949,47 +829,40 @@ class WidgetsMixin:
         if not self.device_info:
             return
 
-        # Update basic info fields
         if 'model' in self.device_info:
-            self.info_fields['Model'].set(self.device_info['model'])
+            self.info_fields['Model'].setText(self.device_info['model'])
 
         if 'manufacturer' in self.device_info:
-            self.info_fields['Manufacturer'].set(self.device_info['manufacturer'])
+            self.info_fields['Manufacturer'].setText(self.device_info['manufacturer'])
 
         if 'android_version' in self.device_info:
-            self.info_fields['Android Version'].set(self.device_info['android_version'])
+            self.info_fields['Android Version'].setText(self.device_info['android_version'])
 
-        # Make sure we only show the serial number, not the debug info
         if 'serial' in self.device_info:
-            # Get just the serial number without any extra text
             serial = str(self.device_info['serial']).strip()
-            # Remove any ADB debug text that might be associated with it
             if '\n' in serial:
                 serial = serial.split('\n')[0].strip()
-            self.info_fields['Serial Number'].set(serial)
+            self.info_fields['Serial Number'].setText(serial)
 
         if 'battery' in self.device_info:
-            self.info_fields['Battery Level'].set(self.device_info['battery'])
+            self.info_fields['Battery Level'].setText(self.device_info['battery'])
 
-        # Display IMEI if available
         if 'imei' in self.device_info:
-            self.info_fields['IMEI'].set(self.device_info['imei'])
-        # Fallback to Android ID if IMEI not available
+            self.info_fields['IMEI'].setText(self.device_info['imei'])
         elif 'device_id' in self.device_info:
-            self.info_fields['IMEI'].set(f"{self.device_info['device_id']} (Android ID)")
+            self.info_fields['IMEI'].setText(f"{self.device_info['device_id']} (Android ID)")
 
-        # Update advanced info fields
         if 'storage' in self.device_info:
-            self.adv_info_fields['Storage'].set(self.device_info['storage'])
+            self.adv_info_fields['Storage'].setText(self.device_info['storage'])
 
         if 'ram' in self.device_info:
-            self.adv_info_fields['RAM'].set(self.device_info['ram'])
+            self.adv_info_fields['RAM'].setText(self.device_info['ram'])
 
         if 'resolution' in self.device_info:
-            self.adv_info_fields['Screen Resolution'].set(self.device_info['resolution'])
+            self.adv_info_fields['Screen Resolution'].setText(self.device_info['resolution'])
 
         if 'cpu' in self.device_info:
-            self.adv_info_fields['CPU'].set(self.device_info['cpu'])
+            self.adv_info_fields['CPU'].setText(self.device_info['cpu'])
 
         if 'kernel' in self.device_info:
-            self.adv_info_fields['Kernel'].set(self.device_info['kernel'])
+            self.adv_info_fields['Kernel'].setText(self.device_info['kernel'])
