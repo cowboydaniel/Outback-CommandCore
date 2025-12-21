@@ -52,7 +52,9 @@ def check_and_install_android_dependencies():
                 elif dist_id in ['fedora', 'rhel', 'centos', 'rocky', 'almalinux']:
                     distro_family = 'redhat'
             except ImportError:
-                pass
+                logging.warning(
+                    "distro module unavailable; falling back to file checks only for distro detection."
+                )
     except Exception as e:
         logging.error(f"Error detecting Linux distribution: {e}")
         return
