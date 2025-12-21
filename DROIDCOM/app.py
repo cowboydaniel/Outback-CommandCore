@@ -15,7 +15,7 @@ import urllib.request
 
 from .constants import IS_WINDOWS
 from .dependencies import check_and_install_android_dependencies
-from .utils.qt_dispatcher import emit_ui
+from .utils.qt_dispatcher import emit_ui, get_ui_dispatcher
 
 # Import UI mixin
 from .ui.widgets import WidgetsMixin
@@ -67,6 +67,10 @@ class AndroidToolsModule(
         self.device_serial = None  # Initialize device_serial to None
         self.threads = []  # Keep track of threads
         self.log_text = None  # Initialize to None, will be created in create_widgets
+
+        # Initialize UiDispatcher on the UI thread to prevent threading issues
+        # This must be done before any worker threads are spawned
+        get_ui_dispatcher(self)
 
         # Set the ADB path early so it's available throughout the application
         if IS_WINDOWS:
