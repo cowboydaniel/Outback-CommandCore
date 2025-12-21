@@ -9,7 +9,7 @@ import time
 import os
 import re
 import logging
-import multiprocessing
+import threading
 
 from ..constants import IS_WINDOWS
 
@@ -184,9 +184,8 @@ class DeviceInfoMixin:
             self.log_message(f"Error getting device info: {str(e)}")
             return None
 
-    @staticmethod
-    def _dialer_method_worker(device_info, serial, adb_cmd, result_queue):
-        """Worker function for dialer IMEI method - runs in isolated subprocess"""
+    def _dialer_method_worker(self, device_info, serial, adb_cmd, result_list):
+        """Worker function for dialer IMEI method - runs in thread with timeout"""
         try:
             temp_dir = tempfile.mkdtemp()
             screenshot_path = os.path.join(temp_dir, "imei_screen.png")
@@ -266,7 +265,7 @@ class DeviceInfoMixin:
                                                         break
 
                                         if imei:
-                                            result_queue.put(imei)
+                                            result_list.append(imei)
                                 except subprocess.TimeoutExpired:
                                     ocr_proc.kill()
                                     ocr_proc.wait()
@@ -296,29 +295,22 @@ class DeviceInfoMixin:
     def _get_device_imei(self, device_info, serial, adb_cmd):
         """Try to get device IMEI using multiple methods"""
         try:
-            # Method 1: Using dialer method with OCR (run in isolated subprocess to prevent crashes)
+            # Method 1: Using dialer method with OCR (run in thread with timeout)
             self.log_message("Trying dialer code method to get IMEI...")
 
-            result_queue = multiprocessing.Queue()
-            dialer_process = multiprocessing.Process(
+            result_list = []
+            dialer_thread = threading.Thread(
                 target=self._dialer_method_worker,
-                args=(device_info, serial, adb_cmd, result_queue)
+                args=(device_info, serial, adb_cmd, result_list),
+                daemon=True
             )
-            dialer_process.start()
-            dialer_process.join(timeout=60)  # Wait max 60 seconds
+            dialer_thread.start()
+            dialer_thread.join(timeout=35)  # Wait max 35 seconds
 
-            if dialer_process.is_alive():
-                dialer_process.terminate()
-                dialer_process.join(timeout=5)
-                if dialer_process.is_alive():
-                    dialer_process.kill()
+            if dialer_thread.is_alive():
                 self.log_message("Dialer method timed out")
-            elif dialer_process.exitcode != 0:
-                self.log_message("Dialer method failed or crashed")
-
-            # Check if we got a result from the worker process
-            if not result_queue.empty():
-                imei = result_queue.get()
+            elif result_list:
+                imei = result_list[0]
                 if imei:
                     self.log_message("IMEI found in OCR text!")
                     device_info['imei'] = imei
