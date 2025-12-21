@@ -3,8 +3,8 @@ DROIDCOM - Debugging Feature Module
 Handles debugging features like bug reports, crash dumps, ANR traces.
 """
 
-import tkinter as tk
-from tkinter import ttk, messagebox, filedialog, scrolledtext
+from ..ui.qt_compat import tk
+from ..ui.qt_compat import ttk, messagebox, filedialog, scrolledtext
 import subprocess
 import threading
 import os

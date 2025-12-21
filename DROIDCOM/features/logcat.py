@@ -3,8 +3,8 @@ DROIDCOM - Logcat Feature Module
 Handles logcat viewing and filtering.
 """
 
-import tkinter as tk
-from tkinter import ttk, messagebox, filedialog
+from ..ui.qt_compat import tk
+from ..ui.qt_compat import ttk, messagebox, filedialog
 import subprocess
 import threading
 import re

@@ -3,8 +3,8 @@ DROIDCOM - System Tools Feature Module
 Handles system monitoring and information display.
 """
 
-import tkinter as tk
-from tkinter import ttk, messagebox, scrolledtext
+from ..ui.qt_compat import tk
+from ..ui.qt_compat import ttk, messagebox, scrolledtext
 import subprocess
 import threading
 import time

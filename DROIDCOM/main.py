@@ -5,7 +5,8 @@ Entry point for running the application standalone.
 
 from pathlib import Path
 import sys
-import tkinter as tk
+
+from .ui.qt_compat import tk
 
 if __package__:
     from .app import AndroidToolsModule

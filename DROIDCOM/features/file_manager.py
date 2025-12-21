@@ -3,8 +3,8 @@ DROIDCOM - File Manager Feature Module
 Handles file operations between PC and Android device.
 """
 
-import tkinter as tk
-from tkinter import ttk, messagebox
+from ..ui.qt_compat import tk
+from ..ui.qt_compat import ttk, messagebox
 import subprocess
 import os
 import time

@@ -3,8 +3,8 @@ DROIDCOM - Connection Feature Module
 Handles device connection, WiFi ADB setup, and device list management.
 """
 
-import tkinter as tk
-from tkinter import ttk, messagebox, scrolledtext
+from ..ui.qt_compat import tk
+from ..ui.qt_compat import ttk, messagebox, scrolledtext
 import subprocess
 import threading
 import time

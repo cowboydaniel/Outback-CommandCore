@@ -3,8 +3,8 @@ DROIDCOM - Backup Feature Module
 Handles device backup and restore functionality.
 """
 
-import tkinter as tk
-from tkinter import ttk, messagebox, filedialog
+from ..ui.qt_compat import tk
+from ..ui.qt_compat import ttk, messagebox, filedialog
 import subprocess
 import os
 import json

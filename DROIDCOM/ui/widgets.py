@@ -3,8 +3,7 @@ DROIDCOM - Widgets Module
 Contains widget creation and UI-related functionality.
 """
 
-import tkinter as tk
-from tkinter import ttk
+from .qt_compat import tk, ttk
 import threading
 import time
 import logging

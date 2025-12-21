@@ -3,8 +3,7 @@ DROIDCOM - Android Device Management Tool
 Main application module that combines all features.
 """
 
-import tkinter as tk
-from tkinter import ttk, messagebox
+from .ui.qt_compat import tk, ttk, messagebox
 import subprocess
 import os
 import shutil
