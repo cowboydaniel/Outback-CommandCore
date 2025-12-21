@@ -51,71 +51,100 @@ class ConnectionMixin:
         # Get device IP address
         update_output("Getting device IP address...")
         adb_cmd = self.adb_path if self.adb_path else 'adb'
-        ip_cmd = f"{adb_cmd} -s {self.device_serial} shell ip addr show wlan0"
+
+        # Try multiple interfaces: WiFi, hotspot/tethering, USB tethering
+        interfaces = ['wlan0', 'ap0', 'swlan0', 'wlan1', 'rndis0', 'usb0']
+        ip_address = None
+
+        for iface in interfaces:
+            try:
+                ip_cmd = f"{adb_cmd} -s {self.device_serial} shell ip addr show {iface}"
+                result = subprocess.check_output(ip_cmd, shell=True, stderr=subprocess.STDOUT).decode('utf-8')
+                ip_match = re.search(r'inet (\d+\.\d+\.\d+\.\d+)', result)
+                if ip_match:
+                    ip_address = ip_match.group(1)
+                    update_output(f"Found IP on {iface}: {ip_address}")
+                    break
+            except subprocess.CalledProcessError:
+                continue
+
+        # Fallback: get all IPs and find a suitable one
+        if not ip_address:
+            try:
+                ip_cmd = f"{adb_cmd} -s {self.device_serial} shell ip addr"
+                result = subprocess.check_output(ip_cmd, shell=True, stderr=subprocess.STDOUT).decode('utf-8')
+                # Find all IPv4 addresses, excluding loopback
+                all_ips = re.findall(r'inet (\d+\.\d+\.\d+\.\d+)', result)
+                for ip in all_ips:
+                    if not ip.startswith('127.'):
+                        ip_address = ip
+                        update_output(f"Found IP: {ip_address}")
+                        break
+            except subprocess.CalledProcessError:
+                pass
+
+        if not ip_address:
+            update_output("Error: Could not find IP address.")
+            update_output("Make sure WiFi or hotspot is enabled on the device.")
+            return
+
+        update_output(f"Device IP address: {ip_address}")
+
+        # Enable ADB over TCP/IP
         try:
-            result = subprocess.check_output(ip_cmd, shell=True, stderr=subprocess.STDOUT).decode('utf-8')
-            ip_match = re.search(r'inet (\d+\.\d+\.\d+\.\d+)', result)
-            if not ip_match:
-                update_output("Error: Could not find IP address. Make sure WiFi is enabled.")
-                return
-
-            ip_address = ip_match.group(1)
-            update_output(f"Device IP address: {ip_address}")
-
-            # Enable ADB over TCP/IP
             update_output("Enabling ADB over TCP/IP...")
             tcp_cmd = f"{adb_cmd} -s {self.device_serial} tcpip 5555"
             tcp_result = subprocess.check_output(tcp_cmd, shell=True, stderr=subprocess.STDOUT).decode('utf-8')
             update_output(tcp_result)
-
-            # Add connect button
-            update_output("\nWaiting for USB disconnect to connect automatically...")
-
-            def auto_connect():
-                # Function to monitor USB disconnect and connect via WiFi
-                threading.Thread(target=monitor_and_connect, args=(ip_address,), daemon=True).start()
-
-            def monitor_and_connect(ip):
-                # Check every second if device is disconnected
-                update_output("Please disconnect the USB cable now...")
-
-                # Wait for the device to disappear from USB devices
-                while True:
-                    try:
-                        devices_cmd = f"{adb_cmd} devices"
-                        devices_output = subprocess.check_output(devices_cmd, shell=True).decode('utf-8')
-                        if self.device_serial not in devices_output:
-                            break
-                        time.sleep(1)
-                    except Exception:
-                        break
-
-                # Try to connect via WiFi
-                update_output(f"USB disconnected. Connecting to {ip}:5555...")
-                try:
-                    connect_cmd = f"{adb_cmd} connect {ip}:5555"
-                    connect_result = subprocess.check_output(connect_cmd, shell=True).decode('utf-8')
-                    update_output(connect_result)
-
-                    # Check if connection was successful
-                    if 'connected' in connect_result.lower():
-                        update_output("\nWiFi ADB connection successful!")
-                        # Update device list to show the new wireless connection after brief delay
-                        def refresh_with_delay():
-                            time.sleep(1.0)
-                            self.refresh_device_list()
-                        threading.Thread(target=refresh_with_delay, daemon=True).start()
-                    else:
-                        update_output(f"\nFailed to connect wirelessly. Please try manually:\nadb connect {ip}:5555")
-                except Exception as e:
-                    update_output(f"Error connecting: {str(e)}")
-
-            # Start monitoring for USB disconnect
-            auto_connect()
-            update_output("\nWiFi ADB setup initiated. Waiting for USB disconnect...")
-
         except subprocess.CalledProcessError as e:
-            update_output(f"Error: {e.output.decode('utf-8')}")
+            update_output(f"Error enabling TCP/IP: {e.output.decode('utf-8')}")
+            return
+
+        # Add connect button
+        update_output("\nWaiting for USB disconnect to connect automatically...")
+
+        def auto_connect():
+            # Function to monitor USB disconnect and connect via WiFi
+            threading.Thread(target=monitor_and_connect, args=(ip_address,), daemon=True).start()
+
+        def monitor_and_connect(ip):
+            # Check every second if device is disconnected
+            update_output("Please disconnect the USB cable now...")
+
+            # Wait for the device to disappear from USB devices
+            while True:
+                try:
+                    devices_cmd = f"{adb_cmd} devices"
+                    devices_output = subprocess.check_output(devices_cmd, shell=True).decode('utf-8')
+                    if self.device_serial not in devices_output:
+                        break
+                    time.sleep(1)
+                except Exception:
+                    break
+
+            # Try to connect via WiFi
+            update_output(f"USB disconnected. Connecting to {ip}:5555...")
+            try:
+                connect_cmd = f"{adb_cmd} connect {ip}:5555"
+                connect_result = subprocess.check_output(connect_cmd, shell=True).decode('utf-8')
+                update_output(connect_result)
+
+                # Check if connection was successful
+                if 'connected' in connect_result.lower():
+                    update_output("\nWiFi ADB connection successful!")
+                    # Update device list to show the new wireless connection after brief delay
+                    def refresh_with_delay():
+                        time.sleep(1.0)
+                        self.refresh_device_list()
+                    threading.Thread(target=refresh_with_delay, daemon=True).start()
+                else:
+                    update_output(f"\nFailed to connect wirelessly. Please try manually:\nadb connect {ip}:5555")
+            except Exception as e:
+                update_output(f"Error connecting: {str(e)}")
+
+        # Start monitoring for USB disconnect
+        auto_connect()
+        update_output("\nWiFi ADB setup initiated. Waiting for USB disconnect...")
 
     def connect_device(self):
         """Connect to the selected Android device"""
