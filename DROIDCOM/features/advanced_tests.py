@@ -4,8 +4,27 @@ Handles advanced testing features like stress tests, benchmarks, etc.
 """
 
 import re
-import tkinter as tk
-from tkinter import ttk, messagebox, scrolledtext
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QGuiApplication, QTextCursor
+from PySide6.QtWidgets import (
+    QButtonGroup,
+    QCheckBox,
+    QComboBox,
+    QDialog,
+    QGridLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QProgressBar,
+    QPushButton,
+    QRadioButton,
+    QSpinBox,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
 import subprocess
 import threading
 import time
@@ -30,134 +49,144 @@ class AdvancedTestsMixin:
             return
 
         # Create a visualization window for the tool
-        test_window = tk.Toplevel(self)
-        test_window.title("Screen Lock Duplicator")
+        test_window = QDialog(self)
+        self._dalvik_cache_dialog = test_window
+        self._gpu_stress_dialog = test_window
+        self._ram_fill_dialog = test_window
+        self._cpu_max_load_dialog = test_window
+        self._app_crash_dialog = test_window
+        self._battery_drain_dialog = test_window
+        self._screen_lock_dialog = test_window
+        test_window.setWindowTitle("Screen Lock Duplicator")
+        test_window.setWindowModality(Qt.ApplicationModal)
 
         # Get screen dimensions to set height to full screen
-        screen_width = self.winfo_screenwidth()
-        screen_height = self.winfo_screenheight()
+        screen_geometry = QGuiApplication.primaryScreen().availableGeometry()
 
         # Keep original width (700) but use full screen height
         window_width = 700
-        window_height = screen_height - 50  # Subtract a small amount to account for taskbar/window decorations
+        window_height = screen_geometry.height() - 50  # Subtract a small amount to account for taskbar/window decorations
 
         # Center the window horizontally
-        x_position = (screen_width - window_width) // 2
+        x_position = screen_geometry.x() + (screen_geometry.width() - window_width) // 2
 
         # Set the geometry
-        test_window.geometry(f"{window_width}x{window_height}+{x_position}+0")
-        test_window.transient(self)
-        test_window.grab_set()
+        test_window.resize(window_width, window_height)
+        test_window.move(x_position, screen_geometry.y())
 
         # Configure window content
-        frame = ttk.Frame(test_window, padding="10")
-        frame.pack(fill=tk.BOTH, expand=True)
+        main_layout = QVBoxLayout(test_window)
 
         # Title and description
-        ttk.Label(frame, text="Screen Lock Duplicator", font=("Arial", 14, "bold")).pack(pady=(0, 10))
-        ttk.Label(frame, text="This tool records your lock screen pattern/PIN and can replay it to unlock your device").pack(pady=(0, 5))
+        title_label = QLabel("Screen Lock Duplicator")
+        title_label.setStyleSheet("font-size: 14px; font-weight: bold;")
+        main_layout.addWidget(title_label)
+        main_layout.addWidget(QLabel("This tool records your lock screen pattern/PIN and can replay it to unlock your device"))
 
         # Lock type selection frame
-        type_frame = ttk.LabelFrame(frame, text="Lock Screen Type")
-        type_frame.pack(fill=tk.X, expand=False, pady=5)
-
-        # Lock type radio buttons
-        lock_type = tk.StringVar(value="pin")
-        ttk.Radiobutton(type_frame, text="PIN", variable=lock_type, value="pin").grid(row=0, column=0, padx=5, pady=5, sticky="w")
-        ttk.Radiobutton(type_frame, text="Pattern", variable=lock_type, value="pattern").grid(row=0, column=1, padx=5, pady=5, sticky="w")
-        ttk.Radiobutton(type_frame, text="Password", variable=lock_type, value="password").grid(row=0, column=2, padx=5, pady=5, sticky="w")
+        type_frame = QGroupBox("Lock Screen Type")
+        type_layout = QGridLayout(type_frame)
+        lock_type_group = QButtonGroup(type_frame)
+        pin_radio = QRadioButton("PIN")
+        pin_radio.setProperty("value", "pin")
+        pattern_radio = QRadioButton("Pattern")
+        pattern_radio.setProperty("value", "pattern")
+        password_radio = QRadioButton("Password")
+        password_radio.setProperty("value", "password")
+        lock_type_group.addButton(pin_radio)
+        lock_type_group.addButton(pattern_radio)
+        lock_type_group.addButton(password_radio)
+        pin_radio.setChecked(True)
+        type_layout.addWidget(pin_radio, 0, 0)
+        type_layout.addWidget(pattern_radio, 0, 1)
+        type_layout.addWidget(password_radio, 0, 2)
+        main_layout.addWidget(type_frame)
 
         # Input configuration frame
-        input_frame = ttk.LabelFrame(frame, text="Lock Sequence")
-        input_frame.pack(fill=tk.X, expand=False, pady=5)
+        input_frame = QGroupBox("Lock Sequence")
+        input_layout = QVBoxLayout(input_frame)
 
-        # Create the input widgets based on lock type
-        pin_frame = ttk.Frame(input_frame)
-        pin_frame.pack(fill=tk.X, expand=True, pady=5)
-
-        ttk.Label(pin_frame, text="PIN/Password:").grid(row=0, column=0, padx=5, pady=5, sticky="w")
-        pin_entry = ttk.Entry(pin_frame, show="*")
-        pin_entry.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
+        # PIN/password input
+        pin_frame = QWidget()
+        pin_layout = QGridLayout(pin_frame)
+        pin_layout.addWidget(QLabel("PIN/Password:"), 0, 0)
+        pin_entry = QLineEdit()
+        pin_entry.setEchoMode(QLineEdit.Password)
+        pin_layout.addWidget(pin_entry, 0, 1)
 
         # Toggle to show/hide PIN
-        show_pin = tk.BooleanVar(value=False)
-        show_check = ttk.Checkbutton(pin_frame, text="Show PIN/Password", variable=show_pin, command=lambda: pin_entry.config(show="" if show_pin.get() else "*"))
-        show_check.grid(row=0, column=2, padx=5, pady=5, sticky="w")
+        show_check = QCheckBox("Show PIN/Password")
+        show_check.toggled.connect(
+            lambda checked: pin_entry.setEchoMode(QLineEdit.Normal if checked else QLineEdit.Password)
+        )
+        pin_layout.addWidget(show_check, 0, 2)
+        pin_layout.setColumnStretch(1, 1)
+        input_layout.addWidget(pin_frame)
 
         # Pattern input (simplified for this implementation)
-        pattern_frame = ttk.Frame(input_frame)
-        pattern_frame.pack(fill=tk.X, expand=True, pady=5)
-
-        ttk.Label(pattern_frame, text="Pattern Sequence (0-8):").grid(row=0, column=0, padx=5, pady=5, sticky="w")
-        pattern_entry = ttk.Entry(pattern_frame)
-        pattern_entry.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
-        ttk.Label(pattern_frame, text="Example: 0,1,4,7,8 for Z pattern").grid(row=0, column=2, padx=5, pady=5, sticky="w")
+        pattern_frame = QWidget()
+        pattern_layout = QGridLayout(pattern_frame)
+        pattern_layout.addWidget(QLabel("Pattern Sequence (0-8):"), 0, 0)
+        pattern_entry = QLineEdit()
+        pattern_layout.addWidget(pattern_entry, 0, 1)
+        pattern_layout.addWidget(QLabel("Example: 0,1,4,7,8 for Z pattern"), 0, 2)
+        pattern_layout.setColumnStretch(1, 1)
 
         # Diagram showing pattern grid numbering
-        pattern_diagram = ttk.Frame(pattern_frame, relief="ridge", borderwidth=1)
-        pattern_diagram.grid(row=1, column=0, columnspan=3, padx=5, pady=5)
-
-        # Create a 3x3 grid showing pattern numbers
+        pattern_diagram = QGroupBox()
+        pattern_diagram.setFlat(True)
+        diagram_layout = QGridLayout(pattern_diagram)
         for i in range(3):
             for j in range(3):
                 num = i * 3 + j
-                ttk.Label(pattern_diagram, text=str(num), width=3, anchor="center").grid(row=i, column=j, padx=10, pady=10)
+                label = QLabel(str(num))
+                label.setAlignment(Qt.AlignCenter)
+                label.setFixedWidth(30)
+                diagram_layout.addWidget(label, i, j)
+        pattern_layout.addWidget(pattern_diagram, 1, 0, 1, 3)
+        input_layout.addWidget(pattern_frame)
+        main_layout.addWidget(input_frame)
 
         # Options frame
-        options_frame = ttk.LabelFrame(frame, text="Options")
-        options_frame.pack(fill=tk.X, expand=False, pady=5)
+        options_frame = QGroupBox("Options")
+        options_layout = QGridLayout(options_frame)
+        options_layout.addWidget(QLabel("Delay (ms):"), 0, 0)
+        delay_entry = QSpinBox()
+        delay_entry.setRange(50, 500)
+        delay_entry.setSingleStep(50)
+        delay_entry.setValue(100)
+        delay_entry.setFixedWidth(70)
+        options_layout.addWidget(delay_entry, 0, 1)
 
-        # Delay between actions
-        ttk.Label(options_frame, text="Delay (ms):").grid(row=0, column=0, padx=5, pady=5, sticky="w")
-        delay_var = tk.StringVar(value="100")
-        delay_entry = ttk.Spinbox(options_frame, from_=50, to=500, increment=50, textvariable=delay_var, width=5)
-        delay_entry.grid(row=0, column=1, padx=5, pady=5, sticky="w")
-
-        # Autorun checkbox
-        autorun_var = tk.BooleanVar(value=True)
-        autorun_check = ttk.Checkbutton(options_frame, text="Automatically unlock after locking", variable=autorun_var)
-        autorun_check.grid(row=0, column=2, padx=5, pady=5, sticky="w")
+        autorun_check = QCheckBox("Automatically unlock after locking")
+        autorun_check.setChecked(True)
+        options_layout.addWidget(autorun_check, 0, 2)
+        options_layout.setColumnStretch(2, 1)
+        main_layout.addWidget(options_frame)
 
         # Progress display
-        progress_frame = ttk.LabelFrame(frame, text="Progress")
-        progress_frame.pack(fill=tk.BOTH, expand=True, pady=5)
-
-        # Text widget for output
-        output_text = tk.Text(progress_frame, height=10, width=80)
-        output_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5, pady=5)
-
-        # Scrollbar
-        scrollbar = ttk.Scrollbar(progress_frame, command=output_text.yview)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        output_text.config(yscrollcommand=scrollbar.set)
+        progress_frame = QGroupBox("Progress")
+        progress_layout = QVBoxLayout(progress_frame)
+        output_text = QTextEdit()
+        output_text.setReadOnly(True)
+        progress_layout.addWidget(output_text)
+        main_layout.addWidget(progress_frame, 1)
 
         # Status label
-        status_var = tk.StringVar(value="Ready to start...")
-        status_label = ttk.Label(frame, textvariable=status_var)
-        status_label.pack(pady=5)
+        status_label = QLabel("Ready to start...")
+        main_layout.addWidget(status_label)
 
         # Action buttons
-        button_frame = ttk.Frame(frame)
-        button_frame.pack(pady=10)
-
-        # Save sequence button
-        save_btn = ttk.Button(
-            button_frame,
-            text="Save Current Sequence",
-            command=lambda: save_sequence()
-        )
-        save_btn.pack(side=tk.LEFT, padx=5)
-
-        # Start test button
-        start_btn = ttk.Button(
-            button_frame,
-            text="Run Duplicator",
-            command=lambda: start_duplicate_test()
-        )
-        start_btn.pack(side=tk.LEFT, padx=5)
-
-        # Close button
-        ttk.Button(button_frame, text="Close", command=test_window.destroy).pack(side=tk.LEFT, padx=5)
+        button_frame = QWidget()
+        button_layout = QHBoxLayout(button_frame)
+        save_btn = QPushButton("Save Current Sequence")
+        start_btn = QPushButton("Run Duplicator")
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(test_window.close)
+        button_layout.addWidget(save_btn)
+        button_layout.addWidget(start_btn)
+        button_layout.addWidget(close_btn)
+        main_layout.addWidget(button_frame)
 
         # Initialize saved sequence storage
         self.saved_lock_sequence = None
@@ -165,25 +194,29 @@ class AdvancedTestsMixin:
 
         # Function to update output in the text widget
         def update_output(text):
-            output_text.insert(tk.END, text + "\n")
-            output_text.see(tk.END)
-            output_text.update_idletasks()
+            QTimer.singleShot(0, lambda: [
+                output_text.append(text),
+                output_text.moveCursor(QTextCursor.End)
+            ])
 
         # Update status in the window
         def update_status(text):
-            status_var.set(text)
+            QTimer.singleShot(0, lambda: status_label.setText(text))
 
         # Function to save the current sequence
         def save_sequence():
-            current_type = lock_type.get()
+            current_type = next(
+                (button.property("value") for button in lock_type_group.buttons() if button.isChecked()),
+                "pin"
+            )
 
             if current_type == "pin" or current_type == "password":
-                sequence = pin_entry.get()
+                sequence = pin_entry.text()
                 if not sequence:
                     update_output("Error: Please enter a PIN or password")
                     return
             elif current_type == "pattern":
-                sequence = pattern_entry.get()
+                sequence = pattern_entry.text()
                 if not sequence:
                     update_output("Error: Please enter a pattern sequence")
                     return
@@ -207,7 +240,7 @@ class AdvancedTestsMixin:
             update_status(f"Sequence saved: {current_type.upper()}")
 
             # Enable the test button now that we have a sequence
-            start_btn.config(state="normal")
+            start_btn.setEnabled(True)
 
         # Function to start the duplicate test
         def start_duplicate_test():
@@ -217,7 +250,7 @@ class AdvancedTestsMixin:
 
             # Get the delay value
             try:
-                delay = int(delay_var.get())
+                delay = int(delay_entry.value())
                 if delay < 50 or delay > 1000:
                     delay = 100  # Reset to default if out of range
             except ValueError:
@@ -230,7 +263,7 @@ class AdvancedTestsMixin:
                     self.saved_lock_type,
                     self.saved_lock_sequence,
                     delay,
-                    autorun_var.get(),
+                    autorun_check.isChecked(),
                     update_output,
                     update_status
                 ),
@@ -238,13 +271,16 @@ class AdvancedTestsMixin:
             ).start()
 
         # Initially disable the test button until a sequence is saved
-        start_btn.config(state="disabled")
+        start_btn.setEnabled(False)
 
         # Initial status message
         update_output("Enter your lock screen pattern or PIN and save it to continue")
         update_output("\nFor pattern locks, use numbers 0-8 with commas (see diagram above)")
         update_output("For PIN locks, enter the numeric sequence")
         update_output("For password locks, enter the alphanumeric password")
+        save_btn.clicked.connect(save_sequence)
+        start_btn.clicked.connect(start_duplicate_test)
+        test_window.show()
 
     def _screen_lock_duplicator_task(self, lock_type, sequence, delay_ms, auto_unlock, update_output, update_status):
         """Background task for running the screen lock duplicator"""
@@ -534,63 +570,59 @@ class AdvancedTestsMixin:
             return
 
         # Create a visualization window for the test
-        test_window = tk.Toplevel(self)
-        test_window.title("Battery Drain Test")
-        test_window.geometry("700x500")
-        test_window.transient(self)
-        test_window.grab_set()
+        test_window = QDialog(self)
+        test_window.setWindowTitle("Battery Drain Test")
+        test_window.resize(700, 500)
+        test_window.setWindowModality(Qt.ApplicationModal)
 
         # Configure window content
-        frame = ttk.Frame(test_window, padding="10")
-        frame.pack(fill=tk.BOTH, expand=True)
+        main_layout = QVBoxLayout(test_window)
 
         # Title and description
-        ttk.Label(frame, text="Battery Drain Test", font=("Arial", 14, "bold")).pack(pady=(0, 10))
-        ttk.Label(frame, text="This test will stress the device to measure battery drain rate").pack(pady=(0, 5))
+        title_label = QLabel("Battery Drain Test")
+        title_label.setStyleSheet("font-size: 14px; font-weight: bold;")
+        main_layout.addWidget(title_label)
+        main_layout.addWidget(QLabel("This test will stress the device to measure battery drain rate"))
 
         # Battery level display
-        battery_frame = ttk.LabelFrame(frame, text="Battery Information")
-        battery_frame.pack(fill=tk.X, expand=False, pady=5)
-
-        # Battery level labels
-        batt_info_var = tk.StringVar(value="Checking battery information...")
-        batt_info_label = ttk.Label(battery_frame, textvariable=batt_info_var, justify=tk.LEFT)
-        batt_info_label.pack(pady=5, padx=5, anchor=tk.W)
+        battery_frame = QGroupBox("Battery Information")
+        battery_layout = QVBoxLayout(battery_frame)
+        batt_info_label = QLabel("Checking battery information...")
+        batt_info_label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        battery_layout.addWidget(batt_info_label)
+        main_layout.addWidget(battery_frame)
 
         # Progress display
-        progress_frame = ttk.LabelFrame(frame, text="Test Progress")
-        progress_frame.pack(fill=tk.BOTH, expand=True, pady=5)
-
-        # Text widget for output
-        output_text = tk.Text(progress_frame, height=15, width=80)
-        output_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5, pady=5)
-
-        # Scrollbar
-        scrollbar = ttk.Scrollbar(progress_frame, command=output_text.yview)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        output_text.config(yscrollcommand=scrollbar.set)
+        progress_frame = QGroupBox("Test Progress")
+        progress_layout = QVBoxLayout(progress_frame)
+        output_text = QTextEdit()
+        output_text.setReadOnly(True)
+        progress_layout.addWidget(output_text)
+        main_layout.addWidget(progress_frame, 1)
 
         # Status label
-        status_var = tk.StringVar(value="Initializing test...")
-        status_label = ttk.Label(frame, textvariable=status_var)
-        status_label.pack(pady=5)
+        status_label = QLabel("Initializing test...")
+        main_layout.addWidget(status_label)
 
         # Close button
-        ttk.Button(frame, text="Close", command=test_window.destroy).pack(pady=10)
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(test_window.close)
+        main_layout.addWidget(close_btn)
 
         # Function to update output in the text widget
         def update_output(text):
-            output_text.insert(tk.END, text + "\n")
-            output_text.see(tk.END)
-            output_text.update_idletasks()
+            QTimer.singleShot(0, lambda: [
+                output_text.append(text),
+                output_text.moveCursor(QTextCursor.End)
+            ])
 
         # Update status in the window
         def update_status(text):
-            status_var.set(text)
+            QTimer.singleShot(0, lambda: status_label.setText(text))
 
         # Update battery info display
         def update_battery_info(text):
-            batt_info_var.set(text)
+            QTimer.singleShot(0, lambda: batt_info_label.setText(text))
 
         # Start the test in a separate thread
         threading.Thread(
@@ -598,6 +630,7 @@ class AdvancedTestsMixin:
             args=(update_output, update_status, update_battery_info, test_window),
             daemon=True
         ).start()
+        test_window.show()
 
     def _battery_drain_test_task(self, update_output, update_status, update_battery_info, test_window):
         """Background task for running the battery drain test with UI updates"""
@@ -818,92 +851,80 @@ class AdvancedTestsMixin:
             return
 
         # Create a visualization window for the tool
-        test_window = tk.Toplevel(self)
-        test_window.title("App Crash Forcer")
-        test_window.geometry("700x500")
-        test_window.transient(self)
-        test_window.grab_set()
+        test_window = QDialog(self)
+        test_window.setWindowTitle("App Crash Forcer")
+        test_window.resize(700, 500)
+        test_window.setWindowModality(Qt.ApplicationModal)
 
         # Configure window content
-        frame = ttk.Frame(test_window, padding="10")
-        frame.pack(fill=tk.BOTH, expand=True)
+        main_layout = QVBoxLayout(test_window)
 
         # Title and description
-        ttk.Label(frame, text="App Crash Forcer", font=("Arial", 14, "bold")).pack(pady=(0, 10))
-        ttk.Label(frame, text="This tool attempts to force Android applications to crash for testing purposes").pack(pady=(0, 5))
+        title_label = QLabel("App Crash Forcer")
+        title_label.setStyleSheet("font-size: 14px; font-weight: bold;")
+        main_layout.addWidget(title_label)
+        main_layout.addWidget(QLabel("This tool attempts to force Android applications to crash for testing purposes"))
 
         # App selection frame
-        app_frame = ttk.LabelFrame(frame, text="Target Application")
-        app_frame.pack(fill=tk.X, expand=False, pady=5)
-
-        # App selection dropdown
-        app_var = tk.StringVar()
-        app_dropdown = ttk.Combobox(app_frame, textvariable=app_var, state="readonly")
-        app_dropdown.pack(side=tk.LEFT, padx=5, pady=5, fill=tk.X, expand=True)
-
-        # Refresh apps button
-        refresh_btn = ttk.Button(app_frame, text="Refresh", command=lambda: refresh_apps())
-        refresh_btn.pack(side=tk.RIGHT, padx=5, pady=5)
+        app_frame = QGroupBox("Target Application")
+        app_layout = QHBoxLayout(app_frame)
+        app_dropdown = QComboBox()
+        app_dropdown.setEditable(False)
+        app_layout.addWidget(app_dropdown)
+        refresh_btn = QPushButton("Refresh")
+        app_layout.addWidget(refresh_btn)
+        main_layout.addWidget(app_frame)
 
         # Crash method selection
-        method_frame = ttk.LabelFrame(frame, text="Crash Methods")
-        method_frame.pack(fill=tk.X, expand=False, pady=5)
+        method_frame = QGroupBox("Crash Methods")
+        method_layout = QVBoxLayout(method_frame)
 
-        # Create crash method options with checkboxes
         method_vars = {
-            "memory": tk.BooleanVar(value=True),
-            "broadcast": tk.BooleanVar(value=True),
-            "activity": tk.BooleanVar(value=True),
-            "native": tk.BooleanVar(value=False)  # Default off as it's more aggressive
+            "memory": QCheckBox("Memory Pressure"),
+            "broadcast": QCheckBox("Broadcast Storm"),
+            "activity": QCheckBox("Activity Stack Overflow"),
+            "native": QCheckBox("Native Signal Injection (Root)")
         }
-
-        ttk.Checkbutton(method_frame, text="Memory Pressure", variable=method_vars["memory"]).pack(anchor=tk.W, padx=5, pady=2)
-        ttk.Checkbutton(method_frame, text="Broadcast Storm", variable=method_vars["broadcast"]).pack(anchor=tk.W, padx=5, pady=2)
-        ttk.Checkbutton(method_frame, text="Activity Stack Overflow", variable=method_vars["activity"]).pack(anchor=tk.W, padx=5, pady=2)
-        ttk.Checkbutton(method_frame, text="Native Signal Injection (Root)", variable=method_vars["native"]).pack(anchor=tk.W, padx=5, pady=2)
+        method_vars["memory"].setChecked(True)
+        method_vars["broadcast"].setChecked(True)
+        method_vars["activity"].setChecked(True)
+        method_vars["native"].setChecked(False)
+        for checkbox in method_vars.values():
+            method_layout.addWidget(checkbox)
+        main_layout.addWidget(method_frame)
 
         # Progress display
-        progress_frame = ttk.LabelFrame(frame, text="Test Progress")
-        progress_frame.pack(fill=tk.BOTH, expand=True, pady=5)
-
-        # Text widget for output
-        output_text = tk.Text(progress_frame, height=15, width=80)
-        output_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5, pady=5)
-
-        # Scrollbar
-        scrollbar = ttk.Scrollbar(progress_frame, command=output_text.yview)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        output_text.config(yscrollcommand=scrollbar.set)
+        progress_frame = QGroupBox("Test Progress")
+        progress_layout = QVBoxLayout(progress_frame)
+        output_text = QTextEdit()
+        output_text.setReadOnly(True)
+        progress_layout.addWidget(output_text)
+        main_layout.addWidget(progress_frame, 1)
 
         # Status label
-        status_var = tk.StringVar(value="Ready to start...")
-        status_label = ttk.Label(frame, textvariable=status_var)
-        status_label.pack(pady=5)
+        status_label = QLabel("Ready to start...")
+        main_layout.addWidget(status_label)
 
         # Action buttons
-        button_frame = ttk.Frame(frame)
-        button_frame.pack(pady=10)
-
-        # Start button
-        start_btn = ttk.Button(
-            button_frame,
-            text="Start Crash Test",
-            command=lambda: start_crash_test()
-        )
-        start_btn.pack(side=tk.LEFT, padx=5)
-
-        # Close button
-        ttk.Button(button_frame, text="Close", command=test_window.destroy).pack(side=tk.LEFT, padx=5)
+        button_frame = QWidget()
+        button_layout = QHBoxLayout(button_frame)
+        start_btn = QPushButton("Start Crash Test")
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(test_window.close)
+        button_layout.addWidget(start_btn)
+        button_layout.addWidget(close_btn)
+        main_layout.addWidget(button_frame)
 
         # Function to update output in the text widget
         def update_output(text):
-            output_text.insert(tk.END, text + "\n")
-            output_text.see(tk.END)
-            output_text.update_idletasks()
+            QTimer.singleShot(0, lambda: [
+                output_text.append(text),
+                output_text.moveCursor(QTextCursor.End)
+            ])
 
         # Update status in the window
         def update_status(text):
-            status_var.set(text)
+            QTimer.singleShot(0, lambda: status_label.setText(text))
 
         # Function to refresh app list
         def refresh_apps():
@@ -925,29 +946,30 @@ class AdvancedTestsMixin:
 
                 if len(apps) > 0:
                     # Update dropdown with app list
-                    app_dropdown['values'] = apps
-                    app_dropdown.current(0)  # Select first app by default
+                    app_dropdown.clear()
+                    app_dropdown.addItems(apps)
+                    app_dropdown.setCurrentIndex(0)
                     update_output(f"Found {len(apps)} applications")
                     update_status("Ready to start")
-                    start_btn.config(state="normal")
+                    start_btn.setEnabled(True)
                 else:
                     update_output("No third-party applications found")
                     update_status("No applications found")
-                    start_btn.config(state="disabled")
+                    start_btn.setEnabled(False)
             else:
                 update_output("Could not retrieve application list")
                 update_status("Could not get app list")
-                start_btn.config(state="disabled")
+                start_btn.setEnabled(False)
 
         # Function to start the crash test
         def start_crash_test():
-            selected_app = app_var.get()
+            selected_app = app_dropdown.currentText()
             if not selected_app:
                 update_output("Please select a target application first")
                 return
 
             # Get selected crash methods
-            enabled_methods = [method for method, var in method_vars.items() if var.get()]
+            enabled_methods = [method for method, checkbox in method_vars.items() if checkbox.isChecked()]
             if not enabled_methods:
                 update_output("Please select at least one crash method")
                 return
@@ -960,7 +982,10 @@ class AdvancedTestsMixin:
             ).start()
 
         # Populate app list initially
+        refresh_btn.clicked.connect(refresh_apps)
+        start_btn.clicked.connect(start_crash_test)
         refresh_apps()
+        test_window.show()
 
     def _app_crash_forcer_task(self, target_app, methods, update_output, update_status):
         """Background task for running the app crash forcer"""
@@ -1263,50 +1288,47 @@ class AdvancedTestsMixin:
             return
 
         # Create a visualization window for the test
-        test_window = tk.Toplevel(self)
-        test_window.title("CPU Max Load Test")
-        test_window.geometry("600x400")
-        test_window.transient(self)
-        test_window.grab_set()
+        test_window = QDialog(self)
+        test_window.setWindowTitle("CPU Max Load Test")
+        test_window.resize(600, 400)
+        test_window.setWindowModality(Qt.ApplicationModal)
 
         # Configure window content
-        frame = ttk.Frame(test_window, padding="10")
-        frame.pack(fill=tk.BOTH, expand=True)
+        main_layout = QVBoxLayout(test_window)
 
         # Title and description
-        ttk.Label(frame, text="CPU Max Load Test", font=("Arial", 14, "bold")).pack(pady=(0, 10))
-        ttk.Label(frame, text="This test will stress all CPU cores to measure performance").pack(pady=(0, 10))
+        title_label = QLabel("CPU Max Load Test")
+        title_label.setStyleSheet("font-size: 14px; font-weight: bold;")
+        main_layout.addWidget(title_label)
+        main_layout.addWidget(QLabel("This test will stress all CPU cores to measure performance"))
 
         # Progress display
-        progress_frame = ttk.LabelFrame(frame, text="Test Progress")
-        progress_frame.pack(fill=tk.BOTH, expand=True, pady=5)
-
-        # Text widget for output
-        output_text = tk.Text(progress_frame, height=15, width=70)
-        output_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5, pady=5)
-
-        # Scrollbar
-        scrollbar = ttk.Scrollbar(progress_frame, command=output_text.yview)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        output_text.config(yscrollcommand=scrollbar.set)
+        progress_frame = QGroupBox("Test Progress")
+        progress_layout = QVBoxLayout(progress_frame)
+        output_text = QTextEdit()
+        output_text.setReadOnly(True)
+        progress_layout.addWidget(output_text)
+        main_layout.addWidget(progress_frame, 1)
 
         # Status label
-        status_var = tk.StringVar(value="Initializing test...")
-        status_label = ttk.Label(frame, textvariable=status_var)
-        status_label.pack(pady=5)
+        status_label = QLabel("Initializing test...")
+        main_layout.addWidget(status_label)
 
         # Close button
-        ttk.Button(frame, text="Close", command=test_window.destroy).pack(pady=10)
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(test_window.close)
+        main_layout.addWidget(close_btn)
 
         # Function to update output in the text widget
         def update_output(text):
-            output_text.insert(tk.END, text + "\n")
-            output_text.see(tk.END)
-            output_text.update_idletasks()
+            QTimer.singleShot(0, lambda: [
+                output_text.append(text),
+                output_text.moveCursor(QTextCursor.End)
+            ])
 
         # Update status in the window
         def update_status(text):
-            status_var.set(text)
+            QTimer.singleShot(0, lambda: status_label.setText(text))
 
         # Start the test in a separate thread
         threading.Thread(
@@ -1314,6 +1336,7 @@ class AdvancedTestsMixin:
             args=(update_output, update_status, test_window),
             daemon=True
         ).start()
+        test_window.show()
 
     def _cpu_max_load_test_task(self, update_output, update_status, test_window):
         """Background task for running the CPU max load test with UI updates"""
@@ -1466,63 +1489,59 @@ class AdvancedTestsMixin:
             return
 
         # Create a visualization window for the test
-        test_window = tk.Toplevel(self)
-        test_window.title("RAM Fill Test")
-        test_window.geometry("700x500")
-        test_window.transient(self)
-        test_window.grab_set()
+        test_window = QDialog(self)
+        test_window.setWindowTitle("RAM Fill Test")
+        test_window.resize(700, 500)
+        test_window.setWindowModality(Qt.ApplicationModal)
 
         # Configure window content
-        frame = ttk.Frame(test_window, padding="10")
-        frame.pack(fill=tk.BOTH, expand=True)
+        main_layout = QVBoxLayout(test_window)
 
         # Title and description
-        ttk.Label(frame, text="RAM Fill Test", font=("Arial", 14, "bold")).pack(pady=(0, 10))
-        ttk.Label(frame, text="This test will progressively allocate more memory to stress the device RAM").pack(pady=(0, 5))
+        title_label = QLabel("RAM Fill Test")
+        title_label.setStyleSheet("font-size: 14px; font-weight: bold;")
+        main_layout.addWidget(title_label)
+        main_layout.addWidget(QLabel("This test will progressively allocate more memory to stress the device RAM"))
 
         # Progress display
-        progress_frame = ttk.LabelFrame(frame, text="Test Progress")
-        progress_frame.pack(fill=tk.BOTH, expand=True, pady=5)
-
-        # Text widget for output
-        output_text = tk.Text(progress_frame, height=15, width=80)
-        output_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5, pady=5)
-
-        # Scrollbar
-        scrollbar = ttk.Scrollbar(progress_frame, command=output_text.yview)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        output_text.config(yscrollcommand=scrollbar.set)
+        progress_frame = QGroupBox("Test Progress")
+        progress_layout = QVBoxLayout(progress_frame)
+        output_text = QTextEdit()
+        output_text.setReadOnly(True)
+        progress_layout.addWidget(output_text)
+        main_layout.addWidget(progress_frame, 1)
 
         # Memory usage display
-        memory_frame = ttk.LabelFrame(frame, text="Memory Usage")
-        memory_frame.pack(fill=tk.X, expand=False, pady=5)
-
-        # Memory usage labels
-        mem_info_var = tk.StringVar(value="Waiting for memory information...")
-        mem_info_label = ttk.Label(memory_frame, textvariable=mem_info_var, justify=tk.LEFT)
-        mem_info_label.pack(pady=5, padx=5, anchor=tk.W)
+        memory_frame = QGroupBox("Memory Usage")
+        memory_layout = QVBoxLayout(memory_frame)
+        mem_info_label = QLabel("Waiting for memory information...")
+        mem_info_label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        memory_layout.addWidget(mem_info_label)
+        main_layout.addWidget(memory_frame)
 
         # Status label
-        status_var = tk.StringVar(value="Initializing test...")
-        status_label = ttk.Label(frame, textvariable=status_var)
-        status_label.pack(pady=5)
+        status_label = QLabel("Initializing test...")
+        main_layout.addWidget(status_label)
 
         # Close button
-        ttk.Button(frame, text="Close", command=test_window.destroy).pack(pady=10)
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(test_window.close)
+        main_layout.addWidget(close_btn)
 
         # Function to update output in the text widget
         def update_output(text):
-            output_text.insert(tk.END, text + "\n")
-            output_text.see(tk.END)
-            output_text.update_idletasks()
+            QTimer.singleShot(0, lambda: [
+                output_text.append(text),
+                output_text.moveCursor(QTextCursor.End)
+            ])
 
         # Update status in the window
         def update_status(text):
-            status_var.set(text)
+            QTimer.singleShot(0, lambda: status_label.setText(text))
 
         # Update memory info display
         def update_memory_info(text):
-            mem_info_var.set(text)
+            QTimer.singleShot(0, lambda: mem_info_label.setText(text))
 
         # Start the test in a separate thread
         threading.Thread(
@@ -1530,6 +1549,7 @@ class AdvancedTestsMixin:
             args=(update_output, update_status, update_memory_info, test_window),
             daemon=True
         ).start()
+        test_window.show()
 
     def _ram_fill_test_task(self, update_output, update_status, update_memory_info, test_window):
         """Background task for running the RAM fill test with UI updates"""
@@ -1826,50 +1846,47 @@ class AdvancedTestsMixin:
             return
 
         # Create a visualization window for the test
-        test_window = tk.Toplevel(self)
-        test_window.title("GPU Stress Test")
-        test_window.geometry("600x400")
-        test_window.transient(self)
-        test_window.grab_set()
+        test_window = QDialog(self)
+        test_window.setWindowTitle("GPU Stress Test")
+        test_window.resize(600, 400)
+        test_window.setWindowModality(Qt.ApplicationModal)
 
         # Configure window content
-        frame = ttk.Frame(test_window, padding="10")
-        frame.pack(fill=tk.BOTH, expand=True)
+        main_layout = QVBoxLayout(test_window)
 
         # Title and description
-        ttk.Label(frame, text="GPU Stress Test", font=("Arial", 14, "bold")).pack(pady=(0, 10))
-        ttk.Label(frame, text="This test will stress the GPU with various rendering operations").pack(pady=(0, 10))
+        title_label = QLabel("GPU Stress Test")
+        title_label.setStyleSheet("font-size: 14px; font-weight: bold;")
+        main_layout.addWidget(title_label)
+        main_layout.addWidget(QLabel("This test will stress the GPU with various rendering operations"))
 
         # Progress display
-        progress_frame = ttk.LabelFrame(frame, text="Test Progress")
-        progress_frame.pack(fill=tk.BOTH, expand=True, pady=5)
-
-        # Text widget for output
-        output_text = tk.Text(progress_frame, height=15, width=70)
-        output_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5, pady=5)
-
-        # Scrollbar
-        scrollbar = ttk.Scrollbar(progress_frame, command=output_text.yview)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        output_text.config(yscrollcommand=scrollbar.set)
+        progress_frame = QGroupBox("Test Progress")
+        progress_layout = QVBoxLayout(progress_frame)
+        output_text = QTextEdit()
+        output_text.setReadOnly(True)
+        progress_layout.addWidget(output_text)
+        main_layout.addWidget(progress_frame, 1)
 
         # Status label
-        status_var = tk.StringVar(value="Initializing test...")
-        status_label = ttk.Label(frame, textvariable=status_var)
-        status_label.pack(pady=5)
+        status_label = QLabel("Initializing test...")
+        main_layout.addWidget(status_label)
 
         # Close button
-        ttk.Button(frame, text="Close", command=test_window.destroy).pack(pady=10)
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(test_window.close)
+        main_layout.addWidget(close_btn)
 
         # Function to update output in the text widget
         def update_output(text):
-            output_text.insert(tk.END, text + "\n")
-            output_text.see(tk.END)
-            output_text.update_idletasks()
+            QTimer.singleShot(0, lambda: [
+                output_text.append(text),
+                output_text.moveCursor(QTextCursor.End)
+            ])
 
         # Update status in the window
         def update_status(text):
-            status_var.set(text)
+            QTimer.singleShot(0, lambda: status_label.setText(text))
 
         # Start the test in a separate thread
         threading.Thread(
@@ -1877,6 +1894,7 @@ class AdvancedTestsMixin:
             args=(update_output, update_status, test_window),
             daemon=True
         ).start()
+        test_window.show()
 
     def _gpu_stress_test_task(self, update_output, update_status, test_window):
         """Background task for running the GPU stress test with UI updates"""
@@ -2078,63 +2096,59 @@ class AdvancedTestsMixin:
             return
 
         # Create a visualization window for the test
-        test_window = tk.Toplevel(self)
-        test_window.title("Dalvik Cache Stress Test")
-        test_window.geometry("700x500")
-        test_window.transient(self)
-        test_window.grab_set()
+        test_window = QDialog(self)
+        test_window.setWindowTitle("Dalvik Cache Stress Test")
+        test_window.resize(700, 500)
+        test_window.setWindowModality(Qt.ApplicationModal)
 
         # Configure window content
-        frame = ttk.Frame(test_window, padding="10")
-        frame.pack(fill=tk.BOTH, expand=True)
+        main_layout = QVBoxLayout(test_window)
 
         # Title and description
-        ttk.Label(frame, text="Dalvik Cache Stress Test", font=("Arial", 14, "bold")).pack(pady=(0, 10))
-        ttk.Label(frame, text="This test will stress the Dalvik/ART runtime cache system").pack(pady=(0, 5))
+        title_label = QLabel("Dalvik Cache Stress Test")
+        title_label.setStyleSheet("font-size: 14px; font-weight: bold;")
+        main_layout.addWidget(title_label)
+        main_layout.addWidget(QLabel("This test will stress the Dalvik/ART runtime cache system"))
 
         # Cache info display
-        cache_frame = ttk.LabelFrame(frame, text="Cache Information")
-        cache_frame.pack(fill=tk.X, expand=False, pady=5)
-
-        # Cache info labels
-        cache_info_var = tk.StringVar(value="Checking cache information...")
-        cache_info_label = ttk.Label(cache_frame, textvariable=cache_info_var, justify=tk.LEFT)
-        cache_info_label.pack(pady=5, padx=5, anchor=tk.W)
+        cache_frame = QGroupBox("Cache Information")
+        cache_layout = QVBoxLayout(cache_frame)
+        cache_info_label = QLabel("Checking cache information...")
+        cache_info_label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        cache_layout.addWidget(cache_info_label)
+        main_layout.addWidget(cache_frame)
 
         # Progress display
-        progress_frame = ttk.LabelFrame(frame, text="Test Progress")
-        progress_frame.pack(fill=tk.BOTH, expand=True, pady=5)
-
-        # Text widget for output
-        output_text = tk.Text(progress_frame, height=15, width=80)
-        output_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5, pady=5)
-
-        # Scrollbar
-        scrollbar = ttk.Scrollbar(progress_frame, command=output_text.yview)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        output_text.config(yscrollcommand=scrollbar.set)
+        progress_frame = QGroupBox("Test Progress")
+        progress_layout = QVBoxLayout(progress_frame)
+        output_text = QTextEdit()
+        output_text.setReadOnly(True)
+        progress_layout.addWidget(output_text)
+        main_layout.addWidget(progress_frame, 1)
 
         # Status label
-        status_var = tk.StringVar(value="Initializing test...")
-        status_label = ttk.Label(frame, textvariable=status_var)
-        status_label.pack(pady=5)
+        status_label = QLabel("Initializing test...")
+        main_layout.addWidget(status_label)
 
         # Close button
-        ttk.Button(frame, text="Close", command=test_window.destroy).pack(pady=10)
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(test_window.close)
+        main_layout.addWidget(close_btn)
 
         # Function to update output in the text widget
         def update_output(text):
-            output_text.insert(tk.END, text + "\n")
-            output_text.see(tk.END)
-            output_text.update_idletasks()
+            QTimer.singleShot(0, lambda: [
+                output_text.append(text),
+                output_text.moveCursor(QTextCursor.End)
+            ])
 
         # Update status in the window
         def update_status(text):
-            status_var.set(text)
+            QTimer.singleShot(0, lambda: status_label.setText(text))
 
         # Update cache info display
         def update_cache_info(text):
-            cache_info_var.set(text)
+            QTimer.singleShot(0, lambda: cache_info_label.setText(text))
 
         # Start the test in a separate thread
         threading.Thread(
@@ -2142,6 +2156,7 @@ class AdvancedTestsMixin:
             args=(update_output, update_status, update_cache_info, test_window),
             daemon=True
         ).start()
+        test_window.show()
 
     def _dalvik_cache_stress_test_task(self, update_output, update_status, update_cache_info, test_window):
         """Background task for running the Dalvik Cache stress test with UI updates"""
@@ -2445,19 +2460,20 @@ class AdvancedTestsMixin:
             return
 
         # Create a configuration dialog for the benchmark
-        config_dialog = tk.Toplevel(self)
-        config_dialog.title("Looped Benchmarking")
-        config_dialog.geometry("750x850")
-        config_dialog.resizable(False, False)
-        config_dialog.transient(self)  # Set to be on top of the main window
-        config_dialog.grab_set()  # Make the dialog modal
+        config_dialog = QDialog(self)
+        self._looped_benchmark_dialog = config_dialog
+        config_dialog.setWindowTitle("Looped Benchmarking")
+        config_dialog.resize(750, 850)
+        config_dialog.setWindowModality(Qt.ApplicationModal)
 
         # Add some padding
-        padframe = ttk.Frame(config_dialog, padding="10 10 10 10")
-        padframe.pack(fill=tk.BOTH, expand=True)
+        main_layout = QVBoxLayout(config_dialog)
 
-        # Create form elements
-        ttk.Label(padframe, text="Benchmark Type:").grid(row=0, column=0, sticky="w", pady=5)
+        # Form layout
+        form_frame = QWidget()
+        form_layout = QGridLayout(form_frame)
+        main_layout.addWidget(form_frame)
+
         benchmark_types = [
             "CPU Performance",
             "Storage I/O",
@@ -2465,43 +2481,45 @@ class AdvancedTestsMixin:
             "UI Responsiveness",
             "All Benchmarks"
         ]
-        benchmark_type = tk.StringVar(value=benchmark_types[0])
-        benchmark_combo = ttk.Combobox(padframe, textvariable=benchmark_type, values=benchmark_types, width=20)
-        benchmark_combo.grid(row=0, column=1, sticky="w", columnspan=2)
+        form_layout.addWidget(QLabel("Benchmark Type:"), 0, 0)
+        benchmark_combo = QComboBox()
+        benchmark_combo.addItems(benchmark_types)
+        form_layout.addWidget(benchmark_combo, 0, 1, 1, 2)
 
-        ttk.Label(padframe, text="Number of Iterations:").grid(row=1, column=0, sticky="w", pady=5)
-        iterations = tk.StringVar(value="5")
-        ttk.Entry(padframe, textvariable=iterations, width=10).grid(row=1, column=1, sticky="w")
+        form_layout.addWidget(QLabel("Number of Iterations:"), 1, 0)
+        iterations_spin = QSpinBox()
+        iterations_spin.setRange(1, 100)
+        iterations_spin.setValue(5)
+        form_layout.addWidget(iterations_spin, 1, 1)
 
-        ttk.Label(padframe, text="Time Between Iterations (s):").grid(row=2, column=0, sticky="w", pady=5)
-        delay_sec = tk.StringVar(value="30")
-        ttk.Entry(padframe, textvariable=delay_sec, width=10).grid(row=2, column=1, sticky="w")
-
-        # Add a separator
-        ttk.Separator(padframe, orient="horizontal").grid(row=3, column=0, columnspan=3, sticky="ew", pady=10)
+        form_layout.addWidget(QLabel("Time Between Iterations (s):"), 2, 0)
+        delay_spin = QSpinBox()
+        delay_spin.setRange(0, 3600)
+        delay_spin.setValue(30)
+        form_layout.addWidget(delay_spin, 2, 1)
 
         # Create result frame
-        result_frame = ttk.LabelFrame(padframe, text="Benchmark Results")
-        result_frame.grid(row=4, column=0, columnspan=3, sticky="nsew", pady=5)
-        padframe.grid_rowconfigure(4, weight=1)
-
-        # Add results text widget
-        result_text = scrolledtext.ScrolledText(result_frame, height=10, width=45)
-        result_text.pack(fill="both", expand=True, padx=5, pady=5)
+        result_frame = QGroupBox("Benchmark Results")
+        result_layout = QVBoxLayout(result_frame)
+        result_text = QTextEdit()
+        result_text.setReadOnly(True)
+        result_layout.addWidget(result_text)
+        main_layout.addWidget(result_frame, 1)
 
         # Add progress bar
-        progress_var = tk.DoubleVar()
-        progress_bar = ttk.Progressbar(padframe, variable=progress_var, maximum=100)
-        progress_bar.grid(row=5, column=0, columnspan=3, sticky="ew", pady=5)
+        progress_bar = QProgressBar()
+        progress_bar.setRange(0, 100)
+        progress_bar.setValue(0)
+        main_layout.addWidget(progress_bar)
 
         # Status label
-        status_var = tk.StringVar(value="Ready")
-        status_label = ttk.Label(padframe, textvariable=status_var)
-        status_label.grid(row=6, column=0, columnspan=3, sticky="w", pady=5)
+        status_label = QLabel("Ready")
+        main_layout.addWidget(status_label)
 
         # Button frame
-        btn_frame = ttk.Frame(padframe)
-        btn_frame.grid(row=7, column=0, columnspan=3, pady=10)
+        btn_frame = QWidget()
+        btn_layout = QHBoxLayout(btn_frame)
+        main_layout.addWidget(btn_frame)
 
         # Variable to control the benchmark process
         running = [False]  # Use a list to allow modification from nested functions
@@ -2513,40 +2531,25 @@ class AdvancedTestsMixin:
 
             try:
                 # Validate inputs
-                try:
-                    num_iterations = int(iterations.get())
-                    if num_iterations < 1 or num_iterations > 100:
-                        update_result("Number of iterations must be between 1 and 100.")
-                        return
-                except ValueError:
-                    update_result("Number of iterations must be a number.")
-                    return
-
-                try:
-                    between_delay = int(delay_sec.get())
-                    if between_delay < 0:
-                        update_result("Delay must be a positive number.")
-                        return
-                except ValueError:
-                    update_result("Delay must be a number.")
-                    return
+                num_iterations = iterations_spin.value()
+                between_delay = delay_spin.value()
 
                 # Clear results
-                result_text.delete(1.0, tk.END)
-                update_result(f"Starting {benchmark_type.get()} benchmark with {num_iterations} iterations...")
+                result_text.clear()
+                update_result(f"Starting {benchmark_combo.currentText()} benchmark with {num_iterations} iterations...")
 
                 # Start the benchmark in a separate thread
                 running[0] = True
-                start_btn.config(state="disabled")
-                stop_btn.config(state="normal")
+                start_btn.setEnabled(False)
+                stop_btn.setEnabled(True)
 
                 # Reset progress bar
-                progress_var.set(0)
-                status_var.set("Running...")
+                progress_bar.setValue(0)
+                status_label.setText("Running...")
 
                 benchmark_thread = threading.Thread(
                     target=lambda: self._run_looped_benchmark(
-                        benchmark_type.get(), num_iterations, between_delay,
+                        benchmark_combo.currentText(), num_iterations, between_delay,
                         update_result, update_progress, lambda: running[0],
                         on_benchmark_complete),
                     daemon=True
@@ -2556,8 +2559,8 @@ class AdvancedTestsMixin:
             except Exception as e:
                 update_result(f"Error: {str(e)}")
                 running[0] = False
-                start_btn.config(state="normal")
-                stop_btn.config(state="disabled")
+                start_btn.setEnabled(True)
+                stop_btn.setEnabled(False)
 
         # Stop button function
         def stop_benchmark():
@@ -2567,31 +2570,43 @@ class AdvancedTestsMixin:
 
         # Function to update results
         def update_result(message):
-            result_text.insert(tk.END, f"{message}\n")
-            result_text.see(tk.END)
+            QTimer.singleShot(0, lambda: [
+                result_text.append(message),
+                result_text.moveCursor(QTextCursor.End)
+            ])
 
         # Function to update progress
         def update_progress(percent, message=None):
-            progress_var.set(percent)
-            if message:
-                status_var.set(message)
+            def apply_progress():
+                progress_bar.setValue(int(percent))
+                if message:
+                    status_label.setText(message)
+
+            QTimer.singleShot(0, apply_progress)
 
         # Function called when benchmark is complete
         def on_benchmark_complete():
-            start_btn.config(state="normal")
-            stop_btn.config(state="disabled")
-            running[0] = False
-            status_var.set("Completed")
+            def finalize():
+                start_btn.setEnabled(True)
+                stop_btn.setEnabled(False)
+                running[0] = False
+                status_label.setText("Completed")
+
+            QTimer.singleShot(0, finalize)
 
         # Add buttons
-        start_btn = ttk.Button(btn_frame, text="Start", command=start_benchmark)
-        start_btn.pack(side="left", padx=5)
+        start_btn = QPushButton("Start")
+        start_btn.clicked.connect(start_benchmark)
+        btn_layout.addWidget(start_btn)
 
-        stop_btn = ttk.Button(btn_frame, text="Stop", command=stop_benchmark, state="disabled")
-        stop_btn.pack(side="left", padx=5)
+        stop_btn = QPushButton("Stop")
+        stop_btn.setEnabled(False)
+        stop_btn.clicked.connect(stop_benchmark)
+        btn_layout.addWidget(stop_btn)
 
         # Initial update
         update_result("Configure the benchmark parameters and click Start to begin.")
+        config_dialog.show()
 
     def _run_looped_benchmark(self, benchmark_type, iterations, delay_sec, result_callback, progress_callback, should_continue, on_complete):
         """Run the selected benchmark in a loop"""
@@ -2962,7 +2977,7 @@ class AdvancedTestsMixin:
     def run_hardware_stress_test(self):
         """Run a comprehensive hardware stress test"""
         if not self.device_connected:
-            messagebox.showinfo("Not Connected", "Please connect to a device first.")
+            QMessageBox.information(self, "Not Connected", "Please connect to a device first.")
             return
 
         self.log_message("Starting comprehensive Hardware Stress Test...")
@@ -3016,37 +3031,37 @@ class AdvancedTestsMixin:
     def _monkey_testing_dialog(self):
         """Show dialog for Monkey testing"""
         if not self.device_connected:
-            messagebox.showinfo("Not Connected", "Please connect to a device first.")
+            QMessageBox.information(self, "Not Connected", "Please connect to a device first.")
             return
 
         try:
             serial = self.device_serial
             adb_cmd = self.adb_path if IS_WINDOWS else "adb"
 
-            dialog = tk.Toplevel(self)
-            dialog.title("Monkey Testing")
-            dialog.geometry("600x500")
-            dialog.transient(self)
-            dialog.grab_set()
+            dialog = QDialog(self)
+            self._io_spike_dialog = dialog
+            self._monkey_dialog = dialog
+            dialog.setWindowTitle("Monkey Testing")
+            dialog.resize(600, 500)
+            dialog.setWindowModality(Qt.ApplicationModal)
 
-            x_pos = (self.winfo_screenwidth() - 600) // 2
-            y_pos = (self.winfo_screenheight() - 500) // 2
-            dialog.geometry(f"+{x_pos}+{y_pos}")
+            screen_geometry = QGuiApplication.primaryScreen().availableGeometry()
+            x_pos = screen_geometry.x() + (screen_geometry.width() - 600) // 2
+            y_pos = screen_geometry.y() + (screen_geometry.height() - 500) // 2
+            dialog.move(x_pos, y_pos)
 
-            main_frame = ttk.Frame(dialog, padding=20)
-            main_frame.pack(fill="both", expand=True)
-
-            ttk.Label(main_frame, text="Monkey Testing", font=("Arial", 12, "bold")).pack(pady=(0, 10))
-
-            ttk.Label(main_frame, text="Monkey is a program that generates random events on your device.").pack(pady=5)
+            main_layout = QVBoxLayout(dialog)
+            title_label = QLabel("Monkey Testing")
+            title_label.setStyleSheet("font-size: 12px; font-weight: bold;")
+            main_layout.addWidget(title_label)
+            main_layout.addWidget(QLabel("Monkey is a program that generates random events on your device."))
 
             # Package selection
-            pkg_frame = ttk.LabelFrame(main_frame, text="Target Package", padding=10)
-            pkg_frame.pack(fill="x", pady=10)
-
-            pkg_var = tk.StringVar()
-            pkg_combo = ttk.Combobox(pkg_frame, textvariable=pkg_var, width=50)
-            pkg_combo.pack(fill="x")
+            pkg_frame = QGroupBox("Target Package")
+            pkg_layout = QVBoxLayout(pkg_frame)
+            pkg_combo = QComboBox()
+            pkg_layout.addWidget(pkg_combo)
+            main_layout.addWidget(pkg_frame)
 
             # Load packages
             def load_packages():
@@ -3056,45 +3071,51 @@ class AdvancedTestsMixin:
                 )
                 if result.returncode == 0:
                     packages = [line[8:] for line in result.stdout.strip().split('\n') if line.startswith('package:')]
-                    dialog.after(0, lambda: pkg_combo.configure(values=packages))
+                    QTimer.singleShot(0, lambda: pkg_combo.addItems(packages))
 
             threading.Thread(target=load_packages, daemon=True).start()
 
             # Event count
-            count_frame = ttk.Frame(main_frame)
-            count_frame.pack(fill="x", pady=5)
-
-            ttk.Label(count_frame, text="Number of events:").pack(side="left")
-            count_var = tk.IntVar(value=1000)
-            count_spinbox = ttk.Spinbox(count_frame, from_=100, to=100000, textvariable=count_var, width=15)
-            count_spinbox.pack(side="left", padx=10)
+            count_frame = QWidget()
+            count_layout = QHBoxLayout(count_frame)
+            count_layout.addWidget(QLabel("Number of events:"))
+            count_spinbox = QSpinBox()
+            count_spinbox.setRange(100, 100000)
+            count_spinbox.setValue(1000)
+            count_layout.addWidget(count_spinbox)
+            count_layout.addStretch(1)
+            main_layout.addWidget(count_frame)
 
             # Delay between events
-            delay_frame = ttk.Frame(main_frame)
-            delay_frame.pack(fill="x", pady=5)
-
-            ttk.Label(delay_frame, text="Delay between events (ms):").pack(side="left")
-            delay_var = tk.IntVar(value=500)
-            delay_spinbox = ttk.Spinbox(delay_frame, from_=0, to=5000, textvariable=delay_var, width=15)
-            delay_spinbox.pack(side="left", padx=10)
+            delay_frame = QWidget()
+            delay_layout = QHBoxLayout(delay_frame)
+            delay_layout.addWidget(QLabel("Delay between events (ms):"))
+            delay_spinbox = QSpinBox()
+            delay_spinbox.setRange(0, 5000)
+            delay_spinbox.setValue(500)
+            delay_layout.addWidget(delay_spinbox)
+            delay_layout.addStretch(1)
+            main_layout.addWidget(delay_frame)
 
             # Seed
-            seed_frame = ttk.Frame(main_frame)
-            seed_frame.pack(fill="x", pady=5)
-
-            ttk.Label(seed_frame, text="Random seed (0 = random):").pack(side="left")
-            seed_var = tk.IntVar(value=0)
-            seed_spinbox = ttk.Spinbox(seed_frame, from_=0, to=999999, textvariable=seed_var, width=15)
-            seed_spinbox.pack(side="left", padx=10)
+            seed_frame = QWidget()
+            seed_layout = QHBoxLayout(seed_frame)
+            seed_layout.addWidget(QLabel("Random seed (0 = random):"))
+            seed_spinbox = QSpinBox()
+            seed_spinbox.setRange(0, 999999)
+            seed_spinbox.setValue(0)
+            seed_layout.addWidget(seed_spinbox)
+            seed_layout.addStretch(1)
+            main_layout.addWidget(seed_frame)
 
             # Output
-            output_text = scrolledtext.ScrolledText(main_frame, wrap=tk.WORD, height=10, width=60)
-            output_text.pack(fill="both", expand=True, pady=10)
+            output_text = QTextEdit()
+            output_text.setReadOnly(True)
+            main_layout.addWidget(output_text, 1)
 
             # Status
-            status_var = tk.StringVar(value="Ready")
-            status_label = ttk.Label(main_frame, textvariable=status_var)
-            status_label.pack(pady=5)
+            status_label = QLabel("Ready")
+            main_layout.addWidget(status_label)
 
             running = {'value': False}
 
@@ -3102,20 +3123,20 @@ class AdvancedTestsMixin:
                 if running['value']:
                     return
 
-                package = pkg_var.get()
+                package = pkg_combo.currentText()
                 if not package:
-                    messagebox.showerror("Error", "Please select a package")
+                    QMessageBox.critical(dialog, "Error", "Please select a package")
                     return
 
                 running['value'] = True
-                status_var.set("Running...")
-                output_text.delete(1.0, tk.END)
+                status_label.setText("Running...")
+                output_text.clear()
 
                 def run_monkey():
                     try:
-                        count = count_var.get()
-                        delay = delay_var.get()
-                        seed = seed_var.get()
+                        count = count_spinbox.value()
+                        delay = delay_spinbox.value()
+                        seed = seed_spinbox.value()
 
                         cmd = [adb_cmd, "-s", serial, "shell", "monkey",
                                "-p", package,
@@ -3138,19 +3159,17 @@ class AdvancedTestsMixin:
                             if not running['value']:
                                 process.terminate()
                                 break
-                            dialog.after(0, lambda l=line: [
-                                output_text.insert(tk.END, l),
-                                output_text.see(tk.END)
-                            ])
+                            QTimer.singleShot(0, lambda l=line: output_text.append(l.rstrip("\n")))
 
                         process.wait()
-                        dialog.after(0, lambda: status_var.set("Completed"))
+                        QTimer.singleShot(0, lambda: status_label.setText("Completed"))
 
                     except Exception as e:
-                        dialog.after(0, lambda: [
-                            output_text.insert(tk.END, f"\nError: {str(e)}"),
-                            status_var.set("Error")
-                        ])
+                        def report_error():
+                            output_text.append(f"\nError: {str(e)}")
+                            status_label.setText("Error")
+
+                        QTimer.singleShot(0, report_error)
                     finally:
                         running['value'] = False
 
@@ -3158,103 +3177,131 @@ class AdvancedTestsMixin:
 
             def stop_test():
                 running['value'] = False
-                status_var.set("Stopped")
+                status_label.setText("Stopped")
 
-            buttons_frame = ttk.Frame(main_frame)
-            buttons_frame.pack(fill="x", pady=10)
-
-            ttk.Button(buttons_frame, text="Run Test", command=run_test).pack(side="left", padx=5)
-            ttk.Button(buttons_frame, text="Stop", command=stop_test).pack(side="left", padx=5)
-            ttk.Button(buttons_frame, text="Close", command=dialog.destroy).pack(side="right", padx=5)
+            buttons_frame = QWidget()
+            buttons_layout = QHBoxLayout(buttons_frame)
+            run_btn = QPushButton("Run Test")
+            run_btn.clicked.connect(run_test)
+            buttons_layout.addWidget(run_btn)
+            stop_btn = QPushButton("Stop")
+            stop_btn.clicked.connect(stop_test)
+            buttons_layout.addWidget(stop_btn)
+            close_btn = QPushButton("Close")
+            close_btn.clicked.connect(dialog.close)
+            buttons_layout.addStretch(1)
+            buttons_layout.addWidget(close_btn)
+            main_layout.addWidget(buttons_frame)
+            dialog.show()
 
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to open monkey testing dialog: {str(e)}")
+            QMessageBox.critical(self, "Error", f"Failed to open monkey testing dialog: {str(e)}")
 
     def run_io_spike_generator(self):
         """Run I/O spike generator test"""
         if not self.device_connected:
-            messagebox.showinfo("Not Connected", "Please connect to a device first.")
+            QMessageBox.information(self, "Not Connected", "Please connect to a device first.")
             return
 
         try:
             serial = self.device_serial
             adb_cmd = self.adb_path if IS_WINDOWS else "adb"
 
-            dialog = tk.Toplevel(self)
-            dialog.title("I/O Spike Generator")
-            dialog.geometry("500x400")
-            dialog.transient(self)
-            dialog.grab_set()
+            dialog = QDialog(self)
+            dialog.setWindowTitle("I/O Spike Generator")
+            dialog.resize(500, 400)
+            dialog.setWindowModality(Qt.ApplicationModal)
 
-            x_pos = (self.winfo_screenwidth() - 500) // 2
-            y_pos = (self.winfo_screenheight() - 400) // 2
-            dialog.geometry(f"+{x_pos}+{y_pos}")
+            screen_geometry = QGuiApplication.primaryScreen().availableGeometry()
+            x_pos = screen_geometry.x() + (screen_geometry.width() - 500) // 2
+            y_pos = screen_geometry.y() + (screen_geometry.height() - 400) // 2
+            dialog.move(x_pos, y_pos)
 
-            main_frame = ttk.Frame(dialog, padding=20)
-            main_frame.pack(fill="both", expand=True)
+            main_layout = QVBoxLayout(dialog)
 
-            ttk.Label(main_frame, text="I/O Spike Generator", font=("Arial", 12, "bold")).pack(pady=(0, 10))
+            title_label = QLabel("I/O Spike Generator")
+            title_label.setStyleSheet("font-size: 12px; font-weight: bold;")
+            main_layout.addWidget(title_label)
 
             # File size
-            size_frame = ttk.Frame(main_frame)
-            size_frame.pack(fill="x", pady=5)
-
-            ttk.Label(size_frame, text="File size (MB):").pack(side="left")
-            size_var = tk.IntVar(value=100)
-            size_spinbox = ttk.Spinbox(size_frame, from_=10, to=1000, textvariable=size_var, width=10)
-            size_spinbox.pack(side="left", padx=10)
+            size_frame = QWidget()
+            size_layout = QHBoxLayout(size_frame)
+            size_layout.addWidget(QLabel("File size (MB):"))
+            size_spinbox = QSpinBox()
+            size_spinbox.setRange(10, 1000)
+            size_spinbox.setValue(100)
+            size_layout.addWidget(size_spinbox)
+            size_layout.addStretch(1)
+            main_layout.addWidget(size_frame)
 
             # Block size
-            block_frame = ttk.Frame(main_frame)
-            block_frame.pack(fill="x", pady=5)
-
-            ttk.Label(block_frame, text="Block size (KB):").pack(side="left")
-            block_var = tk.IntVar(value=4)
-            block_combo = ttk.Combobox(block_frame, textvariable=block_var, values=[1, 4, 16, 64, 256, 1024], width=10)
-            block_combo.pack(side="left", padx=10)
+            block_frame = QWidget()
+            block_layout = QHBoxLayout(block_frame)
+            block_layout.addWidget(QLabel("Block size (KB):"))
+            block_combo = QComboBox()
+            block_combo.addItems(["1", "4", "16", "64", "256", "1024"])
+            block_combo.setCurrentText("4")
+            block_layout.addWidget(block_combo)
+            block_layout.addStretch(1)
+            main_layout.addWidget(block_frame)
 
             # Test type
-            type_frame = ttk.Frame(main_frame)
-            type_frame.pack(fill="x", pady=5)
-
-            ttk.Label(type_frame, text="Test type:").pack(side="left")
-            type_var = tk.StringVar(value="write")
-            ttk.Radiobutton(type_frame, text="Write", variable=type_var, value="write").pack(side="left", padx=5)
-            ttk.Radiobutton(type_frame, text="Read", variable=type_var, value="read").pack(side="left", padx=5)
-            ttk.Radiobutton(type_frame, text="Both", variable=type_var, value="both").pack(side="left", padx=5)
+            type_frame = QWidget()
+            type_layout = QHBoxLayout(type_frame)
+            type_layout.addWidget(QLabel("Test type:"))
+            type_group = QButtonGroup(dialog)
+            write_radio = QRadioButton("Write")
+            write_radio.setProperty("value", "write")
+            read_radio = QRadioButton("Read")
+            read_radio.setProperty("value", "read")
+            both_radio = QRadioButton("Both")
+            both_radio.setProperty("value", "both")
+            write_radio.setChecked(True)
+            for btn in (write_radio, read_radio, both_radio):
+                type_group.addButton(btn)
+                type_layout.addWidget(btn)
+            type_layout.addStretch(1)
+            main_layout.addWidget(type_frame)
 
             # Output
-            output_text = scrolledtext.ScrolledText(main_frame, wrap=tk.WORD, height=10, width=50)
-            output_text.pack(fill="both", expand=True, pady=10)
+            output_text = QTextEdit()
+            output_text.setReadOnly(True)
+            main_layout.addWidget(output_text, 1)
 
             # Progress
-            progress_var = tk.DoubleVar()
-            progress_bar = ttk.Progressbar(main_frame, variable=progress_var, maximum=100)
-            progress_bar.pack(fill="x", pady=5)
+            progress_bar = QProgressBar()
+            progress_bar.setRange(0, 100)
+            progress_bar.setValue(0)
+            main_layout.addWidget(progress_bar)
 
             running = {'value': False}
+            def append_output(message):
+                QTimer.singleShot(0, lambda: output_text.append(message))
 
             def run_io_test():
                 if running['value']:
                     return
 
                 running['value'] = True
-                output_text.delete(1.0, tk.END)
+                output_text.clear()
 
                 def io_thread():
                     try:
-                        size_mb = size_var.get()
-                        block_kb = block_var.get()
-                        test_type = type_var.get()
+                        size_mb = size_spinbox.value()
+                        block_kb = int(block_combo.currentText())
+                        test_type = next(
+                            (button.property("value") for button in type_group.buttons() if button.isChecked()),
+                            "write"
+                        )
 
                         block_count = (size_mb * 1024) // block_kb
 
-                        output_text.insert(tk.END, f"Starting I/O test...\n")
-                        output_text.insert(tk.END, f"File size: {size_mb} MB\n")
-                        output_text.insert(tk.END, f"Block size: {block_kb} KB\n\n")
+                        append_output("Starting I/O test...")
+                        append_output(f"File size: {size_mb} MB")
+                        append_output(f"Block size: {block_kb} KB\n")
 
                         if test_type in ["write", "both"]:
-                            output_text.insert(tk.END, "Running write test...\n")
+                            append_output("Running write test...")
 
                             cmd = f"dd if=/dev/zero of=/data/local/tmp/iotest bs={block_kb}k count={block_count}"
                             result = subprocess.run(
@@ -3262,13 +3309,10 @@ class AdvancedTestsMixin:
                                 capture_output=True, text=True, timeout=300
                             )
 
-                            dialog.after(0, lambda: [
-                                output_text.insert(tk.END, result.stderr),
-                                output_text.insert(tk.END, "\n")
-                            ])
+                            append_output(result.stderr)
 
                         if test_type in ["read", "both"]:
-                            output_text.insert(tk.END, "Running read test...\n")
+                            append_output("Running read test...")
 
                             cmd = f"dd if=/data/local/tmp/iotest of=/dev/null bs={block_kb}k"
                             result = subprocess.run(
@@ -3276,10 +3320,7 @@ class AdvancedTestsMixin:
                                 capture_output=True, text=True, timeout=300
                             )
 
-                            dialog.after(0, lambda: [
-                                output_text.insert(tk.END, result.stderr),
-                                output_text.insert(tk.END, "\n")
-                            ])
+                            append_output(result.stderr)
 
                         # Cleanup
                         subprocess.run(
@@ -3287,10 +3328,10 @@ class AdvancedTestsMixin:
                             capture_output=True, text=True, timeout=10
                         )
 
-                        dialog.after(0, lambda: output_text.insert(tk.END, "\nTest completed!\n"))
+                        append_output("\nTest completed!")
 
                     except Exception as e:
-                        dialog.after(0, lambda: output_text.insert(tk.END, f"\nError: {str(e)}\n"))
+                        append_output(f"\nError: {str(e)}")
                     finally:
                         running['value'] = False
 
@@ -3303,20 +3344,28 @@ class AdvancedTestsMixin:
                     capture_output=True, text=True, timeout=10
                 )
 
-            buttons_frame = ttk.Frame(main_frame)
-            buttons_frame.pack(fill="x", pady=10)
-
-            ttk.Button(buttons_frame, text="Run Test", command=run_io_test).pack(side="left", padx=5)
-            ttk.Button(buttons_frame, text="Cancel", command=cancel_test).pack(side="left", padx=5)
-            ttk.Button(buttons_frame, text="Close", command=dialog.destroy).pack(side="right", padx=5)
+            buttons_frame = QWidget()
+            buttons_layout = QHBoxLayout(buttons_frame)
+            run_btn = QPushButton("Run Test")
+            run_btn.clicked.connect(run_io_test)
+            buttons_layout.addWidget(run_btn)
+            cancel_btn = QPushButton("Cancel")
+            cancel_btn.clicked.connect(cancel_test)
+            buttons_layout.addWidget(cancel_btn)
+            close_btn = QPushButton("Close")
+            close_btn.clicked.connect(dialog.close)
+            buttons_layout.addStretch(1)
+            buttons_layout.addWidget(close_btn)
+            main_layout.addWidget(buttons_frame)
+            dialog.show()
 
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to open I/O spike generator: {str(e)}")
+            QMessageBox.critical(self, "Error", f"Failed to open I/O spike generator: {str(e)}")
 
     def run_scrcpy_mirror(self):
         """Run scrcpy screen mirroring"""
         if not self.device_connected:
-            messagebox.showinfo("Not Connected", "Please connect to a device first.")
+            QMessageBox.information(self, "Not Connected", "Please connect to a device first.")
             return
 
         try:
@@ -3329,7 +3378,8 @@ class AdvancedTestsMixin:
             )
 
             if result.returncode != 0:
-                messagebox.showinfo(
+                QMessageBox.information(
+                    self,
                     "scrcpy Not Found",
                     "scrcpy is not installed on your system.\n\n"
                     "Please install scrcpy to use screen mirroring:\n"
@@ -3349,14 +3399,14 @@ class AdvancedTestsMixin:
                         capture_output=True, text=True
                     )
                 except Exception as e:
-                    self.after(0, lambda: self.log_message(f"scrcpy error: {str(e)}"))
+                    QTimer.singleShot(0, lambda: self.log_message(f"scrcpy error: {str(e)}"))
 
             threading.Thread(target=launch_scrcpy, daemon=True).start()
 
-            messagebox.showinfo("scrcpy Launched", "scrcpy screen mirroring has been launched.")
+            QMessageBox.information(self, "scrcpy Launched", "scrcpy screen mirroring has been launched.")
 
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to launch scrcpy: {str(e)}")
+            QMessageBox.critical(self, "Error", f"Failed to launch scrcpy: {str(e)}")
 
     def run_adb_command(self, command, device_serial=None, timeout=60):
         """Run an ADB command and return the result"""
