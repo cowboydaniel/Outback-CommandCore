@@ -9,6 +9,7 @@ import time
 import os
 import re
 import logging
+import multiprocessing
 
 from ..constants import IS_WINDOWS
 
@@ -183,12 +184,10 @@ class DeviceInfoMixin:
             self.log_message(f"Error getting device info: {str(e)}")
             return None
 
-    def _get_device_imei(self, device_info, serial, adb_cmd):
-        """Try to get device IMEI using multiple methods"""
+    @staticmethod
+    def _dialer_method_worker(device_info, serial, adb_cmd, result_queue):
+        """Worker function for dialer IMEI method - runs in isolated subprocess"""
         try:
-            # Method 1: Using dialer method with OCR
-            self.log_message("Trying dialer code method to get IMEI...")
-
             temp_dir = tempfile.mkdtemp()
             screenshot_path = os.path.join(temp_dir, "imei_screen.png")
 
@@ -248,7 +247,6 @@ class DeviceInfoMixin:
                                     ocr_stdout, _ = ocr_proc.communicate(timeout=15)
                                     if ocr_proc.returncode == 0:
                                         ocr_text = ocr_stdout.strip()
-                                        self.log_message("OCR text extracted from dialer screen.")
 
                                         imei = None
 
@@ -268,18 +266,15 @@ class DeviceInfoMixin:
                                                         break
 
                                         if imei:
-                                            self.log_message("IMEI found in OCR text!")
-                                            device_info['imei'] = imei
+                                            result_queue.put(imei)
                                 except subprocess.TimeoutExpired:
                                     ocr_proc.kill()
                                     ocr_proc.wait()
-                                    self.log_message("OCR processing timed out")
-                            except Exception as e:
-                                self.log_message(f"OCR processing error: {str(e)}")
+                            except Exception:
+                                pass
                     except subprocess.TimeoutExpired:
                         screencap_proc.kill()
                         screencap_proc.wait()
-                        self.log_message("Screenshot capture timed out")
                 except Exception:
                     pass
 
@@ -295,6 +290,38 @@ class DeviceInfoMixin:
                         os.rmdir(temp_dir)
                 except Exception:
                     pass
+        except Exception:
+            pass
+
+    def _get_device_imei(self, device_info, serial, adb_cmd):
+        """Try to get device IMEI using multiple methods"""
+        try:
+            # Method 1: Using dialer method with OCR (run in isolated subprocess to prevent crashes)
+            self.log_message("Trying dialer code method to get IMEI...")
+
+            result_queue = multiprocessing.Queue()
+            dialer_process = multiprocessing.Process(
+                target=self._dialer_method_worker,
+                args=(device_info, serial, adb_cmd, result_queue)
+            )
+            dialer_process.start()
+            dialer_process.join(timeout=60)  # Wait max 60 seconds
+
+            if dialer_process.is_alive():
+                dialer_process.terminate()
+                dialer_process.join(timeout=5)
+                if dialer_process.is_alive():
+                    dialer_process.kill()
+                self.log_message("Dialer method timed out")
+            elif dialer_process.exitcode != 0:
+                self.log_message("Dialer method failed or crashed")
+
+            # Check if we got a result from the worker process
+            if not result_queue.empty():
+                imei = result_queue.get()
+                if imei:
+                    self.log_message("IMEI found in OCR text!")
+                    device_info['imei'] = imei
 
             # Method 2: service call iphonesubinfo
             if 'imei' not in device_info:
