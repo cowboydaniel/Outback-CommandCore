@@ -114,6 +114,7 @@ class SystemToolsMixin:
                                 battery_info.append(f"Temperature: {temp}°C")
                                 continue
                             except (ValueError, IndexError):
+                                battery_info.append(f"Unparsed battery line: {line}")
                                 pass
                         elif "level" in line.lower() and "scale" in line.lower() and "=" in line:
                             try:
@@ -126,6 +127,7 @@ class SystemToolsMixin:
                                     )
                                     continue
                             except (ValueError, IndexError):
+                                battery_info.append(f"Unparsed battery line: {line}")
                                 pass
 
                         battery_info.append(line)
