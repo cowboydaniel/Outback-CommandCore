@@ -216,8 +216,42 @@ class LogcatMixin:
             if process and process.poll() is None:
                 try:
                     process.terminate()
-                except:
-                    pass
+                except Exception as e:
+                    emit_ui(
+                        self,
+                        lambda: self.log_message(
+                            f"Warning: failed to terminate logcat process: {str(e)}"
+                        ),
+                    )
+                    if window.isVisible():
+                        emit_ui(
+                            self,
+                            lambda: self._append_logcat_line(
+                                log_text,
+                                f"\nWarning: failed to terminate logcat process: {str(e)}\n",
+                                "WARN",
+                            ),
+                        )
+                    try:
+                        process.kill()
+                    except Exception as kill_error:
+                        emit_ui(
+                            self,
+                            lambda: self.log_message(
+                                "Warning: failed to kill logcat process: "
+                                f"{str(kill_error)}"
+                            ),
+                        )
+                        if window.isVisible():
+                            emit_ui(
+                                self,
+                                lambda: self._append_logcat_line(
+                                    log_text,
+                                    "\nWarning: failed to kill logcat process: "
+                                    f"{str(kill_error)}\n",
+                                    "WARN",
+                                ),
+                            )
 
     def _append_logcat_line(self, log_text, line, tag):
         """Append a line to the logcat text widget"""
