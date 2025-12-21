@@ -92,7 +92,7 @@ class AndroidToolsModule(
 
         # Update UI to reflect the actual tools status
         tools_status = "✅ Installed" if self.platform_tools_installed else "❌ Not Installed"
-        self.tools_label.configure(text=f"Android Platform Tools: {tools_status}")
+        self.tools_label.setText(f"Android Platform Tools: {tools_status}")
 
         # Automatically try to connect to device when module is opened, if tools are installed
         if self.platform_tools_installed:
@@ -303,7 +303,7 @@ class AndroidToolsModule(
 
             # Update UI to reflect successful installation
             QtCore.QTimer.singleShot(
-                0, lambda: self.tools_label.configure(text="Android Platform Tools: ✅ Installed")
+                0, lambda: self.tools_label.setText("Android Platform Tools: ✅ Installed")
             )
             self.platform_tools_installed = True
 
