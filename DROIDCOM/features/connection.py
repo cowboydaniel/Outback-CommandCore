@@ -3,8 +3,7 @@ DROIDCOM - Connection Feature Module
 Handles device connection, WiFi ADB setup, and device list management.
 """
 
-from ..ui.qt_compat import tk
-from ..ui.qt_compat import ttk, messagebox, scrolledtext
+from PySide6 import QtWidgets, QtCore
 import subprocess
 import threading
 import time
@@ -21,26 +20,26 @@ class ConnectionMixin:
     def setup_wifi_adb(self):
         """Setup ADB over WiFi for the connected device"""
         if not self.device_connected:
-            messagebox.showinfo("Not Connected", "Please connect to a device first")
+            QtWidgets.QMessageBox.information(
+                self.parent, "Not Connected", "Please connect to a device first"
+            )
             return
 
         # Create a status window
-        status_window = tk.Toplevel(self.parent)
-        status_window.title("WiFi ADB Setup")
-        status_window.geometry("500x300")
+        status_window = QtWidgets.QDialog(self.parent)
+        status_window.setWindowTitle("WiFi ADB Setup")
+        status_window.resize(500, 300)
+        layout = QtWidgets.QVBoxLayout(status_window)
 
         # Add a text widget for output
-        output_text = scrolledtext.ScrolledText(status_window, wrap=tk.WORD)
-        output_text.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        output_text = QtWidgets.QPlainTextEdit()
+        output_text.setReadOnly(True)
+        output_text.setLineWrapMode(QtWidgets.QPlainTextEdit.WidgetWidth)
+        layout.addWidget(output_text)
 
         def update_output(message):
-            def apply_update():
-                append_text(output_text, message + "\n")
-                if hasattr(output_text, "see"):
-                    output_text.see("end")
-                if hasattr(status_window, "update"):
-                    status_window.update()
-            emit_ui(self, apply_update)
+            output_text.appendPlainText(message)
+            QtWidgets.QApplication.processEvents()
 
         # Start the setup process
         update_output("Setting up WiFi ADB...")
@@ -98,7 +97,7 @@ class ConnectionMixin:
                     if 'connected' in connect_result.lower():
                         update_output("\nWiFi ADB connection successful!")
                         # Update device list to show the new wireless connection
-                        schedule_ui(self.refresh_device_list, 1000)
+                        QtCore.QTimer.singleShot(1000, self.refresh_device_list)
                     else:
                         update_output(f"\nFailed to connect wirelessly. Please try manually:\nadb connect {ip}:5555")
                 except Exception as e:
@@ -114,21 +113,28 @@ class ConnectionMixin:
     def connect_device(self):
         """Connect to the selected Android device"""
         if not self.platform_tools_installed:
-            messagebox.showinfo("Not Installed", "Android Platform Tools are not installed.")
+            QtWidgets.QMessageBox.information(
+                self.parent, "Not Installed", "Android Platform Tools are not installed."
+            )
             return
 
         # Check if a device is selected
-        selected = self.device_listbox.curselection()
-        if not selected:
-            messagebox.showinfo("No Device Selected", "Please select a device from the list.")
+        selected_items = self.device_listbox.selectedItems()
+        if not selected_items:
+            QtWidgets.QMessageBox.information(
+                self.parent, "No Device Selected", "Please select a device from the list."
+            )
             return
 
         # Check if the selected device might be offline
-        device_entry = self.device_listbox.get(selected[0])
+        device_entry = selected_items[0].text()
         if "DISCONNECTED" in device_entry:
-            messagebox.showinfo("Device Offline",
-                              "The selected device appears to be offline and cannot be connected.\n\n"
-                              "Please use the 'Remove Offline' button to clear disconnected devices from the list.")
+            QtWidgets.QMessageBox.information(
+                self.parent,
+                "Device Offline",
+                "The selected device appears to be offline and cannot be connected.\n\n"
+                "Please use the 'Remove Offline' button to clear disconnected devices from the list.",
+            )
             return
 
         # Start connecting in a separate thread
@@ -137,24 +143,33 @@ class ConnectionMixin:
     def _connect_device_task(self):
         """Worker thread to connect to the selected Android device"""
         try:
-            selected = self.device_listbox.curselection()
-            if not selected:
-                emit_ui(self, lambda: messagebox.showinfo("No Device Selected", "Please select a device from the list"))
+            selected_items = self.device_listbox.selectedItems()
+            if not selected_items:
+                QtCore.QTimer.singleShot(
+                    0,
+                    lambda: QtWidgets.QMessageBox.information(
+                        self.parent,
+                        "No Device Selected",
+                        "Please select a device from the list",
+                    ),
+                )
                 return
 
             # Get the selected device serial
-            device_entry = self.device_listbox.get(selected[0])
+            device_entry = selected_items[0].text()
 
             # Check if the device is marked as offline/disconnected
             if "DISCONNECTED" in device_entry or "Offline" in device_entry or "❌" in device_entry:
-                emit_ui(self, lambda: self.log_message(
-                    f"Rejected connection attempt to offline device: {device_entry}"
-                ))
-                emit_ui(self, lambda: messagebox.showinfo(
-                    "Device Offline",
-                    "The selected device is offline and cannot be connected.\n\n"
-                    "Please use the 'Remove Offline' button to clear disconnected devices from the list."
-                ))
+                self.log_message(f"Rejected connection attempt to offline device: {device_entry}")
+                QtCore.QTimer.singleShot(
+                    0,
+                    lambda: QtWidgets.QMessageBox.information(
+                        self.parent,
+                        "Device Offline",
+                        "The selected device is offline and cannot be connected.\n\n"
+                        "Please use the 'Remove Offline' button to clear disconnected devices from the list.",
+                    ),
+                )
                 return
 
             # Extract the serial number from the device entry
@@ -188,12 +203,13 @@ class ConnectionMixin:
             )
 
             if result.returncode != 0 or serial not in result.stdout:
-                emit_ui(self, lambda: self.log_message(f"Device {serial} not found or disconnected"))
-                emit_ui(self, lambda: self.update_status("Device not found"))
-                emit_ui(self, lambda: messagebox.showerror(
+                self.log_message(f"Device {serial} not found or disconnected")
+                self.update_status("Device not found")
+                QtWidgets.QMessageBox.critical(
+                    self.parent,
                     "Connection Error",
-                    "Device not found or disconnected. Try refreshing the device list."
-                ))
+                    "Device not found or disconnected. Try refreshing the device list.",
+                )
                 return
 
             # Get device information
@@ -204,28 +220,26 @@ class ConnectionMixin:
             if self.device_info:
                 self.device_connected = True
                 self.device_serial = serial
-                emit_ui(self, self.update_device_info)
-                emit_ui(self, self.enable_device_actions)
-                emit_ui(self, lambda: self.log_message("Device connected successfully"))
-                emit_ui(self, lambda: self.update_status(
-                    f"Connected to {self.device_info.get('model', serial)}"
-                ))
+                QtCore.QTimer.singleShot(0, self.update_device_info)
+                QtCore.QTimer.singleShot(0, self.enable_device_actions)
+                self.log_message("Device connected successfully")
+                self.update_status(f"Connected to {self.device_info.get('model', serial)}")
             else:
                 self.device_connected = False
-                emit_ui(self, lambda: self.log_message("Failed to get device information"))
-                emit_ui(self, lambda: self.update_status("Connection failed"))
-                emit_ui(self, lambda: messagebox.showerror(
+                self.log_message("Failed to get device information")
+                self.update_status("Connection failed")
+                QtWidgets.QMessageBox.critical(
+                    self.parent,
                     "Connection Error",
-                    "Failed to get device information. The device may be locked or not responding."
-                ))
+                    "Failed to get device information. The device may be locked or not responding.",
+                )
 
         except Exception as e:
-            emit_ui(self, lambda: self.log_message(f"Error connecting to device: {str(e)}"))
-            emit_ui(self, lambda: self.update_status("Connection failed"))
-            emit_ui(self, lambda: messagebox.showerror(
-                "Connection Error",
-                f"Failed to connect to device: {str(e)}"
-            ))
+            self.log_message(f"Error connecting to device: {str(e)}")
+            self.update_status("Connection failed")
+            QtWidgets.QMessageBox.critical(
+                self.parent, "Connection Error", f"Failed to connect to device: {str(e)}"
+            )
 
     def auto_connect_sequence(self):
         """Start automatic device detection and connection"""
@@ -259,7 +273,7 @@ class ConnectionMixin:
                             devices.append((serial, f"❌ {state.capitalize()} (DISCONNECTED)"))
 
             def update_ui():
-                self.device_listbox.delete(0, tk.END)
+                self.device_listbox.clear()
 
                 if devices:
                     for serial, state in devices:
@@ -267,47 +281,48 @@ class ConnectionMixin:
                             entry = f"{serial} [{state}]"
                         else:
                             entry = serial
-                        self.device_listbox.insert(tk.END, entry)
+                        self.device_listbox.addItem(entry)
 
                     # Select the first connected device
-                    for i in range(self.device_listbox.size()):
-                        entry = self.device_listbox.get(i)
+                    for i in range(self.device_listbox.count()):
+                        entry = self.device_listbox.item(i).text()
                         if "DISCONNECTED" not in entry:
-                            self.device_listbox.selection_set(i)
+                            self.device_listbox.setCurrentRow(i)
                             break
                     else:
-                        if self.device_listbox.size() > 0:
-                            self.device_listbox.selection_set(0)
+                        if self.device_listbox.count() > 0:
+                            self.device_listbox.setCurrentRow(0)
 
                 if getattr(self, 'auto_connecting', False):
                     self.log_message("Auto-connect mode detected - attempting to connect to first available device")
                     self.auto_connecting = False
 
                     connected_device_index = None
-                    for i in range(self.device_listbox.size()):
-                        entry = self.device_listbox.get(i)
+                    for i in range(self.device_listbox.count()):
+                        entry = self.device_listbox.item(i).text()
                         if "DISCONNECTED" not in entry and "Offline" not in entry and "❌" not in entry:
                             connected_device_index = i
                             break
 
                     if connected_device_index is not None:
-                        self.log_message(
-                            f"Found available device at index {connected_device_index} - initiating connection"
+                        self.log_message(f"Found available device at index {connected_device_index} - initiating connection")
+                        self.device_listbox.setCurrentRow(connected_device_index)
+                        self.device_listbox.scrollToItem(
+                            self.device_listbox.item(connected_device_index)
                         )
-                        self.device_listbox.selection_clear(0, tk.END)
-                        self.device_listbox.selection_set(connected_device_index)
-                        self.device_listbox.see(connected_device_index)
-                        schedule_ui(self._trigger_connect, 100)
+                        QtCore.QTimer.singleShot(100, self._trigger_connect)
                     else:
                         self.log_message("Auto-connect: No available devices found for automatic connection")
                 else:
                     self.update_status("No devices found")
 
-            emit_ui(self, update_ui)
+            QtCore.QTimer.singleShot(0, update_ui)
 
         except Exception as e:
             logging.error(f"Error refreshing device list: {e}", exc_info=True)
-            emit_ui(self, lambda: self.update_status(f"Error refreshing device list: {str(e)}"))
+            QtCore.QTimer.singleShot(
+                0, lambda: self.update_status(f"Error refreshing device list: {str(e)}")
+            )
 
     def _trigger_connect(self):
         """Helper method to trigger the connect_device method after a short delay"""
@@ -317,7 +332,9 @@ class ConnectionMixin:
     def remove_offline_devices(self):
         """Remove all offline devices from the list"""
         if not self.platform_tools_installed:
-            messagebox.showinfo("Not Installed", "Android Platform Tools are not installed.")
+            QtWidgets.QMessageBox.information(
+                self.parent, "Not Installed", "Android Platform Tools are not installed."
+            )
             return
         threading.Thread(target=self._remove_offline_devices_task, daemon=True).start()
 
@@ -362,35 +379,29 @@ class ConnectionMixin:
                         if status == 'device':
                             connected_serials.append(serial)
 
-            def update_ui():
-                current_devices = []
-                for i in range(self.device_listbox.size()):
-                    device_entry = self.device_listbox.get(i)
-                    if '[' in device_entry:
-                        serial = device_entry.split('[')[0].strip()
-                    elif '(' in device_entry and ')' in device_entry:
-                        serial = device_entry.split('(')[1].split(')')[0].strip()
-                    else:
-                        serial = device_entry.strip()
-                    current_devices.append(serial)
+            current_devices = []
+            for i in range(self.device_listbox.count()):
+                device_entry = self.device_listbox.item(i).text()
+                if '[' in device_entry:
+                    serial = device_entry.split('[')[0].strip()
+                elif '(' in device_entry and ')' in device_entry:
+                    serial = device_entry.split('(')[1].split(')')[0].strip()
+                else:
+                    serial = device_entry.strip()
+                current_devices.append(serial)
 
                 devices_to_remove = [s for s in current_devices if s not in connected_serials]
 
-                self.device_listbox.delete(0, tk.END)
-                for serial in connected_serials:
-                    self.device_listbox.insert(tk.END, serial)
+            QtCore.QTimer.singleShot(0, lambda: self.device_listbox.clear())
 
-                if devices_to_remove:
-                    self.update_status(f"Removed {len(devices_to_remove)} offline device(s)")
-                    self.log_message(f"Removed offline devices: {', '.join(devices_to_remove)}")
-                else:
-                    self.update_status("No offline devices to remove")
-                    self.log_message("No offline devices found to remove")
+            for serial in connected_serials:
+                QtCore.QTimer.singleShot(0, lambda s=serial: self.device_listbox.addItem(s))
 
                 if self.device_listbox.size() > 0:
                     self.device_listbox.selection_set(0)
 
-            emit_ui(self, update_ui)
+            if self.device_listbox.count() > 0:
+                QtCore.QTimer.singleShot(0, lambda: self.device_listbox.setCurrentRow(0))
 
         except Exception as e:
             emit_ui(self, lambda: self.update_status("Failed to remove offline devices"))
@@ -417,7 +428,7 @@ class ConnectionMixin:
             else:
                 adb_cmd = 'adb'
 
-            emit_ui(self, lambda: self.device_listbox.delete(0, tk.END))
+            QtCore.QTimer.singleShot(0, lambda: self.device_listbox.clear())
 
             result = subprocess.run(
                 [adb_cmd, 'devices', '-l'],
@@ -468,7 +479,9 @@ class ConnectionMixin:
                             if model_info:
                                 display_text = f"{model_info} ({device['serial']})"
 
-                        display_items.append(display_text)
+                        QtCore.QTimer.singleShot(
+                            0, lambda t=display_text: self.device_listbox.addItem(t)
+                        )
 
                     def update_ui():
                         for item in display_items:

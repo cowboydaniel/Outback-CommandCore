@@ -3,8 +3,7 @@ DROIDCOM - Screenshot Feature Module
 Handles screenshot capture and display functionality.
 """
 
-from ..ui.qt_compat import tk
-from ..ui.qt_compat import ttk, messagebox, filedialog
+from PySide6 import QtWidgets, QtCore, QtGui
 import subprocess
 import os
 import shutil
@@ -20,7 +19,9 @@ class ScreenshotMixin:
     def take_screenshot(self):
         """Take a screenshot of the connected Android device"""
         if not self.device_connected:
-            messagebox.showinfo("Not Connected", "Please connect to a device first.")
+            QtWidgets.QMessageBox.information(
+                self, "Not Connected", "Please connect to a device first."
+            )
             return
 
         self._run_in_thread(self._take_screenshot_task)
@@ -96,87 +97,66 @@ class ScreenshotMixin:
             self.update_status("Screenshot saved")
 
             # Show the screenshot
-            self.after(0, lambda: self._show_screenshot(screenshot_file))
+            QtCore.QTimer.singleShot(0, lambda: self._show_screenshot(screenshot_file))
 
         except Exception as e:
             self.log_message(f"Error taking screenshot: {str(e)}")
             self.update_status("Screenshot failed")
-            messagebox.showerror("Screenshot Error", f"Failed to take screenshot: {str(e)}")
+            QtWidgets.QMessageBox.critical(
+                self, "Screenshot Error", f"Failed to take screenshot: {str(e)}"
+            )
 
     def _show_screenshot(self, screenshot_path):
         """Show the screenshot in a new window"""
         try:
-            screenshot_window = tk.Toplevel(self)
-            screenshot_window.title(f"Android Screenshot - {os.path.basename(screenshot_path)}")
+            screenshot_window = QtWidgets.QDialog(self)
+            screenshot_window.setWindowTitle(
+                f"Android Screenshot - {os.path.basename(screenshot_path)}"
+            )
 
-            # Load the image
-            img = tk.PhotoImage(file=screenshot_path)
+            pixmap = QtGui.QPixmap(screenshot_path)
+            if pixmap.isNull():
+                raise ValueError("Failed to load screenshot image.")
 
-            # Calculate window size
-            screen_width = self.winfo_screenwidth()
-            screen_height = self.winfo_screenheight()
+            screen_geom = QtWidgets.QApplication.primaryScreen().availableGeometry()
+            max_width = int(screen_geom.width() * 0.8)
+            max_height = int(screen_geom.height() * 0.8)
 
-            max_width = int(screen_width * 0.8)
-            max_height = int(screen_height * 0.8)
+            window_width = min(pixmap.width(), max_width)
+            window_height = min(pixmap.height(), max_height)
+            screenshot_window.resize(window_width, window_height)
 
-            window_width = min(img.width(), max_width)
-            window_height = min(img.height(), max_height)
+            main_layout = QtWidgets.QVBoxLayout(screenshot_window)
 
-            screenshot_window.geometry(f"{window_width}x{window_height}")
+            scroll_area = QtWidgets.QScrollArea()
+            scroll_area.setWidgetResizable(True)
+            image_label = QtWidgets.QLabel()
+            image_label.setPixmap(pixmap)
+            image_label.setAlignment(QtCore.Qt.AlignCenter)
+            scroll_area.setWidget(image_label)
+            main_layout.addWidget(scroll_area)
 
-            # Center the window
-            x_pos = (screen_width - window_width) // 2
-            y_pos = (screen_height - window_height) // 2
-            screenshot_window.geometry(f"+{x_pos}+{y_pos}")
-
-            # Create canvas
-            canvas = tk.Canvas(screenshot_window, width=window_width, height=window_height)
-            canvas.pack(side="left", fill="both", expand=True)
-
-            # Add scrollbars if needed
-            if img.width() > window_width or img.height() > window_height:
-                h_scrollbar = tk.Scrollbar(screenshot_window, orient="horizontal", command=canvas.xview)
-                h_scrollbar.pack(side="bottom", fill="x")
-
-                v_scrollbar = tk.Scrollbar(screenshot_window, orient="vertical", command=canvas.yview)
-                v_scrollbar.pack(side="right", fill="y")
-
-                canvas.configure(xscrollcommand=h_scrollbar.set, yscrollcommand=v_scrollbar.set)
-
-            # Display the image
-            canvas.create_image(0, 0, anchor="nw", image=img)
-            canvas.config(scrollregion=canvas.bbox("all"))
-            canvas.image = img
-
-            # Button frame
-            button_frame = ttk.Frame(screenshot_window)
-            button_frame.pack(side="bottom", fill="x", padx=10, pady=5)
-
-            # Open folder button
+            button_layout = QtWidgets.QHBoxLayout()
             screenshots_dir = os.path.dirname(screenshot_path)
-            open_btn = ttk.Button(
-                button_frame, text="Open Folder",
-                command=lambda: self._open_screenshots_folder(screenshots_dir)
-            )
-            open_btn.pack(side="left", padx=5)
+            open_btn = QtWidgets.QPushButton("Open Folder")
+            open_btn.clicked.connect(lambda: self._open_screenshots_folder(screenshots_dir))
+            save_btn = QtWidgets.QPushButton("Save As")
+            save_btn.clicked.connect(lambda: self._save_screenshot_as(screenshot_path))
+            close_btn = QtWidgets.QPushButton("Close")
+            close_btn.clicked.connect(screenshot_window.close)
+            button_layout.addWidget(open_btn)
+            button_layout.addWidget(save_btn)
+            button_layout.addStretch()
+            button_layout.addWidget(close_btn)
+            main_layout.addLayout(button_layout)
 
-            # Save as button
-            save_btn = ttk.Button(
-                button_frame, text="Save As",
-                command=lambda: self._save_screenshot_as(screenshot_path)
-            )
-            save_btn.pack(side="left", padx=5)
-
-            # Close button
-            close_btn = ttk.Button(
-                button_frame, text="Close",
-                command=screenshot_window.destroy
-            )
-            close_btn.pack(side="right", padx=5)
+            screenshot_window.show()
 
         except Exception as e:
             self.log_message(f"Error displaying screenshot: {str(e)}")
-            messagebox.showerror("Display Error", f"Failed to display screenshot: {str(e)}")
+            QtWidgets.QMessageBox.critical(
+                self, "Display Error", f"Failed to display screenshot: {str(e)}"
+            )
 
     def _open_screenshots_folder(self, folder_path):
         """Open the screenshots folder in the file explorer"""
@@ -194,10 +174,11 @@ class ScreenshotMixin:
     def _save_screenshot_as(self, source_path):
         """Save the screenshot to another location"""
         try:
-            save_path = filedialog.asksaveasfilename(
-                defaultextension=".png",
-                filetypes=[("PNG files", "*.png"), ("All files", "*.*")],
-                initialfile=os.path.basename(source_path)
+            save_path, _ = QtWidgets.QFileDialog.getSaveFileName(
+                self,
+                "Save Screenshot",
+                os.path.basename(source_path),
+                "PNG files (*.png);;All files (*.*)",
             )
 
             if save_path:
@@ -205,4 +186,6 @@ class ScreenshotMixin:
                 self.log_message(f"Screenshot saved to: {save_path}")
         except Exception as e:
             self.log_message(f"Error saving screenshot: {str(e)}")
-            messagebox.showerror("Save Error", f"Failed to save screenshot: {str(e)}")
+            QtWidgets.QMessageBox.critical(
+                self, "Save Error", f"Failed to save screenshot: {str(e)}"
+            )

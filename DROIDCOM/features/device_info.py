@@ -3,8 +3,6 @@ DROIDCOM - Device Info Feature Module
 Handles device information retrieval and display.
 """
 
-from ..ui.qt_compat import tk
-from ..ui.qt_compat import messagebox
 import subprocess
 import tempfile
 import time

@@ -3,8 +3,7 @@ DROIDCOM - App Manager Feature Module
 Handles app installation, uninstallation, and management.
 """
 
-from ..ui.qt_compat import tk
-from ..ui.qt_compat import ttk, messagebox, filedialog
+from PySide6 import QtWidgets, QtCore
 import subprocess
 import os
 import threading
@@ -18,12 +17,16 @@ class AppManagerMixin:
     def install_apk(self):
         """Install an APK on the connected Android device"""
         if not self.device_connected:
-            messagebox.showinfo("Not Connected", "Please connect to a device first.")
+            QtWidgets.QMessageBox.information(
+                self, "Not Connected", "Please connect to a device first."
+            )
             return
 
-        apk_path = filedialog.askopenfilename(
-            title="Select APK file to install",
-            filetypes=[("Android Package", "*.apk"), ("All files", "*.*")]
+        apk_path, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self,
+            "Select APK file to install",
+            "",
+            "Android Package (*.apk);;All files (*.*)",
         )
 
         if not apk_path:
@@ -63,23 +66,34 @@ class AppManagerMixin:
             if result.returncode != 0 or 'Failure' in result.stdout:
                 self.log_message(f"Failed to install APK: {result.stderr.strip() or result.stdout.strip()}")
                 self.update_status("Installation failed")
-                messagebox.showerror("Installation Error",
-                                  f"Failed to install APK:\n{result.stderr.strip() or result.stdout.strip()}")
+                QtWidgets.QMessageBox.critical(
+                    self,
+                    "Installation Error",
+                    f"Failed to install APK:\n{result.stderr.strip() or result.stdout.strip()}",
+                )
                 return
 
             self.log_message("APK installed successfully")
             self.update_status("APK installed")
-            messagebox.showinfo("Installation Complete", f"{os.path.basename(apk_path)} was installed successfully.")
+            QtWidgets.QMessageBox.information(
+                self,
+                "Installation Complete",
+                f"{os.path.basename(apk_path)} was installed successfully.",
+            )
 
         except Exception as e:
             self.log_message(f"Error installing APK: {str(e)}")
             self.update_status("Installation failed")
-            messagebox.showerror("Installation Error", f"Failed to install APK: {str(e)}")
+            QtWidgets.QMessageBox.critical(
+                self, "Installation Error", f"Failed to install APK: {str(e)}"
+            )
 
     def app_manager(self):
         """Manage apps on the connected Android device"""
         if not self.device_connected:
-            messagebox.showinfo("Not Connected", "Please connect to a device first.")
+            QtWidgets.QMessageBox.information(
+                self, "Not Connected", "Please connect to a device first."
+            )
             return
 
         self._run_in_thread(self._app_manager_task)
@@ -129,7 +143,7 @@ class AppManagerMixin:
             self.update_status(f"Found {len(packages)} apps")
             self.log_message(f"Found {len(packages)} user-installed applications")
 
-            self.after(0, lambda: self._show_app_manager(packages, serial, adb_cmd))
+            QtCore.QTimer.singleShot(0, lambda: self._show_app_manager(packages, serial, adb_cmd))
 
         except Exception as e:
             self.log_message(f"Error loading app list: {str(e)}")
@@ -138,111 +152,93 @@ class AppManagerMixin:
     def _show_app_manager(self, packages, serial, adb_cmd):
         """Show the app manager window"""
         try:
-            app_window = tk.Toplevel(self)
-            app_window.title("Android App Manager")
-            app_window.geometry("500x600")
-            app_window.minsize(400, 400)
+            app_window = QtWidgets.QDialog(self)
+            app_window.setWindowTitle("Android App Manager")
+            app_window.resize(500, 600)
+            app_window.setMinimumSize(400, 400)
 
-            x_pos = (self.winfo_screenwidth() - 500) // 2
-            y_pos = (self.winfo_screenheight() - 600) // 2
-            app_window.geometry(f"+{x_pos}+{y_pos}")
+            main_layout = QtWidgets.QVBoxLayout(app_window)
+            title = QtWidgets.QLabel(f"Installed Apps ({len(packages)})")
+            title.setStyleSheet("font-weight: bold;")
+            main_layout.addWidget(title)
 
-            main_frame = ttk.Frame(app_window)
-            main_frame.pack(fill="both", expand=True, padx=10, pady=10)
+            search_layout = QtWidgets.QHBoxLayout()
+            search_layout.addWidget(QtWidgets.QLabel("Search:"))
+            search_entry = QtWidgets.QLineEdit()
+            search_layout.addWidget(search_entry)
+            main_layout.addLayout(search_layout)
 
-            ttk.Label(
-                main_frame, text=f"Installed Apps ({len(packages)})", font=("Arial", 12, "bold")
-            ).pack(pady=(0, 10))
-
-            # Search frame
-            search_frame = ttk.Frame(main_frame)
-            search_frame.pack(fill="x", pady=(0, 10))
-
-            ttk.Label(search_frame, text="Search:").pack(side="left", padx=(0, 5))
-            search_var = tk.StringVar()
-            search_entry = ttk.Entry(search_frame, textvariable=search_var, width=40)
-            search_entry.pack(side="left", fill="x", expand=True)
-
-            # App list frame
-            list_frame = ttk.Frame(main_frame)
-            list_frame.pack(fill="both", expand=True)
-
-            scrollbar = ttk.Scrollbar(list_frame)
-            scrollbar.pack(side="right", fill="y")
-
-            app_listbox = tk.Listbox(list_frame, yscrollcommand=scrollbar.set)
-            app_listbox.pack(side="left", fill="both", expand=True)
-            scrollbar.config(command=app_listbox.yview)
-
+            app_listbox = QtWidgets.QListWidget()
             for package in packages:
-                app_listbox.insert(tk.END, package)
+                app_listbox.addItem(package)
+            main_layout.addWidget(app_listbox)
 
-            # Bind search
-            def filter_apps(*args):
-                search_text = search_var.get().lower()
-                app_listbox.delete(0, tk.END)
-                for package in packages:
-                    if search_text in package.lower():
-                        app_listbox.insert(tk.END, package)
+            def filter_apps(text):
+                self._filter_app_list(text, packages, app_listbox)
 
-            search_var.trace('w', filter_apps)
+            search_entry.textChanged.connect(filter_apps)
 
-            # Buttons frame
-            buttons_frame = ttk.Frame(main_frame)
-            buttons_frame.pack(fill="x", pady=(10, 0))
+            buttons_layout = QtWidgets.QHBoxLayout()
+            uninstall_btn = QtWidgets.QPushButton("Uninstall")
+            uninstall_btn.clicked.connect(
+                lambda: self._uninstall_app(app_listbox, packages, serial, adb_cmd, app_window)
+            )
+            clear_btn = QtWidgets.QPushButton("Clear Data")
+            clear_btn.clicked.connect(
+                lambda: self._clear_app_data(app_listbox, packages, serial, adb_cmd)
+            )
+            force_btn = QtWidgets.QPushButton("Force Stop")
+            force_btn.clicked.connect(
+                lambda: self._force_stop_app(app_listbox, packages, serial, adb_cmd)
+            )
+            perm_btn = QtWidgets.QPushButton("Permissions")
+            perm_btn.clicked.connect(
+                lambda: self._view_app_permissions(app_listbox, packages, serial, adb_cmd)
+            )
+            close_btn = QtWidgets.QPushButton("Close")
+            close_btn.clicked.connect(app_window.close)
+            buttons_layout.addWidget(uninstall_btn)
+            buttons_layout.addWidget(clear_btn)
+            buttons_layout.addWidget(force_btn)
+            buttons_layout.addWidget(perm_btn)
+            buttons_layout.addStretch()
+            buttons_layout.addWidget(close_btn)
+            main_layout.addLayout(buttons_layout)
 
-            ttk.Button(
-                buttons_frame, text="Uninstall",
-                command=lambda: self._uninstall_app(app_listbox, packages, serial, adb_cmd, app_window)
-            ).pack(side="left", padx=5)
-
-            ttk.Button(
-                buttons_frame, text="Clear Data",
-                command=lambda: self._clear_app_data(app_listbox, packages, serial, adb_cmd)
-            ).pack(side="left", padx=5)
-
-            ttk.Button(
-                buttons_frame, text="Force Stop",
-                command=lambda: self._force_stop_app(app_listbox, packages, serial, adb_cmd)
-            ).pack(side="left", padx=5)
-
-            ttk.Button(
-                buttons_frame, text="Permissions",
-                command=lambda: self._view_app_permissions(app_listbox, packages, serial, adb_cmd)
-            ).pack(side="left", padx=5)
-
-            ttk.Button(
-                buttons_frame, text="Close",
-                command=app_window.destroy
-            ).pack(side="right", padx=5)
+            app_window.show()
 
         except Exception as e:
             self.log_message(f"Error showing app manager: {str(e)}")
-            messagebox.showerror("App Manager Error", f"Failed to show app manager: {str(e)}")
+            QtWidgets.QMessageBox.critical(
+                self, "App Manager Error", f"Failed to show app manager: {str(e)}"
+            )
 
     def _view_app_permissions(self, listbox, packages, serial, adb_cmd):
         """View permissions for the selected app"""
-        selection = listbox.curselection()
+        selection = listbox.selectedItems()
         if not selection:
-            messagebox.showinfo("No App Selected", "Please select an app to view permissions.")
+            QtWidgets.QMessageBox.information(
+                self, "No App Selected", "Please select an app to view permissions."
+            )
             return
 
-        package_name = listbox.get(selection[0])
+        package_name = selection[0].text()
 
         # Create permissions window
-        perm_window = tk.Toplevel(self)
-        perm_window.title(f"Permissions - {package_name}")
-        perm_window.geometry("500x400")
+        perm_window = QtWidgets.QDialog(self)
+        perm_window.setWindowTitle(f"Permissions - {package_name}")
+        perm_window.resize(500, 400)
 
-        main_frame = ttk.Frame(perm_window, padding=10)
-        main_frame.pack(fill="both", expand=True)
+        main_layout = QtWidgets.QVBoxLayout(perm_window)
+        main_layout.addWidget(QtWidgets.QLabel("Loading permissions..."))
 
-        ttk.Label(main_frame, text="Loading permissions...").pack()
+        text_widget = QtWidgets.QPlainTextEdit()
+        text_widget.setReadOnly(True)
+        text_widget.setLineWrapMode(QtWidgets.QPlainTextEdit.WidgetWidth)
+        main_layout.addWidget(text_widget)
 
-        text_widget = tk.Text(main_frame, wrap=tk.WORD)
-        text_widget.pack(fill="both", expand=True)
-
-        status_var = tk.StringVar(value="Loading...")
+        status_label = QtWidgets.QLabel("Loading...")
+        main_layout.addWidget(status_label)
 
         def load_permissions():
             try:
@@ -267,44 +263,60 @@ class AppManagerMixin:
                             elif line.strip() and not line.startswith(' '):
                                 in_permissions = False
 
-                    self.after(0, lambda: self._display_permissions(text_widget, status_var, package_name, permissions))
+                    QtCore.QTimer.singleShot(
+                        0,
+                        lambda: self._display_permissions(
+                            text_widget, status_label, package_name, permissions
+                        ),
+                    )
                 else:
-                    self.after(0, lambda: self._show_permission_error(status_var, result.stderr))
+                    QtCore.QTimer.singleShot(
+                        0, lambda: self._show_permission_error(status_label, result.stderr)
+                    )
 
             except Exception as e:
-                self.after(0, lambda: self._show_permission_error(status_var, str(e)))
+                QtCore.QTimer.singleShot(
+                    0, lambda: self._show_permission_error(status_label, str(e))
+                )
 
         threading.Thread(target=load_permissions, daemon=True).start()
+        perm_window.show()
 
-    def _display_permissions(self, text_widget, status_var, package_name, permissions):
+    def _display_permissions(self, text_widget, status_label, package_name, permissions):
         """Display permissions in the text widget"""
-        text_widget.delete(1.0, tk.END)
-        text_widget.insert(tk.END, f"Permissions for {package_name}:\n\n")
+        text_widget.clear()
+        text_widget.appendPlainText(f"Permissions for {package_name}:\n")
 
         if permissions:
             for perm in permissions:
-                text_widget.insert(tk.END, f"  • {perm}\n")
-            status_var.set(f"Found {len(permissions)} permissions")
+                text_widget.appendPlainText(f"  • {perm}")
+            status_label.setText(f"Found {len(permissions)} permissions")
         else:
-            text_widget.insert(tk.END, "No permissions found or unable to retrieve permissions.")
-            status_var.set("No permissions found")
+            text_widget.appendPlainText("No permissions found or unable to retrieve permissions.")
+            status_label.setText("No permissions found")
 
-    def _show_permission_error(self, status_var, error_msg):
+    def _show_permission_error(self, status_label, error_msg):
         """Show error message for permission retrieval"""
-        status_var.set(f"Error: {error_msg}")
+        status_label.setText(f"Error: {error_msg}")
 
     def _uninstall_app(self, listbox, packages, serial, adb_cmd, parent_window):
         """Uninstall the selected app"""
-        selection = listbox.curselection()
+        selection = listbox.selectedItems()
         if not selection:
-            messagebox.showinfo("No App Selected", "Please select an app to uninstall.")
+            QtWidgets.QMessageBox.information(
+                self, "No App Selected", "Please select an app to uninstall."
+            )
             return
 
-        package_name = listbox.get(selection[0])
+        package_name = selection[0].text()
 
-        confirm = messagebox.askyesno(
-            "Confirm Uninstall",
-            f"Are you sure you want to uninstall {package_name}?\n\nThis action cannot be undone."
+        confirm = (
+            QtWidgets.QMessageBox.question(
+                self,
+                "Confirm Uninstall",
+                f"Are you sure you want to uninstall {package_name}?\n\nThis action cannot be undone.",
+            )
+            == QtWidgets.QMessageBox.Yes
         )
 
         if not confirm:
@@ -325,33 +337,47 @@ class AppManagerMixin:
             if result.returncode == 0 and 'Success' in result.stdout:
                 self.log_message(f"{package_name} uninstalled successfully")
                 self.update_status("App uninstalled")
-                messagebox.showinfo("Uninstall Complete", f"{package_name} was uninstalled successfully.")
+                QtWidgets.QMessageBox.information(
+                    self,
+                    "Uninstall Complete",
+                    f"{package_name} was uninstalled successfully.",
+                )
 
                 # Remove from list
-                listbox.delete(selection[0])
+                listbox.takeItem(listbox.row(selection[0]))
             else:
                 error_msg = result.stderr.strip() or result.stdout.strip()
                 self.log_message(f"Failed to uninstall {package_name}: {error_msg}")
                 self.update_status("Uninstall failed")
-                messagebox.showerror("Uninstall Error", f"Failed to uninstall {package_name}:\n{error_msg}")
+                QtWidgets.QMessageBox.critical(
+                    self, "Uninstall Error", f"Failed to uninstall {package_name}:\n{error_msg}"
+                )
 
         except Exception as e:
             self.log_message(f"Error uninstalling app: {str(e)}")
-            messagebox.showerror("Uninstall Error", f"Failed to uninstall app: {str(e)}")
+            QtWidgets.QMessageBox.critical(
+                self, "Uninstall Error", f"Failed to uninstall app: {str(e)}"
+            )
 
     def _clear_app_data(self, listbox, packages, serial, adb_cmd):
         """Clear data for the selected app"""
-        selection = listbox.curselection()
+        selection = listbox.selectedItems()
         if not selection:
-            messagebox.showinfo("No App Selected", "Please select an app to clear data.")
+            QtWidgets.QMessageBox.information(
+                self, "No App Selected", "Please select an app to clear data."
+            )
             return
 
-        package_name = listbox.get(selection[0])
+        package_name = selection[0].text()
 
-        confirm = messagebox.askyesno(
-            "Confirm Clear Data",
-            f"Are you sure you want to clear all data for {package_name}?\n\n"
-            "This will delete all app settings, accounts, and cached data."
+        confirm = (
+            QtWidgets.QMessageBox.question(
+                self,
+                "Confirm Clear Data",
+                f"Are you sure you want to clear all data for {package_name}?\n\n"
+                "This will delete all app settings, accounts, and cached data.",
+            )
+            == QtWidgets.QMessageBox.Yes
         )
 
         if not confirm:
@@ -372,25 +398,37 @@ class AppManagerMixin:
             if result.returncode == 0 and 'Success' in result.stdout:
                 self.log_message(f"Data cleared for {package_name}")
                 self.update_status("App data cleared")
-                messagebox.showinfo("Clear Data Complete", f"Data for {package_name} was cleared successfully.")
+                QtWidgets.QMessageBox.information(
+                    self,
+                    "Clear Data Complete",
+                    f"Data for {package_name} was cleared successfully.",
+                )
             else:
                 error_msg = result.stderr.strip() or result.stdout.strip()
                 self.log_message(f"Failed to clear data for {package_name}: {error_msg}")
                 self.update_status("Clear data failed")
-                messagebox.showerror("Clear Data Error", f"Failed to clear data for {package_name}:\n{error_msg}")
+                QtWidgets.QMessageBox.critical(
+                    self,
+                    "Clear Data Error",
+                    f"Failed to clear data for {package_name}:\n{error_msg}",
+                )
 
         except Exception as e:
             self.log_message(f"Error clearing app data: {str(e)}")
-            messagebox.showerror("Clear Data Error", f"Failed to clear app data: {str(e)}")
+            QtWidgets.QMessageBox.critical(
+                self, "Clear Data Error", f"Failed to clear app data: {str(e)}"
+            )
 
     def _force_stop_app(self, listbox, packages, serial, adb_cmd):
         """Force stop the selected app"""
-        selection = listbox.curselection()
+        selection = listbox.selectedItems()
         if not selection:
-            messagebox.showinfo("No App Selected", "Please select an app to force stop.")
+            QtWidgets.QMessageBox.information(
+                self, "No App Selected", "Please select an app to force stop."
+            )
             return
 
-        package_name = listbox.get(selection[0])
+        package_name = selection[0].text()
 
         try:
             self.log_message(f"Force stopping {package_name}...")
@@ -407,7 +445,11 @@ class AppManagerMixin:
             if result.returncode == 0:
                 self.log_message(f"{package_name} force stopped")
                 self.update_status("App force stopped")
-                messagebox.showinfo("Force Stop Complete", f"{package_name} was force stopped successfully.")
+                QtWidgets.QMessageBox.information(
+                    self,
+                    "Force Stop Complete",
+                    f"{package_name} was force stopped successfully.",
+                )
             else:
                 error_msg = result.stderr.strip() or result.stdout.strip()
                 self.log_message(f"Failed to force stop {package_name}: {error_msg}")
@@ -415,16 +457,20 @@ class AppManagerMixin:
 
         except Exception as e:
             self.log_message(f"Error force stopping app: {str(e)}")
-            messagebox.showerror("Force Stop Error", f"Failed to force stop app: {str(e)}")
+            QtWidgets.QMessageBox.critical(
+                self, "Force Stop Error", f"Failed to force stop app: {str(e)}"
+            )
 
     def _toggle_app_freeze(self, listbox, packages, serial, adb_cmd):
         """Toggle freeze/unfreeze for the selected app"""
-        selection = listbox.curselection()
+        selection = listbox.selectedItems()
         if not selection:
-            messagebox.showinfo("No App Selected", "Please select an app to freeze/unfreeze.")
+            QtWidgets.QMessageBox.information(
+                self, "No App Selected", "Please select an app to freeze/unfreeze."
+            )
             return
 
-        package_name = listbox.get(selection[0])
+        package_name = selection[0].text()
 
         try:
             # Check if app is currently disabled
@@ -460,31 +506,41 @@ class AppManagerMixin:
             if result.returncode == 0:
                 status = "frozen" if action == "disable-user" else "unfrozen"
                 self.log_message(f"{package_name} has been {status}")
-                messagebox.showinfo("Success", f"{package_name} has been {status}.")
+                QtWidgets.QMessageBox.information(
+                    self, "Success", f"{package_name} has been {status}."
+                )
             else:
                 error_msg = result.stderr.strip() or result.stdout.strip()
                 self.log_message(f"Failed to {action_msg} {package_name}: {error_msg}")
-                messagebox.showerror("Error", f"Failed to {action_msg} {package_name}:\n{error_msg}")
+                QtWidgets.QMessageBox.critical(
+                    self,
+                    "Error",
+                    f"Failed to {action_msg} {package_name}:\n{error_msg}",
+                )
 
         except Exception as e:
             self.log_message(f"Error toggling app freeze: {str(e)}")
-            messagebox.showerror("Error", f"Failed to toggle app freeze: {str(e)}")
+            QtWidgets.QMessageBox.critical(
+                self, "Error", f"Failed to toggle app freeze: {str(e)}"
+            )
 
     def _extract_apk(self, listbox, packages, serial, adb_cmd):
         """Extract APK for the selected app"""
-        selection = listbox.curselection()
+        selection = listbox.selectedItems()
         if not selection:
-            messagebox.showinfo("No App Selected", "Please select an app to extract APK.")
+            QtWidgets.QMessageBox.information(
+                self, "No App Selected", "Please select an app to extract APK."
+            )
             return
 
-        package_name = listbox.get(selection[0])
+        package_name = selection[0].text()
 
         # Ask where to save
-        save_path = filedialog.asksaveasfilename(
-            title="Save APK As",
-            defaultextension=".apk",
-            filetypes=[("Android Package", "*.apk")],
-            initialfile=f"{package_name}.apk"
+        save_path, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self,
+            "Save APK As",
+            f"{package_name}.apk",
+            "Android Package (*.apk)",
         )
 
         if not save_path:
@@ -504,7 +560,9 @@ class AppManagerMixin:
             )
 
             if result.returncode != 0:
-                messagebox.showerror("Error", f"Failed to find APK path: {result.stderr}")
+                QtWidgets.QMessageBox.critical(
+                    self, "Error", f"Failed to find APK path: {result.stderr}"
+                )
                 return
 
             apk_path = result.stdout.strip().replace('package:', '')
@@ -521,18 +579,24 @@ class AppManagerMixin:
             if result.returncode == 0:
                 self.log_message(f"APK extracted to {save_path}")
                 self.update_status("APK extracted")
-                messagebox.showinfo("Success", f"APK extracted to:\n{save_path}")
+                QtWidgets.QMessageBox.information(
+                    self, "Success", f"APK extracted to:\n{save_path}"
+                )
             else:
-                messagebox.showerror("Error", f"Failed to extract APK: {result.stderr}")
+                QtWidgets.QMessageBox.critical(
+                    self, "Error", f"Failed to extract APK: {result.stderr}"
+                )
 
         except Exception as e:
             self.log_message(f"Error extracting APK: {str(e)}")
-            messagebox.showerror("Error", f"Failed to extract APK: {str(e)}")
+            QtWidgets.QMessageBox.critical(
+                self, "Error", f"Failed to extract APK: {str(e)}"
+            )
 
     def _filter_app_list(self, search_text, packages, listbox):
         """Filter the app list based on search text"""
-        listbox.delete(0, tk.END)
+        listbox.clear()
         search_lower = search_text.lower()
         for package in packages:
             if search_lower in package.lower():
-                listbox.insert(tk.END, package)
+                listbox.addItem(package)
