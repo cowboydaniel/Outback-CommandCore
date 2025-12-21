@@ -138,38 +138,21 @@ class ConnectionMixin:
             return
 
         # Start connecting in a separate thread
-        threading.Thread(target=self._connect_device_task, daemon=True).start()
+        threading.Thread(target=self._connect_device_task, args=(device_entry,), daemon=True).start()
 
-    def _connect_device_task(self):
+    def _connect_device_task(self, device_entry):
         """Worker thread to connect to the selected Android device"""
         try:
-            selected_items = self.device_listbox.selectedItems()
-            if not selected_items:
-                QtCore.QTimer.singleShot(
-                    0,
-                    lambda: QtWidgets.QMessageBox.information(
-                        self.parent,
-                        "No Device Selected",
-                        "Please select a device from the list",
-                    ),
-                )
-                return
-
-            # Get the selected device serial
-            device_entry = selected_items[0].text()
 
             # Check if the device is marked as offline/disconnected
             if "DISCONNECTED" in device_entry or "Offline" in device_entry or "❌" in device_entry:
-                self.log_message(f"Rejected connection attempt to offline device: {device_entry}")
-                QtCore.QTimer.singleShot(
-                    0,
-                    lambda: QtWidgets.QMessageBox.information(
-                        self.parent,
-                        "Device Offline",
-                        "The selected device is offline and cannot be connected.\n\n"
-                        "Please use the 'Remove Offline' button to clear disconnected devices from the list.",
-                    ),
-                )
+                emit_ui(self, lambda: self.log_message(f"Rejected connection attempt to offline device: {device_entry}"))
+                emit_ui(self, lambda: QtWidgets.QMessageBox.information(
+                    self.parent,
+                    "Device Offline",
+                    "The selected device is offline and cannot be connected.\n\n"
+                    "Please use the 'Remove Offline' button to clear disconnected devices from the list.",
+                ))
                 return
 
             # Extract the serial number from the device entry
@@ -203,13 +186,13 @@ class ConnectionMixin:
             )
 
             if result.returncode != 0 or serial not in result.stdout:
-                self.log_message(f"Device {serial} not found or disconnected")
-                self.update_status("Device not found")
-                QtWidgets.QMessageBox.critical(
+                emit_ui(self, lambda: self.log_message(f"Device {serial} not found or disconnected"))
+                emit_ui(self, lambda: self.update_status("Device not found"))
+                emit_ui(self, lambda: QtWidgets.QMessageBox.critical(
                     self.parent,
                     "Connection Error",
                     "Device not found or disconnected. Try refreshing the device list.",
-                )
+                ))
                 return
 
             # Get device information
@@ -220,26 +203,26 @@ class ConnectionMixin:
             if self.device_info:
                 self.device_connected = True
                 self.device_serial = serial
-                QtCore.QTimer.singleShot(0, self.update_device_info)
-                QtCore.QTimer.singleShot(0, self.enable_device_actions)
-                self.log_message("Device connected successfully")
-                self.update_status(f"Connected to {self.device_info.get('model', serial)}")
+                emit_ui(self, self.update_device_info)
+                emit_ui(self, self.enable_device_actions)
+                emit_ui(self, lambda: self.log_message("Device connected successfully"))
+                emit_ui(self, lambda: self.update_status(f"Connected to {self.device_info.get('model', serial)}"))
             else:
                 self.device_connected = False
-                self.log_message("Failed to get device information")
-                self.update_status("Connection failed")
-                QtWidgets.QMessageBox.critical(
+                emit_ui(self, lambda: self.log_message("Failed to get device information"))
+                emit_ui(self, lambda: self.update_status("Connection failed"))
+                emit_ui(self, lambda: QtWidgets.QMessageBox.critical(
                     self.parent,
                     "Connection Error",
                     "Failed to get device information. The device may be locked or not responding.",
-                )
+                ))
 
         except Exception as e:
-            self.log_message(f"Error connecting to device: {str(e)}")
-            self.update_status("Connection failed")
-            QtWidgets.QMessageBox.critical(
+            emit_ui(self, lambda: self.log_message(f"Error connecting to device: {str(e)}"))
+            emit_ui(self, lambda: self.update_status("Connection failed"))
+            emit_ui(self, lambda: QtWidgets.QMessageBox.critical(
                 self.parent, "Connection Error", f"Failed to connect to device: {str(e)}"
-            )
+            ))
 
     def auto_connect_sequence(self):
         """Start automatic device detection and connection"""
@@ -254,8 +237,16 @@ class ConnectionMixin:
             emit_ui(self, lambda: self.update_status("Refreshing device list..."))
 
             result = subprocess.run(
-                [adb_cmd, "devices"], capture_output=True, text=True, check=True
+                [adb_cmd, "devices"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=5
             )
+
+            if result.returncode != 0:
+                emit_ui(self, lambda: self.update_status(f"Error refreshing device list: {result.stderr.strip()}"))
+                return
 
             lines = result.stdout.strip().split("\n")
             devices = []
@@ -316,13 +307,14 @@ class ConnectionMixin:
                 else:
                     self.update_status("No devices found")
 
-            QtCore.QTimer.singleShot(0, update_ui)
+            emit_ui(self, update_ui)
 
+        except subprocess.TimeoutExpired:
+            emit_ui(self, lambda: self.log_message("Device list refresh timed out"))
+            emit_ui(self, lambda: self.update_status("Timeout refreshing device list"))
         except Exception as e:
             logging.error(f"Error refreshing device list: {e}", exc_info=True)
-            QtCore.QTimer.singleShot(
-                0, lambda: self.update_status(f"Error refreshing device list: {str(e)}")
-            )
+            emit_ui(self, lambda: self.update_status(f"Error refreshing device list: {str(e)}"))
 
     def _trigger_connect(self):
         """Helper method to trigger the connect_device method after a short delay"""
@@ -390,19 +382,20 @@ class ConnectionMixin:
                     serial = device_entry.strip()
                 current_devices.append(serial)
 
-                devices_to_remove = [s for s in current_devices if s not in connected_serials]
+            devices_to_remove = [s for s in current_devices if s not in connected_serials]
 
-            QtCore.QTimer.singleShot(0, lambda: self.device_listbox.clear())
+            def update_ui():
+                self.device_listbox.clear()
+                for serial in connected_serials:
+                    self.device_listbox.addItem(serial)
+                if self.device_listbox.count() > 0:
+                    self.device_listbox.setCurrentRow(0)
 
-            for serial in connected_serials:
-                QtCore.QTimer.singleShot(0, lambda s=serial: self.device_listbox.addItem(s))
+            emit_ui(self, update_ui)
 
-                if self.device_listbox.size() > 0:
-                    self.device_listbox.selection_set(0)
-
-            if self.device_listbox.count() > 0:
-                QtCore.QTimer.singleShot(0, lambda: self.device_listbox.setCurrentRow(0))
-
+        except subprocess.TimeoutExpired:
+            emit_ui(self, lambda: self.log_message("Device check timed out"))
+            emit_ui(self, lambda: self.update_status("Timeout checking devices"))
         except Exception as e:
             emit_ui(self, lambda: self.update_status("Failed to remove offline devices"))
             emit_ui(self, lambda: self.log_message(f"Error removing offline devices: {str(e)}"))
