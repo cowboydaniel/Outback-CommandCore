@@ -44,7 +44,7 @@ def restart_with_pkexec():
 
 def main():
     # Import GUI components first (without root privileges)
-    from PyQt6.QtWidgets import QApplication, QMessageBox
+    from PySide6.QtWidgets import QApplication, QMessageBox
     from hack_attack_gui import HackAttackGUI
     
     try:

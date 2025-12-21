@@ -3,7 +3,7 @@
 Mobile & Embedded Tools Module for Hack Attack
 
 This module provides tools for security testing of mobile and embedded devices.
-It includes a PyQt6-based GUI and can be used both as an importable module
+It includes a PySide6-based GUI and can be used both as an importable module
 and as a standalone application.
 
 Features:
@@ -33,14 +33,14 @@ except ImportError:
 
 # Check if GUI is available
 try:
-    from PyQt6.QtWidgets import (
+    from PySide6.QtWidgets import (
         QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
         QLabel, QLineEdit, QPushButton, QTabWidget, QGroupBox,
         QTableWidget, QTableWidgetItem, QTextEdit, QProgressBar,
         QStatusBar, QComboBox, QHeaderView, QMessageBox, QFileDialog, QSplitter
     )
-    from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot, QObject
-    from PyQt6.QtGui import QColor, QTextCursor, QFont, QIcon
+    from PySide6.QtCore import Qt, QThread, Signal, Slot, QObject
+    from PySide6.QtGui import QColor, QTextCursor, QFont, QIcon
     
     # Set up high DPI scaling for better display on high-resolution screens
     if hasattr(Qt, 'AA_EnableHighDpiScaling'):
@@ -52,14 +52,14 @@ try:
 except ImportError:
     GUI_AVAILABLE = False
     
-    # Create dummy classes for type hinting when PyQt6 is not available
+    # Create dummy classes for type hinting when PySide6 is not available
     class QObject:
         pass
     
     class QThread:
         pass
     
-    class pyqtSignal:
+    class Signal:
         def __init__(self, *args, **kwargs):
             pass
             
@@ -67,6 +67,10 @@ except ImportError:
             pass
             
         def connect(self, *args):
+            pass
+
+    class Slot:
+        def __init__(self, *args, **kwargs):
             pass
             
     class Qt:
@@ -162,7 +166,7 @@ except ImportError:
             Vertical = None
     
     logger = logging.getLogger(__name__)
-    logger.warning("PyQt6 not available. GUI features will be disabled.")
+    logger.warning("PySide6 not available. GUI features will be disabled.")
 
 # Set up logging
 logging.basicConfig(
@@ -1447,7 +1451,7 @@ class USBTab(QWidget):
     """Tab for USB device management and analysis."""
     
     # Define a signal for device updates
-    devices_updated = pyqtSignal(list, str)
+    devices_updated = Signal(list, str)
     
     def __init__(self, parent=None):
         """Initialize the USB tab."""
@@ -1574,7 +1578,7 @@ class USBTab(QWidget):
                 self.scan_thread.quit()
                 self.scan_thread.wait()
     
-    @pyqtSlot(list, str)
+    @Slot(list, str)
     def _update_device_list(self, devices, error=''):
         """Update the device list with found USB devices (thread-safe).
         
@@ -2356,10 +2360,10 @@ class ScanThread(QThread):
     """Thread for running scans in the background."""
     
     # Define signals
-    progress_signal = pyqtSignal(str, int)  # message, progress
-    log_signal = pyqtSignal(str, str)  # message, level
-    result_signal = pyqtSignal(dict)  # partial results
-    finished_signal = pyqtSignal(bool)  # success
+    progress_signal = Signal(str, int)  # message, progress
+    log_signal = Signal(str, str)  # message, level
+    result_signal = Signal(dict)  # partial results
+    finished_signal = Signal(bool)  # success
     
     def __init__(self, target: str, scan_type: str, callback: Callable, conn_type: str = 'network'):
         """Initialize the scan thread.
@@ -2478,7 +2482,7 @@ def main_gui():
 def main():
     """Launch the application."""
     if not GUI_AVAILABLE:
-        print("Error: PyQt6 is required. Please install it with: pip install PyQt6")
+        print("Error: PySide6 is required. Please install it with: pip install PySide6")
         return 1
     
     try:

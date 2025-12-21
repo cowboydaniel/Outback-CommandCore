@@ -20,11 +20,11 @@ from typing import List, Dict, Optional, Tuple, Any, Union
 GUI_ENABLED = True
 try:
     # Core Qt imports
-    from PyQt6.QtCore import QThread, pyqtSignal, Qt, QSize
-    from PyQt6.QtGui import QIcon, QFont, QColor, QAction
+    from PySide6.QtCore import QThread, Signal, Qt, QSize
+    from PySide6.QtGui import QIcon, QFont, QColor, QAction
     
     # Widget imports
-    from PyQt6.QtWidgets import (
+    from PySide6.QtWidgets import (
         QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
         QPushButton, QTreeWidget, QTreeWidgetItem, QTabWidget, QLabel,
         QStatusBar, QMessageBox, QFileDialog, QTableWidget, QTableWidgetItem,
@@ -32,7 +32,7 @@ try:
     )
     
     # Additional Qt modules
-    from PyQt6 import QtCore, QtGui, QtWidgets
+    from PySide6 import QtCore, QtGui, QtWidgets
     
     # Don't create QApplication here, just verify imports
     GUI_ENABLED = True
@@ -881,9 +881,9 @@ class NetworkScanThread(QThread):
     progress and results.
     """
     
-    scan_complete = pyqtSignal(list)
-    scan_progress = pyqtSignal(str)
-    scan_error = pyqtSignal(str)
+    scan_complete = Signal(list)
+    scan_progress = Signal(str)
+    scan_error = Signal(str)
     
     def __init__(self, device_discovery, network=None):
         """
@@ -1315,7 +1315,7 @@ class DeviceDiscoveryGUI(QMainWindow):
         menu.addAction(self.details_action)
         
         # Show the context menu at the cursor position
-        menu.exec_(self.network_scan_table.viewport().mapToGlobal(position))
+        menu.exec(self.network_scan_table.viewport().mapToGlobal(position))
     
     def copy_selected_cells(self):
         """Copy the selected cells to the clipboard."""
@@ -1575,7 +1575,7 @@ def main():
     """Main entry point for the Device Discovery tool."""
     if not GUI_ENABLED:
         print("Running in console mode (GUI dependencies not available)")
-        print("Installing PyQt6 to enable the GUI: pip install PyQt6")
+        print("Installing PySide6 to enable the GUI: pip install PySide6")
         
         # Fallback to console mode
         discovery = DeviceDiscovery()

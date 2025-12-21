@@ -71,9 +71,9 @@ except ImportError:
     logger.warning("Scapy not available. Please install with: pip install scapy")
 
 # GUI Dependencies
-from PyQt6.QtCore import QThread, pyqtSignal, Qt, QSize, QTimer, pyqtSlot, QMetaObject, Q_ARG, QObject, QProcess
-from PyQt6.QtGui import QIcon, QFont, QColor, QAction, QTextCursor
-from PyQt6.QtWidgets import (
+from PySide6.QtCore import QThread, Signal, Qt, QSize, QTimer, Slot, QMetaObject, Q_ARG, QObject, QProcess
+from PySide6.QtGui import QIcon, QFont, QColor, QAction, QTextCursor
+from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QTreeWidget, QTreeWidgetItem, QTabWidget, QLabel,
     QStatusBar, QMessageBox, QFileDialog, QTableWidget, QTableWidgetItem,
@@ -430,8 +430,8 @@ class NetworkAnalyzer:
 
 class CaptureThread(QThread):
     """Thread for capturing network packets."""
-    packet_received = pyqtSignal(dict)
-    capture_error = pyqtSignal(str)
+    packet_received = Signal(dict)
+    capture_error = Signal(str)
     
     def __init__(self, analyzer, gui=None):
         super().__init__()
@@ -1202,7 +1202,7 @@ class NetworkAnalysisGUI(QMainWindow):
             self.interface_combo.setEnabled(True)
             logger.info("Capture stopped")
     
-    @pyqtSlot(dict)
+    @Slot(dict)
     def add_packet_safe(self, packet_info):
         """Thread-safe method to add a packet to the UI.
         
