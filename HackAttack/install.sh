@@ -26,8 +26,9 @@ rsync -av --progress --exclude='.git' --exclude='__pycache__' --exclude='*.pyc' 
 
 # Install icon
 echo "Installing icon..."
-cp "$INSTALL_DIR/Hack_Attack.png" "$ICON_DIR/hack-attack.png" 2>/dev/null || \
-    { echo "Warning: Could not find Hack_Attack.png, using default icon"; 
+# Copy from centralized icons folder in repository root
+cp "$(dirname "$INSTALL_DIR")/../icons/hackattack.png" "$ICON_DIR/hack-attack.png" 2>/dev/null || \
+    { echo "Warning: Could not find icons/hackattack.png, using default icon";
       # Create a simple default icon if needed
       convert -size 256x256 xc:black -fill red -pointsize 72 -gravity center \
                -draw "text 0,0 'HA'" "$ICON_DIR/hack-attack.png"; }

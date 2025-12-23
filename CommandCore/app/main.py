@@ -53,7 +53,7 @@ class CommandCoreLauncher(QMainWindow):
         self.setMinimumSize(1024, 768)
         
         # Set window icon
-        icon_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'CommandCore.png')
+        icon_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'icons', 'commandcore.png')
         if os.path.exists(icon_path):
             self.setWindowIcon(QIcon(icon_path))
         

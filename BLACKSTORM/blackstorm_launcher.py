@@ -51,7 +51,12 @@ class BlackStormLauncher(QMainWindow):
         super().__init__()
         self.setWindowTitle("BLACKSTORM - Secure Data Erasure & Forensic Suite")
         self.setMinimumSize(1280, 800)
-        
+
+        # Set window icon
+        icon_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'icons', 'blackstorm.png')
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
+
         # Initialize logging
         self._setup_logging()
         self.logger = logging.getLogger('BlackStormLauncher')

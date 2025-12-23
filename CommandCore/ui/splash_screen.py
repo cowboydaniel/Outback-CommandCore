@@ -242,7 +242,7 @@ class SplashScreen(QMainWindow):
         self.setAttribute(Qt.WA_TranslucentBackground)
         
         # Set window icon
-        icon_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'CommandCore', 'CommandCore.png')
+        icon_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'icons', 'commandcore.png')
         if os.path.exists(icon_path):
             self.setWindowIcon(QIcon(icon_path))
             print(f"Splash screen icon loaded from: {icon_path}")
