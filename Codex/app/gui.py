@@ -545,18 +545,30 @@ class CommandCoreGUI(QMainWindow):
         
         try:
             self.log_message("Generating code...")
-            
+
+            # Check if model is trained
+            if self.orchestrator.model is None:
+                # If no model is trained, show a message and return
+                self.log_message("No trained model available. Please train a model first.", is_error=True)
+                self.generated_code.setPlainText(
+                    "# No trained model available\n"
+                    "# Please train a model first by:\n"
+                    "# 1. Loading training data\n"
+                    "# 2. Starting the training process\n"
+                    f"# Then you can generate code from prompt: {prompt}"
+                )
+                return
+
             # Call orchestrator to generate code
-            # generated = self.orchestrator.generate_code(
-            #     prompt=prompt,
-            #     max_length=self.max_length.value(),
-            #     temperature=self.temperature.value()
-            # )
-            
-            # For now, just show a placeholder
-            generated = "# Generated code will appear here\n# This is a placeholder for the actual generated code"
-            
-            self.generated_code.setPlainText(generated)
+            max_tokens = self.max_length.value() if hasattr(self, 'max_length') else 100
+            generated = self.orchestrator.generate_code(
+                prompt=prompt,
+                max_tokens=max_tokens
+            )
+
+            # Display the generated code with the prompt
+            full_code = f"{prompt}\n{generated}" if not generated.startswith(prompt) else generated
+            self.generated_code.setPlainText(full_code)
             self.log_message("Code generation completed.")
         except Exception as e:
             self.log_message(f"Error generating code: {str(e)}", is_error=True)
@@ -571,15 +583,21 @@ class CommandCoreGUI(QMainWindow):
         
         try:
             self.log_message("Running linter...")
-            
+
             # Call orchestrator to run linter
-            # lint_results = self.orchestrator.lint_code(code)
-            # self.linter_output.setPlainText(lint_results)
-            
-            # For now, just show a placeholder
-            self.linter_output.setPlainText("Linter output will appear here.\nNo issues found.")
-            
-            self.log_message("Linting completed.")
+            lint_results = self.orchestrator.lint_code(code)
+
+            # Format the lint results for display
+            if lint_results:
+                output = "Linter Results:\n" + "-" * 40 + "\n"
+                for i, issue in enumerate(lint_results, 1):
+                    output += f"{i}. {issue}\n"
+                output += "-" * 40 + f"\nTotal issues: {len(lint_results)}"
+            else:
+                output = "✓ No issues found. Code passed all lint checks."
+
+            self.linter_output.setPlainText(output)
+            self.log_message(f"Linting completed. Found {len(lint_results)} issue(s).")
         except Exception as e:
             self.log_message(f"Error running linter: {str(e)}", is_error=True)
     
@@ -593,14 +611,27 @@ class CommandCoreGUI(QMainWindow):
         
         try:
             self.log_message("Running code in sandbox...")
-            
+
             # Call orchestrator to run in sandbox
-            # sandbox_output = self.orchestrator.run_in_sandbox(code)
-            # self.sandbox_output.setPlainText(sandbox_output)
-            
-            # For now, just show a placeholder
-            self.sandbox_output.setPlainText("Sandbox output will appear here.\nHello, World! (example output)")
-            
+            stdout, stderr = self.orchestrator.run_sandboxed(code)
+
+            # Format the sandbox output
+            output = "Sandbox Execution Results:\n" + "=" * 40 + "\n\n"
+
+            if stdout:
+                output += "STDOUT:\n" + "-" * 20 + "\n"
+                output += stdout + "\n\n"
+
+            if stderr:
+                output += "STDERR:\n" + "-" * 20 + "\n"
+                output += stderr + "\n\n"
+
+            if not stdout and not stderr:
+                output += "(No output produced)\n"
+
+            output += "=" * 40 + "\nExecution completed."
+
+            self.sandbox_output.setPlainText(output)
             self.log_message("Sandbox execution completed.")
         except Exception as e:
             self.log_message(f"Error running in sandbox: {str(e)}", is_error=True)
