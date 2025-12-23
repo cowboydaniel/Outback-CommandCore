@@ -829,10 +829,9 @@ class ApplicationManagerTab(QWidget):
     
     def _get_installed_apps(self):
         """Get the list of installed CommandCore applications with detected versions."""
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        # Adjust base_dir if it ends with 'CommandCore/CommandCore' to 'CommandCore'
-        if base_dir.endswith('CommandCore/CommandCore'):
-            base_dir = os.path.dirname(base_dir)
+        # Navigate from CommandCore/tabs/ up to project root (Outback-CommandCore)
+        # __file__ is in CommandCore/tabs/, so go up 3 levels to reach project root
+        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         apps = [
             {
                 "id": "ares_i",
