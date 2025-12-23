@@ -6,6 +6,7 @@ A PySide6-based GUI for managing the AI training and code generation pipeline.
 """
 
 import sys
+import os
 import logging
 from pathlib import Path
 from typing import Optional
@@ -17,7 +18,7 @@ from PySide6.QtWidgets import (
     QFormLayout, QGroupBox, QStatusBar, QSizePolicy
 )
 from PySide6.QtCore import Qt, QThread, QObject, Slot, QTimer, Signal
-from PySide6.QtGui import QAction, QTextCursor, QFont, QPalette, QColor
+from PySide6.QtGui import QAction, QTextCursor, QFont, QPalette, QColor, QIcon
 
 # Import the orchestrator
 from Codex.ai.orchestrator import Orchestrator
@@ -149,9 +150,14 @@ class CommandCoreGUI(QMainWindow):
         self.worker_thread = None
         self.worker = None
         self.dark_mode = False
-        
+
         self.setWindowTitle("CommandCoreCodex AI Pipeline Control Center")
         self.setMinimumSize(1000, 700)
+
+        # Set window icon
+        icon_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'icons', 'codex.png')
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
         
         self.setup_ui()
         self.setup_connections()

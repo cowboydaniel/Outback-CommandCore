@@ -6006,6 +6006,19 @@ if __name__ == "__main__":
     root.title("PC Tools Module")
     root.geometry("1024x768")
     root.option_add('*applicationVersion', '1.0.0')
+
+    # Set window icon
+    try:
+        from PIL import Image, ImageTk
+        icon_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'icons', 'pc-x.png')
+        if os.path.exists(icon_path):
+            img = Image.open(icon_path)
+            img.thumbnail((32, 32))
+            photo = ImageTk.PhotoImage(img)
+            root.iconphoto(False, photo)
+    except (ImportError, Exception):
+        # PIL not available or icon loading failed, continue without icon
+        pass
     
     # Set a theme that matches the other modules
     style = ttk.Style()

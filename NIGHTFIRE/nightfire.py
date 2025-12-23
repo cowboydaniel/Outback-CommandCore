@@ -3,6 +3,7 @@
 NIGHTFIRE - Real-time Active Defense and Monitoring Tool
 """
 import sys
+import os
 import time
 import logging
 from typing import Dict, List, Optional
@@ -10,7 +11,7 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QLabel, QPushButton, QTextEdit, QTabWidget, QTableWidget,
                              QTableWidgetItem, QHeaderView, QStatusBar, QMessageBox)
 from PySide6.QtCore import Qt, QTimer, Signal, QObject
-from PySide6.QtGui import QFont, QColor, QPalette
+from PySide6.QtGui import QFont, QColor, QPalette, QIcon
 
 class SignalEmitter(QObject):
     alert_triggered = Signal(str, str)  # alert_type, message
@@ -21,6 +22,12 @@ class NightfireUI(QMainWindow):
         super().__init__()
         self.nightfire = nightfire
         self.signal_emitter = SignalEmitter()
+
+        # Set window icon
+        icon_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'icons', 'nightfire.png')
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
+
         self.setup_ui()
         self.setup_connections()
     

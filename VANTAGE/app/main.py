@@ -8,7 +8,7 @@ import time
 from typing import Optional, Dict, Any
 
 from PySide6.QtCore import Qt, Signal, QSize, QTimer, QCoreApplication
-from PySide6.QtGui import QPalette, QColor, QFont
+from PySide6.QtGui import QPalette, QColor, QFont, QIcon
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QVBoxLayout, QWidget, QTabWidget, QStatusBar
 )
@@ -39,7 +39,7 @@ class VantageUI(QMainWindow):
     
     def __init__(self, parent: Optional[QWidget] = None, show_immediately: bool = True):
         """Initialize the main UI window.
-        
+
         Args:
             parent: Parent widget
             show_immediately: If True, shows the window maximized immediately.
@@ -48,6 +48,11 @@ class VantageUI(QMainWindow):
         super().__init__(parent)
         self.setWindowTitle("VANTAGE")
         self.setMinimumSize(1024, 768)
+
+        # Set window icon
+        icon_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'icons', 'vantage.png')
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
         
         # Initialize tabs
         self.tabs: Dict[str, QWidget] = {}
