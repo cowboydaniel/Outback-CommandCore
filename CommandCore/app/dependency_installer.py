@@ -230,6 +230,8 @@ def check_and_install_dependencies(verbose: bool = True) -> bool:
                 print(f"  - {dep}")
             print("\nYou may need to install these manually.")
             print("Some packages may require system-level dependencies.")
+            print("\nSee CommandCore/requirements-optional.txt for installation")
+            print("instructions for packages with special requirements.")
             print("=" * 60)
         return False
 
