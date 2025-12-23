@@ -769,54 +769,43 @@ class ApplicationManagerTab(QWidget):
                     pname = proc.info['name'].lower() if proc.info['name'] else ''
                     cmdline = proc.info['cmdline']
                     # Check for specific process names and command line matches
+                    cmdline_str = ' '.join(cmdline).lower() if cmdline else ''
                     if process_name == 'ares_i_process':
-                        if cmdline and 'ares_i.ares_i' in ' '.join(cmdline).lower():
-                            print(f"Found running process for {process_name}")
+                        if 'ares_i.ares_i' in cmdline_str:
                             return True
                     elif process_name == 'blackstorm_launcher_process':
-                        if cmdline and 'blackstorm.blackstorm_launcher' in ' '.join(cmdline).lower():
-                            print(f"Found running process for {process_name}")
+                        if 'blackstorm.blackstorm_launcher' in cmdline_str:
                             return True
                     elif process_name == 'commandcore_launcher_process':
-                        if cmdline and 'commandcore.app.main' in ' '.join(cmdline).lower():
-                            print(f"Found running process for {process_name}")
+                        if 'commandcore.app.main' in cmdline_str:
                             return True
                     elif process_name == 'commandcorecodex_process':
-                        if cmdline and 'codex.gui' in ' '.join(cmdline).lower():
-                            print(f"Found running process for {process_name}")
+                        if 'codex.gui' in cmdline_str:
                             return True
                     elif process_name == 'droidcom_process':
-                        if cmdline and 'android_tools_linux.android_tools_linux' in ' '.join(cmdline).lower():
-                            print(f"Found running process for {process_name}")
+                        if 'android_tools_linux.android_tools_linux' in cmdline_str:
                             return True
                     elif process_name == 'hackattack_process':
-                        if cmdline and 'hackattack.launch' in ' '.join(cmdline).lower():
-                            print(f"Found running process for {process_name}")
+                        if 'hackattack.launch' in cmdline_str:
                             return True
                     elif process_name == 'nightfire_process':
-                        if cmdline and 'nightfire.nightfire' in ' '.join(cmdline).lower():
-                            print(f"Found running process for {process_name}")
+                        if 'nightfire.nightfire' in cmdline_str:
                             return True
                     elif process_name == 'omniscribe_process':
-                        if cmdline and 'omniscribe.omniscribe' in ' '.join(cmdline).lower():
-                            print(f"Found running process for {process_name}")
+                        if 'omniscribe.omniscribe' in cmdline_str:
                             return True
                     elif process_name == 'pc_tools_linux_process':
-                        if cmdline and 'pc.pc_tools_linux' in ' '.join(cmdline).lower():
-                            print(f"Found running process for {process_name}")
+                        if 'pc.pc_tools_linux' in cmdline_str:
                             return True
                     elif process_name == 'vantage_process':
-                        if cmdline and 'vantage.launch_vantage' in ' '.join(cmdline).lower():
-                            print(f"Found running process for {process_name}")
+                        if 'vantage.launch_vantage' in cmdline_str:
                             return True
                     # Otherwise, check if process name or command line contains process_name
-                    elif (process_name.lower() in pname or 
+                    elif (process_name.lower() in pname or
                           (cmdline and any(process_name.lower() in cmd.lower() for cmd in cmdline))):
-                        print(f"Found running process for {process_name}")
                         return True
                 except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                     continue
-            print(f"No running process found for {process_name}")
             return False
         except Exception as e:
             print(f"Error checking process {process_name}: {e}")
@@ -1018,10 +1007,10 @@ class ApplicationManagerTab(QWidget):
         """)
         refresh_btn.clicked.connect(self.refresh_apps)
         
-        # Auto refresh every second
+        # Auto refresh every 5 seconds (reduced frequency to prevent UI issues)
         self._refresh_timer = QTimer(self)
         self._refresh_timer.timeout.connect(self.refresh_apps)
-        self._refresh_timer.start(1000)  # 1000 ms = 1 second
+        self._refresh_timer.start(5000)  # 5000 ms = 5 seconds
 
         header_layout.addWidget(title)
         header_layout.addWidget(description)
@@ -1108,7 +1097,14 @@ class ApplicationManagerTab(QWidget):
     
     def refresh_apps(self):
         """Refresh the status of all apps independently without linking."""
+        status_changed = False
         for app in self.apps:
             app_name = app['process_name']
-            app['status'] = 'running' if self._is_process_running(app_name) else 'stopped'
-        self.update_app_cards()
+            new_status = 'running' if self._is_process_running(app_name) else 'stopped'
+            if app['status'] != new_status:
+                app['status'] = new_status
+                status_changed = True
+
+        # Only rebuild UI if status actually changed
+        if status_changed:
+            self.update_app_cards()
