@@ -361,77 +361,58 @@ class PerformanceAnalyticsTab(QWidget):
         Calculate and update CPU usage prediction with natural-looking fluctuations.
         Uses a combination of linear regression and noise to simulate realistic patterns.
         """
-        # Get recent data points for prediction
+        # Get recent data points for prediction (newest first)
         recent_data = self.avg_cpu_data[:self.prediction_window]
-        
+
         if len(recent_data) < 2:  # Need at least 2 points for prediction
             return
-            
-        # Calculate the standard deviation of recent data for natural fluctuation
-        mean = sum(recent_data) / len(recent_data)
-        std_dev = (sum((x - mean) ** 2 for x in recent_data) / len(recent_data)) ** 0.5
-        
-        # Add some randomness but keep it within reasonable bounds
-        noise_scale = min(5.0, std_dev * 0.8) if std_dev > 0 else 2.0
-        
-        # Calculate linear regression (y = mx + b)
-        x_vals = list(range(len(recent_data)))
-        y_vals = recent_data
-        n = len(x_vals)
-        sum_x = sum(x_vals)
-        sum_y = sum(y_vals)
-        sum_xy = sum(x * y for x, y in zip(x_vals, y_vals))
-        sum_x2 = sum(x * x for x in x_vals)
-        
-        # Calculate slope (m) and intercept (b)
-        if n * sum_x2 - sum_x * sum_x != 0:  # Avoid division by zero
-            slope = (n * sum_xy - sum_x * sum_y) / (n * sum_x2 - sum_x * sum_x)
-            intercept = (sum_y - slope * sum_x) / n
-            
-            # Clear previous prediction
-            self.prediction_series.clear()
-            
-            # Add connection point at current time (0)
-            if self.avg_cpu_data:
-                self.prediction_series.append(0, self.avg_cpu_data[0])
-            
-            # Add predicted points (from 0 to -30 seconds)
-            last_y = self.avg_cpu_data[0] if self.avg_cpu_data else 0
-            
-            for i in range(1, self.prediction_steps + 1):
-                # Calculate base prediction using linear regression
-                future_x = len(recent_data) + i
-                base_prediction = slope * future_x + intercept
-                
-                # Add some natural-looking fluctuations
-                # 1. Add some noise based on recent volatility
-                noise = (hash(str(i)) % 200 - 100) / 100.0 * noise_scale
-                
-                # 2. Add some momentum from recent trend (weighted average of last few points)
-                momentum = 0
-                if len(recent_data) > 3:
-                    recent_trend = sum(recent_data[0:3])/3 - sum(recent_data[3:6])/3 if len(recent_data) >= 6 else 0
-                    momentum = recent_trend * 0.7  # Dampen the momentum effect
-                
-                # 3. Add some inertia (tendency to stay near recent values)
-                inertia = (last_y - base_prediction) * 0.3
-                
-                # Combine all factors
-                predicted_y = base_prediction + noise + momentum + inertia
-                
-                # Clamp values between 0 and 100
-                predicted_y = max(0, min(100, predicted_y))
-                last_y = predicted_y
-                
-                # Add some sinusoidal variation for more natural movement
-                if i > 1:  # Skip first point to avoid sharp angles
-                    cycle = (i / 5.0) % (2 * 3.14159)  # Cycle every ~6 seconds
-                    predicted_y += math.sin(cycle) * (noise_scale * 0.5)
-                    predicted_y = max(0, min(100, predicted_y))
-                
-                # Calculate time point (negative because we're going into future)
-                time_point = -i * (30.0 / self.prediction_steps)
-                self.prediction_series.append(time_point, predicted_y)
+
+        # Convert to chronological order (oldest -> newest) for smoothing
+        series = list(reversed(recent_data))
+
+        # Holt's linear trend method with damping for more stable forecasts
+        alpha = 0.4  # level smoothing
+        beta = 0.2   # trend smoothing
+        phi = 0.85   # damping factor for trend
+
+        level = series[0]
+        trend = series[1] - series[0]
+        for value in series[1:]:
+            prev_level = level
+            level = alpha * value + (1 - alpha) * (level + trend)
+            trend = beta * (level - prev_level) + (1 - beta) * trend
+
+        # Calculate recent volatility to cap step-to-step movement
+        deltas = [abs(b - a) for a, b in zip(series[:-1], series[1:])]
+        avg_delta = sum(deltas) / len(deltas) if deltas else 0
+        max_step = max(1.5, min(8.0, avg_delta * 1.5))
+
+        # Clear previous prediction
+        self.prediction_series.clear()
+
+        # Add connection point at current time (0)
+        if self.avg_cpu_data:
+            self.prediction_series.append(0, self.avg_cpu_data[0])
+
+        # Add predicted points (from 0 to -30 seconds)
+        last_y = self.avg_cpu_data[0] if self.avg_cpu_data else 0
+        for i in range(1, self.prediction_steps + 1):
+            if phi == 1:
+                forecast = level + trend * i
+            else:
+                forecast = level + trend * (1 - phi ** i) / (1 - phi)
+
+            # Limit per-step change to avoid overreacting
+            delta = forecast - last_y
+            if abs(delta) > max_step:
+                forecast = last_y + max_step * (1 if delta > 0 else -1)
+
+            predicted_y = max(0, min(100, forecast))
+            last_y = predicted_y
+
+            # Calculate time point (negative because we're going into future)
+            time_point = -i * (30.0 / self.prediction_steps)
+            self.prediction_series.append(time_point, predicted_y)
     
     def classify_trend(self, deltas):
         if deltas[0] > 10 and all(abs(d) < 3 for d in deltas[1:]):
@@ -699,62 +680,54 @@ class PerformanceAnalyticsTab(QWidget):
         Simple and predictable memory usage prediction.
         Uses recent trend but dampens it over time.
         """
-        recent_data = self.mem_data[:min(3, len(self.mem_data))]  # Use last 3 points only
-        
+        recent_data = self.mem_data[:min(6, len(self.mem_data))]  # Use last 6 points
+
         if len(recent_data) < 2:
             return
-        
-        # Calculate deltas between adjacent points
-        deltas = [b - a for a, b in zip(recent_data[:-1], recent_data[1:])]
-        avg_delta = - sum(deltas) / len(deltas)
-        slope_changes = [j - i for i, j in zip(deltas[:-1], deltas[1:])]
-        
-        # Classify trend
-        trend_label = self.classify_trend(deltas)
-        
+
+        # Convert to chronological order (oldest -> newest) for smoothing
+        series = list(reversed(recent_data))
+
+        # Holt's linear trend with stronger damping for memory stability
+        alpha = 0.3
+        beta = 0.1
+        phi = 0.7
+
+        level = series[0]
+        trend = series[1] - series[0]
+        for value in series[1:]:
+            prev_level = level
+            level = alpha * value + (1 - alpha) * (level + trend)
+            trend = beta * (level - prev_level) + (1 - beta) * trend
+
+        # Calculate recent volatility to cap step-to-step movement
+        deltas = [abs(b - a) for a, b in zip(series[:-1], series[1:])]
+        avg_delta = sum(deltas) / len(deltas) if deltas else 0
+        max_step = max(0.5, min(4.0, avg_delta * 1.2))
+
         current_value = recent_data[0]
-        
         self.mem_prediction_series.clear()
         self.mem_prediction_series.append(0, current_value)
-        
+
         # Add predicted points
+        last_y = current_value
         for i in range(1, self.prediction_steps + 1):
-            damping = max(0.05, 1.0 - (i / self.prediction_steps) * 0.8)
-            
-            # Modify prediction based on trend label
-            if trend_label == "Spike then Flatten":
-                # Prediction flattens after initial spike
-                factor = 0.3 + 0.7 * (i / self.prediction_steps)
-                predicted_y = current_value + (avg_delta * i * damping * factor)
-            elif trend_label == "Accelerating Uptrend":
-                # Accelerate the trend
-                factor = 1.0 + 0.5 * (i / self.prediction_steps)
-                predicted_y = current_value + (avg_delta * i * damping * factor)
-            elif trend_label == "Flat":
-                # Minimal change
-                predicted_y = current_value + (hash(str(i)) % 10 - 5) / 1000.0  # ±0.005%
-            elif trend_label == "Decline then Stable":
-                # Prediction stabilizes after initial decline
-                factor = 0.3 + 0.7 * (i / self.prediction_steps)
-                predicted_y = current_value + (avg_delta * i * damping * factor)
-            elif trend_label == "Drop then Rebound":
-                # Prediction rebounds after initial drop
-                factor = 1.0 + 0.5 * (i / self.prediction_steps)
-                predicted_y = current_value + (avg_delta * i * damping * factor)
-            elif trend_label == "Volatile / Noisy":
-                # Prediction is highly variable
-                predicted_y = current_value + (hash(str(i)) % 10 - 5) / 100.0  # ±0.5%
+            if phi == 1:
+                forecast = level + trend * i
             else:
-                # Default behavior
-                predicted_y = current_value + (avg_delta * i * damping)
-            
-            predicted_y += (hash(str(i)) % 10 - 5) / 1000.0  # ±0.005%
-            predicted_y = max(0, min(100, predicted_y))
+                forecast = level + trend * (1 - phi ** i) / (1 - phi)
+
+            delta = forecast - last_y
+            if abs(delta) > max_step:
+                forecast = last_y + max_step * (1 if delta > 0 else -1)
+
+            predicted_y = max(0, min(100, forecast))
             time_point = -i * (30.0 / self.prediction_steps)
             self.mem_prediction_series.append(time_point, predicted_y)
-        
+            last_y = predicted_y
+
         # Optionally: store or display trend_label for UI
-        self.mem_trend_label = trend_label
+        self.mem_trend_label = "Smoothed Trend"
 
     def setup_disk_tab(self):
         """Setup Disk I/O tab with disk usage and I/O charts."""
