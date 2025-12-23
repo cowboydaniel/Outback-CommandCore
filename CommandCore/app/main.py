@@ -6,12 +6,38 @@ Main entry point for the CommandCore launcher application.
 """
 import sys
 import os
-from PySide6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QTabWidget
-from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QPalette, QColor, QFont, QIcon
 
 # Add parent directory to path to allow package imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Check and install dependencies before importing anything else
+def ensure_dependencies():
+    """Ensure all module dependencies are installed before starting."""
+    try:
+        from app.dependency_installer import check_and_install_dependencies
+        print("\nChecking module dependencies...\n")
+        success = check_and_install_dependencies(verbose=True)
+        if not success:
+            print("\nWarning: Some dependencies could not be installed.")
+            print("The application may not function correctly.")
+            response = input("\nContinue anyway? [y/N]: ").strip().lower()
+            if response != 'y':
+                print("Exiting.")
+                sys.exit(1)
+        print()  # Add blank line before Qt output
+    except Exception as e:
+        print(f"Warning: Dependency check failed: {e}")
+        print("Continuing with application startup...")
+
+# Run dependency check if not already done
+if '--skip-deps' not in sys.argv:
+    ensure_dependencies()
+else:
+    sys.argv.remove('--skip-deps')
+
+from PySide6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QTabWidget
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QPalette, QColor, QFont, QIcon
 
 from app.config import Config
 from ui.splash_screen import SplashScreen
