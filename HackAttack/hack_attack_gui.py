@@ -193,18 +193,73 @@ class HackAttackGUI(QMainWindow):
             
         elif title == "Mobile & Embedded Tools":
             from modules.mobile_embedded_tools import MobileEmbeddedToolsGUI
-            
+
             # Create and add the MobileEmbeddedToolsGUI
             self.mobile_embedded_gui = MobileEmbeddedToolsGUI()
-            
+
             # Remove margins and add to layout
             layout.setContentsMargins(0, 0, 0, 0)
             layout.setSpacing(0)
             layout.addWidget(self.mobile_embedded_gui)
-            
+
+        elif title == "Forensics & Incident Response":
+            from modules.forensics import ForensicsGUI
+
+            # Create and add the ForensicsGUI
+            self.forensics_gui = ForensicsGUI()
+
+            # Remove margins and add to layout
+            layout.setContentsMargins(0, 0, 0, 0)
+            layout.setSpacing(0)
+            layout.addWidget(self.forensics_gui)
+
+        elif title == "Settings & Reports":
+            from modules.settings_reports import SettingsReportsGUI
+
+            # Create and add the SettingsReportsGUI
+            self.settings_gui = SettingsReportsGUI()
+
+            # Remove margins and add to layout
+            layout.setContentsMargins(0, 0, 0, 0)
+            layout.setSpacing(0)
+            layout.addWidget(self.settings_gui)
+
+        elif title == "Automation & Scripting":
+            from modules.automation import AutomationGUI
+
+            # Create and add the AutomationGUI
+            self.automation_gui = AutomationGUI()
+
+            # Remove margins and add to layout
+            layout.setContentsMargins(0, 0, 0, 0)
+            layout.setSpacing(0)
+            layout.addWidget(self.automation_gui)
+
+        elif title == "Logs & History":
+            from modules.logs import LogsGUI
+
+            # Create and add the LogsGUI
+            self.logs_gui = LogsGUI()
+
+            # Remove margins and add to layout
+            layout.setContentsMargins(0, 0, 0, 0)
+            layout.setSpacing(0)
+            layout.addWidget(self.logs_gui)
+
+        elif title == "Help & Documentation":
+            from modules.help_docs import HelpDocsGUI
+
+            # Create and add the HelpDocsGUI
+            self.help_gui = HelpDocsGUI()
+
+            # Remove margins and add to layout
+            layout.setContentsMargins(0, 0, 0, 0)
+            layout.setSpacing(0)
+            layout.addWidget(self.help_gui)
+
         else:
-            # Default banner for other modules
-            banner = QLabel("🚀 Coming Soon")
+            # Default banner for Dashboard (which doesn't need a full module)
+            banner = QLabel("Dashboard - Security Testing Overview")
             banner.setStyleSheet("""
                 background: linear-gradient(90deg, #1e1e2e, #313244);
                 color: #a6e3a1;
