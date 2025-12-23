@@ -204,7 +204,12 @@ class IOSToolsModule(QMainWindow):
         
         # Set window properties
         self.setWindowTitle("iOS Tools")
-        
+
+        # Set window icon
+        icon_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'icons', 'ares-i.png')
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
+
         # Get available screen geometry (accounts for taskbar)
         screen = QApplication.primaryScreen()
         screen_rect = screen.availableGeometry()

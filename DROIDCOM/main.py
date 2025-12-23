@@ -5,8 +5,10 @@ Entry point for running the application standalone.
 
 from pathlib import Path
 import sys
+import os
 
 from PySide6 import QtCore, QtWidgets
+from PySide6.QtGui import QIcon
 
 if __package__:
     from .app import AndroidToolsModule
@@ -33,6 +35,11 @@ def main():
     # Set a smaller default size that fits most screens
     window.resize(800, 600)  # Wider but shorter
     window.setMinimumSize(800, 400)  # Set minimum size
+
+    # Set window icon
+    icon_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'icons', 'droidcom.png')
+    if os.path.exists(icon_path):
+        window.setWindowIcon(QIcon(icon_path))
 
     layout = QtWidgets.QVBoxLayout(window)
     app = AndroidToolsModule(window)

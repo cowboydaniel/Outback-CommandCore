@@ -3,6 +3,7 @@
 OMNISCRIBE - Automation and Scripting Control Suite
 """
 import sys
+import os
 import json
 import logging
 from datetime import datetime
@@ -31,6 +32,11 @@ class OmniscribeUI(QMainWindow):
         self.setup_connections()
         self.setWindowTitle("OMNISCRIBE - Scripting Control Suite")
         self.setMinimumSize(1000, 700)
+
+        # Set window icon
+        icon_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'icons', 'omniscribe.png')
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
     
     def setup_ui(self):
         """Set up the main UI components."""
