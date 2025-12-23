@@ -129,9 +129,9 @@ def find_missing_dependencies(dependencies: Dict[str, str]) -> List[str]:
     return missing
 
 
-def install_dependencies(dependencies: List[str], quiet: bool = False) -> Tuple[bool, List[str]]:
+def install_dependencies(dependencies: List[str], verbose: bool = True) -> Tuple[bool, List[str]]:
     """
-    Install the given dependencies using pip.
+    Install the given dependencies using pip with real-time output.
     Returns (success, list_of_failed_packages)
     """
     if not dependencies:
@@ -139,33 +139,34 @@ def install_dependencies(dependencies: List[str], quiet: bool = False) -> Tuple[
 
     failed = []
 
-    # Try to install all at once first
-    try:
-        cmd = [sys.executable, '-m', 'pip', 'install', '--upgrade']
-        if quiet:
-            cmd.append('-q')
-        cmd.extend(dependencies)
+    # Install packages one by one to show progress and catch individual failures
+    total = len(dependencies)
+    for i, dep in enumerate(dependencies, 1):
+        if verbose:
+            print(f"\n[{i}/{total}] Installing {dep}...")
+            sys.stdout.flush()
 
-        result = subprocess.run(cmd, capture_output=True, text=True)
-
-        if result.returncode == 0:
-            return True, []
-    except Exception:
-        pass
-
-    # If batch install fails, try one by one
-    for dep in dependencies:
         try:
-            cmd = [sys.executable, '-m', 'pip', 'install', '--upgrade']
-            if quiet:
-                cmd.append('-q')
-            cmd.append(dep)
+            cmd = [sys.executable, '-m', 'pip', 'install', '--upgrade', dep]
 
-            result = subprocess.run(cmd, capture_output=True, text=True)
+            # Stream output directly to terminal
+            result = subprocess.run(
+                cmd,
+                stdout=sys.stdout if verbose else subprocess.DEVNULL,
+                stderr=sys.stderr if verbose else subprocess.DEVNULL,
+            )
 
             if result.returncode != 0:
+                if verbose:
+                    print(f"  ✗ Failed to install {dep}")
                 failed.append(dep)
+            else:
+                if verbose:
+                    print(f"  ✓ Installed {dep}")
+
         except Exception as e:
+            if verbose:
+                print(f"  ✗ Error installing {dep}: {e}", file=sys.stderr)
             failed.append(dep)
 
     return len(failed) == 0, failed
@@ -215,7 +216,7 @@ def check_and_install_dependencies(verbose: bool = True) -> bool:
     if verbose:
         print("\nInstalling missing dependencies...")
 
-    success, failed = install_dependencies(missing, quiet=not verbose)
+    success, failed = install_dependencies(missing, verbose=verbose)
 
     if success:
         if verbose:
