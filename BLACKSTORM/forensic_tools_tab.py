@@ -1596,12 +1596,149 @@ class ForensicToolsTab(QWidget):
         )
         
         if confirm == QMessageBox.StandardButton.Yes:
-            # TODO: Implement the actual recovery process
-            QMessageBox.information(
-                self, "Recovery Started",
-                "The damaged drive recovery process has been started.\n\n"
-                "This is a placeholder - the actual recovery functionality will be implemented in a future update."
+            # Disable UI during recovery
+            self.rescue_start_btn.setEnabled(False)
+            self.rescue_stop_btn.setEnabled(True)
+            self.rescue_device_list.setEnabled(False)
+
+            # Initialize rescue log if it exists
+            if hasattr(self, 'rescue_log'):
+                self.rescue_log.clear()
+                self.rescue_log.append(f"Starting damaged drive recovery from {device}")
+
+            # Set up rescue options for aggressive recovery
+            rescue_options = {
+                'starting_mode': 3,  # Start with Deep Recovery mode for damaged drives
+                'auto_mode': True,   # Enable automatic mode progression
+                'verify': False,     # Skip verification on damaged drives
+                'hash_algorithms': [],
+                'retry_count': retries,
+                'block_size': block_size,
+                'skip_errors': skip_errors,
+                'log_bad_sectors': log_errors,
+                'reverse_direction': True,  # Try reverse read direction
+                'phase_retry': True,  # Use phase-based approach
+            }
+
+            # Create and start the rescue worker
+            self.rescue_worker = UnifiedAcquisitionWorker(
+                source_device=device,
+                output_path=output_path,
+                options=rescue_options
             )
+
+            # Connect signals
+            self.rescue_worker.progress.connect(self._on_rescue_progress)
+            self.rescue_worker.log_message.connect(self._on_rescue_log)
+            self.rescue_worker.stats_update.connect(self._on_rescue_stats)
+            self.rescue_worker.mode_changed.connect(self._on_rescue_mode_changed)
+            self.rescue_worker.finished.connect(self._on_rescue_finished)
+
+            # Update status
+            if hasattr(self, 'rescue_status'):
+                self.rescue_status.setText("Starting recovery...")
+                self.rescue_status.setStyleSheet("color: #a6e3a1;")
+
+            # Start the worker
+            self.rescue_worker.start()
+
+    def _on_rescue_progress(self, percent, message):
+        """Handle rescue progress updates."""
+        if hasattr(self, 'rescue_progress'):
+            self.rescue_progress.setValue(percent)
+        if hasattr(self, 'rescue_status'):
+            self.rescue_status.setText(message)
+
+    def _on_rescue_log(self, message):
+        """Handle rescue log messages."""
+        if hasattr(self, 'rescue_log'):
+            self.rescue_log.append(message)
+
+    def _on_rescue_stats(self, stats):
+        """Handle rescue statistics updates."""
+        if hasattr(self, 'rescue_stats'):
+            recovered = stats.get('recovered', 0) / (1024**3)
+            total = stats.get('total_size', 0) / (1024**3)
+            bad_sectors = stats.get('bad_sectors', 0)
+            rate = stats.get('recovery_rate', 0)
+
+            stats_text = f"Recovered: {recovered:.2f} GB / {total:.2f} GB\n"
+            stats_text += f"Bad Sectors: {bad_sectors}\n"
+            stats_text += f"Recovery Rate: {rate:.2f}%"
+            self.rescue_stats.setText(stats_text)
+
+    def _on_rescue_mode_changed(self, mode, reason):
+        """Handle rescue mode changes."""
+        mode_names = ["Standard", "Light Recovery", "Aggressive Recovery", "Deep Recovery", "Forensic Recovery"]
+        mode_name = mode_names[mode] if mode < len(mode_names) else f"Mode {mode}"
+
+        if hasattr(self, 'rescue_log'):
+            self.rescue_log.append(f"Mode changed to: {mode_name}")
+            self.rescue_log.append(f"Reason: {reason}")
+
+        if hasattr(self, 'rescue_status'):
+            self.rescue_status.setText(f"Mode: {mode_name}")
+
+    def _on_rescue_finished(self, success, message, stats):
+        """Handle rescue operation completion."""
+        # Re-enable UI
+        if hasattr(self, 'rescue_start_btn'):
+            self.rescue_start_btn.setEnabled(True)
+        if hasattr(self, 'rescue_stop_btn'):
+            self.rescue_stop_btn.setEnabled(False)
+        if hasattr(self, 'rescue_device_list'):
+            self.rescue_device_list.setEnabled(True)
+
+        # Update status
+        if hasattr(self, 'rescue_status'):
+            if success:
+                self.rescue_status.setText("Recovery completed successfully")
+                self.rescue_status.setStyleSheet("color: #a6e3a1;")
+            else:
+                self.rescue_status.setText(f"Recovery failed: {message}")
+                self.rescue_status.setStyleSheet("color: #f38ba8;")
+
+        # Show completion message
+        if success:
+            recovery_rate = stats.get('recovery_rate', 0)
+            bad_sectors = stats.get('bad_sectors', 0)
+            QMessageBox.information(
+                self, "Recovery Complete",
+                f"The damaged drive recovery has completed.\n\n"
+                f"Recovery Rate: {recovery_rate:.2f}%\n"
+                f"Bad Sectors Found: {bad_sectors}\n\n"
+                f"Output saved to: {self.rescue_output_path.text()}"
+            )
+        else:
+            QMessageBox.warning(
+                self, "Recovery Failed",
+                f"The recovery operation encountered an error:\n\n{message}"
+            )
+
+        # Clean up worker
+        if hasattr(self, 'rescue_worker'):
+            self.rescue_worker.quit()
+            self.rescue_worker.wait()
+            del self.rescue_worker
+
+    def stop_rescue_operation(self):
+        """Stop the ongoing rescue operation."""
+        if hasattr(self, 'rescue_worker') and self.rescue_worker.isRunning():
+            reply = QMessageBox.question(
+                self, "Stop Recovery",
+                "Are you sure you want to stop the recovery operation?\n\n"
+                "Partial data may have been recovered to the output file.",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No
+            )
+
+            if reply == QMessageBox.StandardButton.Yes:
+                self.rescue_worker.stop()
+                if hasattr(self, 'rescue_log'):
+                    self.rescue_log.append("Stopping recovery operation...")
+                if hasattr(self, 'rescue_status'):
+                    self.rescue_status.setText("Stopping...")
+                    self.rescue_status.setStyleSheet("color: #f9e2af;")
 
     def create_forensic_tools_tab(self):
         """Create the Forensic Tools tab with its subtabs."""

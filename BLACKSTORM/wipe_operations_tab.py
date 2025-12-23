@@ -1122,12 +1122,160 @@ class WipeOperationsTab(QWidget):
             }
         }
         
-        # TODO: Implement the actual advanced wipe process using WipeWorker
-        self.adv_wipe_log.append("Advanced wipe not yet implemented")
-        self.adv_wipe_status.setText("Not implemented")
+        # Start the advanced wipe process
+        self.adv_wipe_log.append("Starting advanced wipe process...")
+        self.adv_wipe_status.setText("Initializing...")
+        self.adv_wipe_status.setStyleSheet("color: #a6e3a1;")
+
+        # Start wiping the first device
+        self._start_next_advanced_wipe()
+
+    def _start_next_advanced_wipe(self):
+        """Start wiping the next device in the advanced wipe queue."""
+        if not hasattr(self, 'advanced_wipe'):
+            return
+
+        if self.advanced_wipe['current_device_index'] >= len(self.advanced_wipe['devices']):
+            # All devices wiped
+            self._advanced_wipe_completed(True, "All devices wiped successfully")
+            return
+
+        device = self.advanced_wipe['devices'][self.advanced_wipe['current_device_index']]
+
+        # Update status
+        self.adv_wipe_status.setText(f"Wiping {device} ({self.advanced_wipe['current_device_index'] + 1}/{len(self.advanced_wipe['devices'])})")
+        self.adv_wipe_log.append(f"Starting advanced wipe on {device}...")
+
+        # Create WipeWorker with custom method
+        self.adv_wipe_worker = WipeWorker(
+            device=device,
+            method='custom',
+            verify=self.advanced_wipe['verify'],
+            quick_erase=False
+        )
+
+        # Configure advanced options from stored settings
+        opts = self.advanced_wipe['options']
+        self.adv_wipe_worker.set_advanced_options(
+            pattern=self._parse_pattern(self.advanced_wipe['pattern']),
+            passes=self.advanced_wipe['passes'],
+            sector_size=opts['sector_size'],
+            block_size=opts['block_size'],
+            direct_io=opts['direct_io'],
+            sync_writes=opts['sync_writes'],
+            key_wipe=opts['key_wipe'],
+            bootloader_wipe=opts['bootloader_wipe'],
+            volatile_memory=opts['volatile_memory'],
+            thermal_stress=opts['thermal_stress'],
+            verification_mode=opts['verification_mode'],
+            tamper_log=opts['tamper_log'],
+            entropy_threshold=opts['entropy_threshold'],
+            stress_duration=opts['stress_duration'],
+            stress_temp=opts['stress_temp'],
+            post_erase_lock=opts['post_erase_lock'],
+            force_brick=opts['force_brick'],
+            lock_password=opts['lock_password']
+        )
+
+        # Connect signals
+        self.adv_wipe_worker.progress.connect(self._update_adv_progress)
+        self.adv_wipe_worker.log_message.connect(self.adv_wipe_log.append)
+        self.adv_wipe_worker.finished.connect(self._on_advanced_wipe_finished)
+        self.adv_wipe_worker.progress_card_shown.connect(self._show_adv_progress_card)
+
+        # Start the worker
+        self.adv_wipe_worker.start()
+
+    def _parse_pattern(self, pattern_text):
+        """Parse pattern text into bytes list for WipeWorker."""
+        if not pattern_text:
+            return None
+
+        patterns = []
+        for line in pattern_text.strip().split('\n'):
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            try:
+                # Try to parse as hex
+                if line.startswith('0x') or line.startswith('0X'):
+                    patterns.append(int(line, 16))
+                elif all(c in '0123456789abcdefABCDEF' for c in line):
+                    patterns.append(int(line, 16))
+                else:
+                    # Parse as decimal
+                    patterns.append(int(line))
+            except ValueError:
+                continue
+
+        return patterns if patterns else None
+
+    def _update_adv_progress(self, percent, message):
+        """Update advanced wipe progress display."""
+        if hasattr(self, 'adv_wipe_status'):
+            if percent >= 0:
+                self.adv_wipe_status.setText(f"{message} ({percent}%)")
+            else:
+                self.adv_wipe_status.setText(message)
+
+        if hasattr(self, 'adv_wipe_progress'):
+            self.adv_wipe_progress.setValue(percent)
+
+    def _show_adv_progress_card(self, card):
+        """Show the progress card in the advanced wipe UI."""
+        if hasattr(self, 'adv_progress_layout'):
+            # Clear existing card if any
+            while self.adv_progress_layout.count():
+                item = self.adv_progress_layout.takeAt(0)
+                if item.widget():
+                    item.widget().deleteLater()
+            self.adv_progress_layout.addWidget(card)
+
+    def _on_advanced_wipe_finished(self, success, message):
+        """Handle completion of an advanced wipe operation."""
+        if not hasattr(self, 'advanced_wipe'):
+            return
+
+        status = "completed" if success else "failed"
+        device = self.advanced_wipe['devices'][self.advanced_wipe['current_device_index']]
+        self.adv_wipe_log.append(f"Wipe {status} on {device}: {message}")
+
+        # Move to next device
+        self.advanced_wipe['current_device_index'] += 1
+
+        if success:
+            # Start next wipe or finish
+            self._start_next_advanced_wipe()
+        else:
+            # Stop on failure
+            self._advanced_wipe_completed(False, f"Wipe failed: {message}")
+
+    def _advanced_wipe_completed(self, success, message):
+        """Handle completion of all advanced wipe operations."""
+        # Clean up worker
+        if hasattr(self, 'adv_wipe_worker'):
+            self.adv_wipe_worker.quit()
+            self.adv_wipe_worker.wait()
+            del self.adv_wipe_worker
+
+        # Re-enable UI elements
         self.adv_start_btn.setEnabled(True)
         self.adv_stop_btn.setEnabled(False)
         self.adv_device_list.setEnabled(True)
+
+        # Update status
+        if success:
+            self.adv_wipe_status.setText("All wipes completed successfully")
+            self.adv_wipe_status.setStyleSheet("color: #a6e3a1;")
+            self.adv_wipe_log.append("✓ Advanced wipe completed successfully")
+        else:
+            self.adv_wipe_status.setText(message)
+            self.adv_wipe_status.setStyleSheet("color: #f38ba8;")
+            self.adv_wipe_log.append(f"✗ {message}")
+
+        # Clear advanced wipe data
+        if hasattr(self, 'advanced_wipe'):
+            del self.advanced_wipe
     
     def _update_lock_ui_state(self, checked):
         """Update UI state for post-erase lock and force-brick checkboxes."""
