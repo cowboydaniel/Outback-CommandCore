@@ -837,7 +837,7 @@ class ApplicationManagerTab(QWidget):
                 "id": "ares_i",
                 "name": "ARES-I",
                 "description": "AI-powered research and analysis tool.",
-                "path": os.path.join(base_dir, "ARES-I/ares_i.py"),
+                "path": os.path.join(base_dir, "ARES-i/ares-i.py"),
                 'version': None,
                 'status': 'stopped',
                 'process_name': 'ares_i_process'
@@ -873,7 +873,7 @@ class ApplicationManagerTab(QWidget):
                 "id": "droidcom",
                 "name": "DROIDCOM",
                 "description": "Android device management and debugging toolkit.",
-                "path": os.path.join(base_dir, "DROIDCOM/android_tools_linux.py"),
+                "path": os.path.join(base_dir, "DROIDCOM/main.py"),
                 'version': None,
                 'status': 'stopped',
                 'process_name': 'droidcom_process'
@@ -891,7 +891,7 @@ class ApplicationManagerTab(QWidget):
                 "id": "nightfire",
                 "name": "Nightfire",
                 "description": "Nightfire system monitor and controller.",
-                "path": os.path.join(base_dir, "Nightfire/nightfire.py"),
+                "path": os.path.join(base_dir, "NIGHTFIRE/nightfire.py"),
                 'version': None,
                 'status': 'stopped',
                 'process_name': 'nightfire_process'
@@ -900,7 +900,7 @@ class ApplicationManagerTab(QWidget):
                 "id": "omniscribe",
                 "name": "Omniscribe",
                 "description": "Omniscribe transcription and analysis tool.",
-                "path": os.path.join(base_dir, "Omniscribe/omniscribe.py"),
+                "path": os.path.join(base_dir, "OMNISCRIBE/omniscribe.py"),
                 'version': None,
                 'status': 'stopped',
                 'process_name': 'omniscribe_process'
@@ -909,7 +909,7 @@ class ApplicationManagerTab(QWidget):
                 "id": "pc_tools_linux",
                 "name": "PC Tools Linux",
                 "description": "PC tools for Linux system management.",
-                "path": os.path.join(base_dir, "PC/pc_tools_linux.py"),
+                "path": os.path.join(base_dir, "PC-X/pc_tools_linux.py"),
                 'version': None,
                 'status': 'stopped',
                 'process_name': 'pc_tools_linux_process'
