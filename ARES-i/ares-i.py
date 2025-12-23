@@ -5389,11 +5389,11 @@ class IOSToolsModule(QMainWindow):
             "iPhone15,5": "iPhone 15 Plus",
             "iPhone16,1": "iPhone 15 Pro",
             "iPhone16,2": "iPhone 15 Pro Max",
-            # iPhone 16 series (placeholder for future)
-            "iPhone16,3": "iPhone 16",
-            "iPhone16,4": "iPhone 16 Plus",
-            "iPhone16,5": "iPhone 16 Pro",
-            "iPhone16,6": "iPhone 16 Pro Max",
+            # iPhone 16 series (released September 2024)
+            "iPhone17,3": "iPhone 16",
+            "iPhone17,4": "iPhone 16 Plus",
+            "iPhone17,1": "iPhone 16 Pro",
+            "iPhone17,2": "iPhone 16 Pro Max",
         }
         
         # iPad models
