@@ -11,6 +11,8 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QColor
 import psutil
+import subprocess
+import os
 
 class DeviceManagementTab(QWidget):
     """Tab for managing storage devices."""
@@ -222,29 +224,31 @@ class DeviceManagementTab(QWidget):
                 # Device
                 item = QTableWidgetItem(device)
                 self.device_table.setItem(i, 0, item)
-                
-                # Model (placeholder)
-                self.device_table.setItem(i, 1, QTableWidgetItem("Unknown"))
-                
+
+                # Model - detect using lsblk or udevadm
+                model = self._get_device_model(device)
+                self.device_table.setItem(i, 1, QTableWidgetItem(model))
+
                 # Size
                 size = "Unknown"
                 if info['usage']:
                     size = f"{info['usage'].total / (1024**3):.1f} GB"
                 self.device_table.setItem(i, 2, QTableWidgetItem(size))
-                
+
                 # Type
                 self.device_table.setItem(i, 3, QTableWidgetItem(info['type']))
-                
+
                 # Filesystem
                 self.device_table.setItem(i, 4, QTableWidgetItem(info['type']))
-                
+
                 # Mounted
                 mounted = "Yes" if info['mountpoint'] else "No"
                 self.device_table.setItem(i, 5, QTableWidgetItem(mounted))
-                
-                # Health (placeholder)
-                health_item = QTableWidgetItem("Good")
-                health_item.setForeground(QColor("#2ECC71"))  # Green
+
+                # Health - detect using SMART data
+                health, health_color = self._get_device_health(device)
+                health_item = QTableWidgetItem(health)
+                health_item.setForeground(QColor(health_color))
                 self.device_table.setItem(i, 6, health_item)
                 
                 # Restore selection if possible
@@ -307,3 +311,86 @@ class DeviceManagementTab(QWidget):
         self.btn_format.setEnabled(has_selection)
         self.btn_smart.setEnabled(has_selection)
         self.btn_benchmark.setEnabled(has_selection)
+
+    def _get_device_model(self, device):
+        """Get the device model name using system tools."""
+        # Remove partition number to get base device
+        base_device = ''.join(c for c in device if not c.isdigit()) or device
+
+        # Try lsblk first
+        try:
+            result = subprocess.run(
+                ['lsblk', '-no', 'MODEL', f'/dev/{base_device}'],
+                capture_output=True, text=True, timeout=5
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                return result.stdout.strip()
+        except Exception:
+            pass
+
+        # Try udevadm as fallback
+        try:
+            result = subprocess.run(
+                ['udevadm', 'info', '--query=property', f'--name=/dev/{base_device}'],
+                capture_output=True, text=True, timeout=5
+            )
+            if result.returncode == 0:
+                for line in result.stdout.split('\n'):
+                    if line.startswith('ID_MODEL='):
+                        model = line.split('=', 1)[1].replace('_', ' ')
+                        return model
+        except Exception:
+            pass
+
+        # Try reading from sysfs
+        try:
+            model_path = f'/sys/block/{base_device}/device/model'
+            if os.path.exists(model_path):
+                with open(model_path, 'r') as f:
+                    return f.read().strip()
+        except Exception:
+            pass
+
+        return "Unknown"
+
+    def _get_device_health(self, device):
+        """Get the device health status using SMART data."""
+        # Remove partition number to get base device
+        base_device = ''.join(c for c in device if not c.isdigit()) or device
+
+        # Try smartctl
+        try:
+            result = subprocess.run(
+                ['smartctl', '-H', f'/dev/{base_device}'],
+                capture_output=True, text=True, timeout=10
+            )
+
+            output = result.stdout.lower()
+
+            # Check for PASSED/FAILED status
+            if 'passed' in output:
+                return ("Good", "#2ECC71")  # Green
+            elif 'failed' in output:
+                return ("Failed", "#E74C3C")  # Red
+            elif 'unknown' in output or result.returncode != 0:
+                # Check for warning signs even if status is unknown
+                if any(word in output for word in ['warning', 'pre-fail', 'old_age']):
+                    return ("Warning", "#F39C12")  # Orange
+                return ("Unknown", "#3498DB")  # Blue
+
+        except FileNotFoundError:
+            # smartctl not installed
+            return ("N/A", "#95A5A6")  # Gray
+        except subprocess.TimeoutExpired:
+            return ("Timeout", "#95A5A6")  # Gray
+        except Exception:
+            pass
+
+        # Fallback: check if device is responsive
+        try:
+            if os.path.exists(f'/dev/{base_device}'):
+                return ("OK", "#2ECC71")  # Green - device exists
+        except Exception:
+            pass
+
+        return ("Unknown", "#3498DB")  # Blue
