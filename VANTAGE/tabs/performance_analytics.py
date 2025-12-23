@@ -68,7 +68,7 @@ class PerformanceAnalyticsTab(QWidget):
         self.update_disk_chart()
         self.update_network_chart()
     
-    def create_chart(self, title, y_title, y_range=(0, 100)):
+    def create_chart(self, title, y_title, y_range=(0, 100), reverse=True):
         """Create a base chart with common settings."""
         chart = QChart()
         chart.setTitle(title)
@@ -87,7 +87,7 @@ class PerformanceAnalyticsTab(QWidget):
         # Set range to show past (positive) and future (negative) times
         # -30s to 300s to show 30 seconds into future and 300s (5min) into past
         axis_x.setRange(-30, 300)
-        axis_x.setReverse(True)  # Show past on right, future on left
+        axis_x.setReverse(reverse)  # Show past on right, future on left
         axis_x.setTickCount(6)
         axis_x.setTitleBrush(Qt.white)
         axis_x.setLabelsBrush(Qt.white)
@@ -361,77 +361,58 @@ class PerformanceAnalyticsTab(QWidget):
         Calculate and update CPU usage prediction with natural-looking fluctuations.
         Uses a combination of linear regression and noise to simulate realistic patterns.
         """
-        # Get recent data points for prediction
+        # Get recent data points for prediction (newest first)
         recent_data = self.avg_cpu_data[:self.prediction_window]
-        
+
         if len(recent_data) < 2:  # Need at least 2 points for prediction
             return
-            
-        # Calculate the standard deviation of recent data for natural fluctuation
-        mean = sum(recent_data) / len(recent_data)
-        std_dev = (sum((x - mean) ** 2 for x in recent_data) / len(recent_data)) ** 0.5
-        
-        # Add some randomness but keep it within reasonable bounds
-        noise_scale = min(5.0, std_dev * 0.8) if std_dev > 0 else 2.0
-        
-        # Calculate linear regression (y = mx + b)
-        x_vals = list(range(len(recent_data)))
-        y_vals = recent_data
-        n = len(x_vals)
-        sum_x = sum(x_vals)
-        sum_y = sum(y_vals)
-        sum_xy = sum(x * y for x, y in zip(x_vals, y_vals))
-        sum_x2 = sum(x * x for x in x_vals)
-        
-        # Calculate slope (m) and intercept (b)
-        if n * sum_x2 - sum_x * sum_x != 0:  # Avoid division by zero
-            slope = (n * sum_xy - sum_x * sum_y) / (n * sum_x2 - sum_x * sum_x)
-            intercept = (sum_y - slope * sum_x) / n
-            
-            # Clear previous prediction
-            self.prediction_series.clear()
-            
-            # Add connection point at current time (0)
-            if self.avg_cpu_data:
-                self.prediction_series.append(0, self.avg_cpu_data[0])
-            
-            # Add predicted points (from 0 to -30 seconds)
-            last_y = self.avg_cpu_data[0] if self.avg_cpu_data else 0
-            
-            for i in range(1, self.prediction_steps + 1):
-                # Calculate base prediction using linear regression
-                future_x = len(recent_data) + i
-                base_prediction = slope * future_x + intercept
-                
-                # Add some natural-looking fluctuations
-                # 1. Add some noise based on recent volatility
-                noise = (hash(str(i)) % 200 - 100) / 100.0 * noise_scale
-                
-                # 2. Add some momentum from recent trend (weighted average of last few points)
-                momentum = 0
-                if len(recent_data) > 3:
-                    recent_trend = sum(recent_data[0:3])/3 - sum(recent_data[3:6])/3 if len(recent_data) >= 6 else 0
-                    momentum = recent_trend * 0.7  # Dampen the momentum effect
-                
-                # 3. Add some inertia (tendency to stay near recent values)
-                inertia = (last_y - base_prediction) * 0.3
-                
-                # Combine all factors
-                predicted_y = base_prediction + noise + momentum + inertia
-                
-                # Clamp values between 0 and 100
-                predicted_y = max(0, min(100, predicted_y))
-                last_y = predicted_y
-                
-                # Add some sinusoidal variation for more natural movement
-                if i > 1:  # Skip first point to avoid sharp angles
-                    cycle = (i / 5.0) % (2 * 3.14159)  # Cycle every ~6 seconds
-                    predicted_y += math.sin(cycle) * (noise_scale * 0.5)
-                    predicted_y = max(0, min(100, predicted_y))
-                
-                # Calculate time point (negative because we're going into future)
-                time_point = -i * (30.0 / self.prediction_steps)
-                self.prediction_series.append(time_point, predicted_y)
+
+        # Convert to chronological order (oldest -> newest) for smoothing
+        series = list(reversed(recent_data))
+
+        # Holt's linear trend method with damping for more stable forecasts
+        alpha = 0.4  # level smoothing
+        beta = 0.2   # trend smoothing
+        phi = 0.85   # damping factor for trend
+
+        level = series[0]
+        trend = series[1] - series[0]
+        for value in series[1:]:
+            prev_level = level
+            level = alpha * value + (1 - alpha) * (level + trend)
+            trend = beta * (level - prev_level) + (1 - beta) * trend
+
+        # Calculate recent volatility to cap step-to-step movement
+        deltas = [abs(b - a) for a, b in zip(series[:-1], series[1:])]
+        avg_delta = sum(deltas) / len(deltas) if deltas else 0
+        max_step = max(1.5, min(8.0, avg_delta * 1.5))
+
+        # Clear previous prediction
+        self.prediction_series.clear()
+
+        # Add connection point at current time (0)
+        if self.avg_cpu_data:
+            self.prediction_series.append(0, self.avg_cpu_data[0])
+
+        # Add predicted points (from 0 to -30 seconds)
+        last_y = self.avg_cpu_data[0] if self.avg_cpu_data else 0
+        for i in range(1, self.prediction_steps + 1):
+            if phi == 1:
+                forecast = level + trend * i
+            else:
+                forecast = level + trend * (1 - phi ** i) / (1 - phi)
+
+            # Limit per-step change to avoid overreacting
+            delta = forecast - last_y
+            if abs(delta) > max_step:
+                forecast = last_y + max_step * (1 if delta > 0 else -1)
+
+            predicted_y = max(0, min(100, forecast))
+            last_y = predicted_y
+
+            # Calculate time point (negative because we're going into future)
+            time_point = -i * (30.0 / self.prediction_steps)
+            self.prediction_series.append(time_point, predicted_y)
     
     def classify_trend(self, deltas):
         if deltas[0] > 10 and all(abs(d) < 3 for d in deltas[1:]):
@@ -699,62 +680,158 @@ class PerformanceAnalyticsTab(QWidget):
         Simple and predictable memory usage prediction.
         Uses recent trend but dampens it over time.
         """
-        recent_data = self.mem_data[:min(3, len(self.mem_data))]  # Use last 3 points only
-        
+        recent_data = self.mem_data[:min(6, len(self.mem_data))]  # Use last 6 points
+
         if len(recent_data) < 2:
             return
-        
-        # Calculate deltas between adjacent points
-        deltas = [b - a for a, b in zip(recent_data[:-1], recent_data[1:])]
-        avg_delta = - sum(deltas) / len(deltas)
-        slope_changes = [j - i for i, j in zip(deltas[:-1], deltas[1:])]
-        
-        # Classify trend
-        trend_label = self.classify_trend(deltas)
-        
+
+        # Convert to chronological order (oldest -> newest) for smoothing
+        series = list(reversed(recent_data))
+
+        # Holt's linear trend with stronger damping for memory stability
+        alpha = 0.3
+        beta = 0.1
+        phi = 0.7
+
+        level = series[0]
+        trend = series[1] - series[0]
+        for value in series[1:]:
+            prev_level = level
+            level = alpha * value + (1 - alpha) * (level + trend)
+            trend = beta * (level - prev_level) + (1 - beta) * trend
+
+        # Calculate recent volatility to cap step-to-step movement
+        deltas = [abs(b - a) for a, b in zip(series[:-1], series[1:])]
+        avg_delta = sum(deltas) / len(deltas) if deltas else 0
+        max_step = max(0.5, min(4.0, avg_delta * 1.2))
+
         current_value = recent_data[0]
-        
         self.mem_prediction_series.clear()
         self.mem_prediction_series.append(0, current_value)
-        
+
         # Add predicted points
+        last_y = current_value
         for i in range(1, self.prediction_steps + 1):
-            damping = max(0.05, 1.0 - (i / self.prediction_steps) * 0.8)
-            
-            # Modify prediction based on trend label
-            if trend_label == "Spike then Flatten":
-                # Prediction flattens after initial spike
-                factor = 0.3 + 0.7 * (i / self.prediction_steps)
-                predicted_y = current_value + (avg_delta * i * damping * factor)
-            elif trend_label == "Accelerating Uptrend":
-                # Accelerate the trend
-                factor = 1.0 + 0.5 * (i / self.prediction_steps)
-                predicted_y = current_value + (avg_delta * i * damping * factor)
-            elif trend_label == "Flat":
-                # Minimal change
-                predicted_y = current_value + (hash(str(i)) % 10 - 5) / 1000.0  # ±0.005%
-            elif trend_label == "Decline then Stable":
-                # Prediction stabilizes after initial decline
-                factor = 0.3 + 0.7 * (i / self.prediction_steps)
-                predicted_y = current_value + (avg_delta * i * damping * factor)
-            elif trend_label == "Drop then Rebound":
-                # Prediction rebounds after initial drop
-                factor = 1.0 + 0.5 * (i / self.prediction_steps)
-                predicted_y = current_value + (avg_delta * i * damping * factor)
-            elif trend_label == "Volatile / Noisy":
-                # Prediction is highly variable
-                predicted_y = current_value + (hash(str(i)) % 10 - 5) / 100.0  # ±0.5%
+            if phi == 1:
+                forecast = level + trend * i
             else:
-                # Default behavior
-                predicted_y = current_value + (avg_delta * i * damping)
-            
-            predicted_y += (hash(str(i)) % 10 - 5) / 1000.0  # ±0.005%
-            predicted_y = max(0, min(100, predicted_y))
+                forecast = level + trend * (1 - phi ** i) / (1 - phi)
+
+            delta = forecast - last_y
+            if abs(delta) > max_step:
+                forecast = last_y + max_step * (1 if delta > 0 else -1)
+
+            predicted_y = max(0, min(100, forecast))
             time_point = -i * (30.0 / self.prediction_steps)
             self.mem_prediction_series.append(time_point, predicted_y)
-        
+            last_y = predicted_y
+
         # Optionally: store or display trend_label for UI
-        self.mem_trend_label = trend_label
+        self.mem_trend_label = "Smoothed Trend"
+
+    def _holt_forecast(self, data, steps, alpha, beta, phi, max_step, clamp_min=0, clamp_max=None):
+        if len(data) < 2:
+            return []
+
+        series = list(data[-min(self.prediction_window, len(data)):])
+        level = series[0]
+        trend = series[1] - series[0]
+        for value in series[1:]:
+            prev_level = level
+            level = alpha * value + (1 - alpha) * (level + trend)
+            trend = beta * (level - prev_level) + (1 - beta) * trend
+
+        forecasts = []
+        last_y = series[-1]
+        for i in range(1, steps + 1):
+            if phi == 1:
+                forecast = level + trend * i
+            else:
+                forecast = level + trend * (1 - phi ** i) / (1 - phi)
+
+            delta = forecast - last_y
+            if abs(delta) > max_step:
+                forecast = last_y + max_step * (1 if delta > 0 else -1)
+
+            if clamp_max is None:
+                forecast = max(clamp_min, forecast)
+            else:
+                forecast = max(clamp_min, min(clamp_max, forecast))
+
+            forecasts.append(forecast)
+            last_y = forecast
+
+        return forecasts
+
+    def update_disk_prediction(self):
+        recent_read = self.disk_read_data[-min(self.prediction_window, len(self.disk_read_data)):]
+        recent_write = self.disk_write_data[-min(self.prediction_window, len(self.disk_write_data)):]
+
+        read_deltas = [abs(b - a) for a, b in zip(recent_read[:-1], recent_read[1:])]
+        write_deltas = [abs(b - a) for a, b in zip(recent_write[:-1], recent_write[1:])]
+        read_avg_delta = sum(read_deltas) / len(read_deltas) if read_deltas else 0
+        write_avg_delta = sum(write_deltas) / len(write_deltas) if write_deltas else 0
+
+        read_max_step = max(5.0, min(200.0, read_avg_delta * 2.0))
+        write_max_step = max(5.0, min(200.0, write_avg_delta * 2.0))
+
+        read_forecast = self._holt_forecast(
+            recent_read, self.prediction_steps, alpha=0.35, beta=0.15, phi=0.8, max_step=read_max_step
+        )
+        write_forecast = self._holt_forecast(
+            recent_write, self.prediction_steps, alpha=0.35, beta=0.15, phi=0.8, max_step=write_max_step
+        )
+
+        self.disk_read_prediction_series.clear()
+        self.disk_write_prediction_series.clear()
+
+        if self.disk_read_data:
+            self.disk_read_prediction_series.append(0, self.disk_read_data[-1])
+        if self.disk_write_data:
+            self.disk_write_prediction_series.append(0, self.disk_write_data[-1])
+
+        for i, value in enumerate(read_forecast, start=1):
+            time_point = -i * (30.0 / self.prediction_steps)
+            self.disk_read_prediction_series.append(time_point, value)
+
+        for i, value in enumerate(write_forecast, start=1):
+            time_point = -i * (30.0 / self.prediction_steps)
+            self.disk_write_prediction_series.append(time_point, value)
+
+    def update_network_prediction(self):
+        recent_sent = self.net_sent_data[-min(self.prediction_window, len(self.net_sent_data)):]
+        recent_recv = self.net_recv_data[-min(self.prediction_window, len(self.net_recv_data)):]
+
+        sent_deltas = [abs(b - a) for a, b in zip(recent_sent[:-1], recent_sent[1:])]
+        recv_deltas = [abs(b - a) for a, b in zip(recent_recv[:-1], recent_recv[1:])]
+        sent_avg_delta = sum(sent_deltas) / len(sent_deltas) if sent_deltas else 0
+        recv_avg_delta = sum(recv_deltas) / len(recv_deltas) if recv_deltas else 0
+
+        sent_max_step = max(5.0, min(200.0, sent_avg_delta * 2.0))
+        recv_max_step = max(5.0, min(200.0, recv_avg_delta * 2.0))
+
+        sent_forecast = self._holt_forecast(
+            recent_sent, self.prediction_steps, alpha=0.35, beta=0.15, phi=0.8, max_step=sent_max_step
+        )
+        recv_forecast = self._holt_forecast(
+            recent_recv, self.prediction_steps, alpha=0.35, beta=0.15, phi=0.8, max_step=recv_max_step
+        )
+
+        self.net_sent_prediction_series.clear()
+        self.net_recv_prediction_series.clear()
+
+        if self.net_sent_data:
+            self.net_sent_prediction_series.append(0, self.net_sent_data[-1])
+        if self.net_recv_data:
+            self.net_recv_prediction_series.append(0, self.net_recv_data[-1])
+
+        for i, value in enumerate(sent_forecast, start=1):
+            time_point = -i * (30.0 / self.prediction_steps)
+            self.net_sent_prediction_series.append(time_point, value)
+
+        for i, value in enumerate(recv_forecast, start=1):
+            time_point = -i * (30.0 / self.prediction_steps)
+            self.net_recv_prediction_series.append(time_point, value)
 
     def setup_disk_tab(self):
         """Setup Disk I/O tab with disk usage and I/O charts."""
@@ -774,7 +851,7 @@ class PerformanceAnalyticsTab(QWidget):
         
         # Create disk I/O chart
         self.disk_chart, self.disk_chart_view, self.disk_axis_x, self.disk_axis_y = self.create_chart(
-            "Disk I/O Over Time", "KB/s", (0, 1024))  # 0-1MB/s range by default
+            "Disk I/O Over Time", "KB/s", (0, 1024), reverse=False)  # 0-1MB/s range by default
         
         # Create series for read/write
         self.disk_read_series = QSplineSeries()
@@ -795,6 +872,41 @@ class PerformanceAnalyticsTab(QWidget):
         for series in [self.disk_read_series, self.disk_write_series]:
             series.attachAxis(self.disk_axis_x)
             series.attachAxis(self.disk_axis_y)
+
+        # Create prediction series
+        self.disk_read_prediction_series = QSplineSeries()
+        self.disk_read_prediction_series.setName("Read (Predicted)")
+        pred_pen = QPen(QColor(255, 200, 120))  # Soft orange
+        pred_pen.setWidth(2)
+        pred_pen.setStyle(Qt.DashDotLine)
+        self.disk_read_prediction_series.setPen(pred_pen)
+
+        self.disk_write_prediction_series = QSplineSeries()
+        self.disk_write_prediction_series.setName("Write (Predicted)")
+        pred_pen = QPen(QColor(255, 140, 120))  # Soft red-orange
+        pred_pen.setWidth(2)
+        pred_pen.setStyle(Qt.DashDotLine)
+        self.disk_write_prediction_series.setPen(pred_pen)
+
+        self.disk_chart.addSeries(self.disk_read_prediction_series)
+        self.disk_chart.addSeries(self.disk_write_prediction_series)
+        self.disk_read_prediction_series.attachAxis(self.disk_axis_x)
+        self.disk_read_prediction_series.attachAxis(self.disk_axis_y)
+        self.disk_write_prediction_series.attachAxis(self.disk_axis_x)
+        self.disk_write_prediction_series.attachAxis(self.disk_axis_y)
+
+        # Add a vertical line at 0 to separate real data from predictions
+        self.disk_divider_line = QLineSeries()
+        self.disk_divider_line.setName("Now")
+        divider_pen = QPen(QColor(255, 255, 255, 150))  # Semi-transparent white
+        divider_pen.setWidth(1)
+        divider_pen.setStyle(Qt.DotLine)
+        self.disk_divider_line.setPen(divider_pen)
+        self.disk_divider_line.append(0, 0)
+        self.disk_divider_line.append(0, 1)
+        self.disk_chart.addSeries(self.disk_divider_line)
+        self.disk_divider_line.attachAxis(self.disk_axis_x)
+        self.disk_divider_line.attachAxis(self.disk_axis_y)
         
         # Set background color for the chart view
         self.disk_chart_view.setBackgroundBrush(QColor(30, 30, 30))
@@ -849,6 +961,7 @@ class PerformanceAnalyticsTab(QWidget):
         self.disk_write_data = [0] * self.data_points
         self.last_disk_io = psutil.disk_io_counters()
         self.last_disk_update = datetime.now()
+        self.disk_prediction_enabled = True
         
         # Initial update
         self.update_disk_chart()
@@ -908,6 +1021,15 @@ class PerformanceAnalyticsTab(QWidget):
         for i in range(self.data_points):
             self.disk_read_series.append(i * time_interval, self.disk_read_data[i])
             self.disk_write_series.append(i * time_interval, self.disk_write_data[i])
+
+        # Update divider line to match current range
+        self.disk_divider_line.clear()
+        self.disk_divider_line.append(0, 0)
+        self.disk_divider_line.append(0, max_io)
+
+        # Update prediction if enabled
+        if self.disk_prediction_enabled and len(self.disk_read_data) >= 2:
+            self.update_disk_prediction()
         
         # Update last values
         self.last_disk_io = current_io
@@ -920,7 +1042,7 @@ class PerformanceAnalyticsTab(QWidget):
         
         # Create chart
         self.net_chart, self.net_chart_view, self.net_axis_x, self.net_axis_y = self.create_chart(
-            "Network I/O (KB/s)", "KB/s", y_range=(0, 1024)  # Start with 1 MB/s range
+            "Network I/O (KB/s)", "KB/s", y_range=(0, 1024), reverse=False  # Start with 1 MB/s range
         )
         
         # Create series for sent and received data
@@ -935,12 +1057,47 @@ class PerformanceAnalyticsTab(QWidget):
         # Add series to chart
         self.net_chart.addSeries(self.net_sent_series)
         self.net_chart.addSeries(self.net_recv_series)
+
+        # Prediction series
+        self.net_sent_prediction_series = QSplineSeries()
+        self.net_sent_prediction_series.setName("Sent (Predicted)")
+        pred_pen = QPen(QColor(255, 160, 140))
+        pred_pen.setWidth(2)
+        pred_pen.setStyle(Qt.DashDotLine)
+        self.net_sent_prediction_series.setPen(pred_pen)
+
+        self.net_recv_prediction_series = QSplineSeries()
+        self.net_recv_prediction_series.setName("Received (Predicted)")
+        pred_pen = QPen(QColor(140, 180, 255))
+        pred_pen.setWidth(2)
+        pred_pen.setStyle(Qt.DashDotLine)
+        self.net_recv_prediction_series.setPen(pred_pen)
+
+        self.net_chart.addSeries(self.net_sent_prediction_series)
+        self.net_chart.addSeries(self.net_recv_prediction_series)
         
         # Attach axes
         self.net_sent_series.attachAxis(self.net_axis_x)
         self.net_sent_series.attachAxis(self.net_axis_y)
         self.net_recv_series.attachAxis(self.net_axis_x)
         self.net_recv_series.attachAxis(self.net_axis_y)
+        self.net_sent_prediction_series.attachAxis(self.net_axis_x)
+        self.net_sent_prediction_series.attachAxis(self.net_axis_y)
+        self.net_recv_prediction_series.attachAxis(self.net_axis_x)
+        self.net_recv_prediction_series.attachAxis(self.net_axis_y)
+
+        # Divider line at current time
+        self.net_divider_line = QLineSeries()
+        self.net_divider_line.setName("Now")
+        divider_pen = QPen(QColor(255, 255, 255, 150))
+        divider_pen.setWidth(1)
+        divider_pen.setStyle(Qt.DotLine)
+        self.net_divider_line.setPen(divider_pen)
+        self.net_divider_line.append(0, 0)
+        self.net_divider_line.append(0, 1)
+        self.net_chart.addSeries(self.net_divider_line)
+        self.net_divider_line.attachAxis(self.net_axis_x)
+        self.net_divider_line.attachAxis(self.net_axis_y)
         
         # Create stats labels
         stats_widget = QWidget()
@@ -981,6 +1138,7 @@ class PerformanceAnalyticsTab(QWidget):
         self.net_recv_data = [0] * self.data_points
         self.last_net_io = psutil.net_io_counters()
         self.last_net_update = datetime.now()
+        self.net_prediction_enabled = True
     
     def update_network_chart(self):
         """Update network I/O chart with current network activity."""
@@ -1039,6 +1197,15 @@ class PerformanceAnalyticsTab(QWidget):
         for i in range(self.data_points):
             self.net_sent_series.append(i * time_interval, self.net_sent_data[i])
             self.net_recv_series.append(i * time_interval, self.net_recv_data[i])
+
+        # Update divider line to match current range
+        self.net_divider_line.clear()
+        self.net_divider_line.append(0, 0)
+        self.net_divider_line.append(0, max_net)
+
+        # Update prediction if enabled
+        if self.net_prediction_enabled and len(self.net_sent_data) >= 2:
+            self.update_network_prediction()
         
         # Update last values
         self.last_net_io = current_io
