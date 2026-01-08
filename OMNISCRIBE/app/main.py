@@ -3,8 +3,13 @@
 OMNISCRIBE - Automation and Scripting Control Suite
 """
 import sys
+from pathlib import Path
 
 from PySide6.QtWidgets import QApplication
+
+BASE_DIR = Path(__file__).resolve().parents[1]
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
 
 from OMNISCRIBE.app.config import APP_VERSION, APP_NAME
 from OMNISCRIBE.core.base import Omniscribe

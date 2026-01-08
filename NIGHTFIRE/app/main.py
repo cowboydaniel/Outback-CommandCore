@@ -4,8 +4,13 @@ NIGHTFIRE - Real-time Active Defense and Monitoring Tool
 """
 import random
 import sys
+from pathlib import Path
 from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import QTimer
+
+BASE_DIR = Path(__file__).resolve().parents[1]
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
 
 from NIGHTFIRE.app import config
 from NIGHTFIRE.core.base import NightfireCore

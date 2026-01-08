@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import sys
+from pathlib import Path
 
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
@@ -15,6 +16,10 @@ from PySide6.QtWidgets import (
     QStatusBar,
     QWidget,
 )
+
+BASE_DIR = Path(__file__).resolve().parents[1]
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
 
 from HackAttack.app.config import LOGGING_CONFIG, application_title
 from HackAttack.tabs import get_tab_definitions
