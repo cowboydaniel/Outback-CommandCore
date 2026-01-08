@@ -332,10 +332,15 @@ class USBAnalyzer(QObject if GUI_AVAILABLE else object):
     
     def __init__(self, callback: Callable = None):
         """Initialize the USB analyzer.
-        
+
         Args:
             callback: Optional callback function for progress updates
         """
+        import traceback
+        logger.info("USBAnalyzer.__init__ called from:")
+        for line in traceback.format_stack()[:-1]:
+            logger.info(line.strip())
+
         if GUI_AVAILABLE:
             super().__init__()
         self.callback = callback
@@ -343,6 +348,7 @@ class USBAnalyzer(QObject if GUI_AVAILABLE else object):
         self.vendor_db = {}
         self.device_db = {}
         self._load_databases()
+        logger.info("USBAnalyzer.__init__ completed successfully")
         
     def update_progress(self, message: str, progress: int = None):
         """Update progress through the callback."""
