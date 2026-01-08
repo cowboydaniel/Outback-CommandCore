@@ -41,7 +41,7 @@ Outback-CommandCore/
 | Module | Description | Entry Point |
 |--------|-------------|-------------|
 | **CommandCore** | Central launcher and application manager | `CommandCore/app/main.py` |
-| **ARES-i** | AI-powered research and analysis tool | `ARES-i/ares-i.py` |
+| **ARES-i** | AI-powered research and analysis tool | `ARES-i/app/main.py` |
 | **BLACKSTORM** | Forensic disk cloning and secure data erasure | `BLACKSTORM/blackstorm_launcher.py` |
 | **Codex** | AI-powered code generation and analysis | `Codex/app/gui.py` |
 | **DROIDCOM** | Android device management and debugging | `DROIDCOM/main.py` |

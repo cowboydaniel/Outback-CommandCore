@@ -5,7 +5,6 @@ import json
 import time
 import platform
 import logging
-import shutil
 import tempfile
 import requests
 import zipfile
@@ -20,53 +19,46 @@ import array
 import random
 
 # PySide6 imports
-from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
-                              QPushButton, QFrame, QTabWidget, QScrollArea, QMessageBox, QFileDialog,
-                              QTextEdit, QGroupBox, QSizePolicy, QScrollBar, QGridLayout, QProgressDialog,
-                              QInputDialog, QDialog, QVBoxLayout as QVBoxLayout2, QLabel as QLabel2,
-                              QLineEdit, QComboBox, QDialogButtonBox, QTextEdit, QScrollArea, QStatusBar,
-                              QTextBrowser)
-from PySide6.QtCore import Qt, QMetaObject, Q_ARG, QSize, QThread, QObject, Signal as PySideSignal, QTimer, Slot
+from PySide6.QtWidgets import (
+    QApplication,
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QFrame,
+    QTabWidget,
+    QScrollArea,
+    QMessageBox,
+    QFileDialog,
+    QTextEdit,
+    QGroupBox,
+    QSizePolicy,
+    QScrollBar,
+    QGridLayout,
+    QProgressDialog,
+    QInputDialog,
+    QDialog,
+    QVBoxLayout as QVBoxLayout2,
+    QLabel as QLabel2,
+    QLineEdit,
+    QComboBox,
+    QDialogButtonBox,
+    QTextEdit,
+    QScrollArea,
+    QStatusBar,
+    QTextBrowser,
+)
+from PySide6.QtCore import Qt, QMetaObject, Q_ARG, QSize, QThread, QTimer, Slot
 from PySide6.QtGui import QFont, QIcon, QPixmap, QPalette, QColor
 
-# Set up logging for iOS Tools Module
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[logging.StreamHandler()]
-)
+from app import config
+from core.base import BaseWindow, SignalEmitter
+from core import utils
+from tabs import device_info, log_console, tools
 
-# Custom signal class for thread-safe UI updates
-class SignalEmitter(QObject):
-    update_signal = PySideSignal(str)
-    
-    def __init__(self):
-        super().__init__()
-        
-    def update_status(self, message):
-        self.update_signal.emit(message)
 
-# Check if required iOS tools are installed
-def check_ios_tools_installed():
-    """
-    Check if required iOS tools are installed.
-    Returns True if all required tools are available, False otherwise.
-    """
-    required_tools = ['idevice_id', 'ideviceinfo', 'idevicebackup2', 'ifuse']
-    missing_tools = []
-    
-    for tool in required_tools:
-        if shutil.which(tool) is None:
-            missing_tools.append(tool)
-    
-    if not missing_tools:
-        logging.info("All required iOS tools are installed")
-        return True
-        
-    logging.warning(f"Missing iOS tools: {', '.join(missing_tools)}")
-    return False
-
-class IOSToolsModule(QMainWindow):
+class IOSToolsModule(BaseWindow):
     def apply_styles(self):
         """Apply BLACKSTORM theme to the application"""
         self.setStyleSheet("""
@@ -203,12 +195,12 @@ class IOSToolsModule(QMainWindow):
         self.signal_emitter.update_signal.connect(self.update_status)
         
         # Set window properties
-        self.setWindowTitle("iOS Tools")
+        self.setWindowTitle(config.APP_TITLE)
 
         # Set window icon
-        icon_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'icons', 'ares-i.png')
-        if os.path.exists(icon_path):
-            self.setWindowIcon(QIcon(icon_path))
+        icon_path = Path(__file__).resolve().parents[2] / "icons" / "ares-i.png"
+        if icon_path.exists():
+            self.setWindowIcon(QIcon(str(icon_path)))
 
         # Get available screen geometry (accounts for taskbar)
         screen = QApplication.primaryScreen()
@@ -231,258 +223,6 @@ class IOSToolsModule(QMainWindow):
             self.status_bar.setText(message)
             QApplication.processEvents()
 
-    def _decode_base64_if_needed(self, value):
-        """Helper to decode base64 values if they appear to be base64"""
-        import base64
-        import re
-        
-        # Skip if not a typical base64 string
-        if not re.match(r'^[A-Za-z0-9+/=]+$', value):
-            return value
-            
-        try:
-            # Try to decode as base64
-            decoded = base64.b64decode(value).decode('utf-8', errors='ignore')
-            # If it decodes to something readable, return both
-            if len(decoded) > 0 and all(32 <= ord(c) <= 126 for c in decoded):
-                return f"{value} (decoded: {decoded})"
-        except Exception:
-            pass
-            
-        return value
-        
-    def _decode_base64(self, value):
-        """Safely decode base64 values"""
-        import base64
-        try:
-            # Skip if not actually base64
-            if not value or not isinstance(value, str):
-                return value
-                
-            # Remove any whitespace
-            value = value.strip()
-            
-            # Try standard base64 first
-            decoded_bytes = base64.b64decode(value)
-            decoded = decoded_bytes.decode('utf-8', errors='ignore')
-            
-            # If it's just a few characters, it's probably a simple string
-            if len(decoded) < 20 and all(32 <= ord(c) <= 126 for c in decoded):
-                return f"{decoded}"
-                
-            # For longer binary data, show size and type
-            return f"[Binary data: {len(decoded_bytes)} bytes]"
-            
-        except Exception as e:
-            # If we can't decode it, just return the original
-            return value
-
-    def _format_system_value(self, key, value):
-        """Format system information values for better readability"""
-        import base64
-        import datetime
-        import re
-        
-        # Skip empty values and numeric keys (array indices)
-        if not value or value == '(null)' or (isinstance(key, str) and re.match(r'^\d+$', key)):
-            return None
-            
-        # Handle array values
-        if isinstance(value, list):
-            # Clean up the list by removing empty strings
-            cleaned = [str(v).strip() for v in value if str(v).strip()]
-            if not cleaned:
-                return None
-                
-            # Special handling for device families
-            if 'DeviceFamilies' in key:
-                family_map = {
-                    '1': 'iPhone/iPod Touch',
-                    '2': 'iPad',
-                    '3': 'Apple TV',
-                    '4': 'Apple Watch',
-                    '5': 'HomePod',
-                    '6': 'iPod Touch',
-                    '7': 'Apple Vision Pro'
-                }
-                families = [family_map.get(v, f'Unknown ({v})') for v in cleaned if v in family_map or v.isdigit()]
-                return ', '.join(families) if families else None
-                
-            return ', '.join(cleaned)
-            
-        # Handle boolean values first - these should always be consistent
-        if key in ['ActivationStateAcknowledged', 'ProductionSOC', 'TrustedHostAttached',
-                  'TelephonyCapability', 'UseRaptorCerts', 'HasSiDP', 'HostAttached']:
-            return "✅ Yes" if value.lower() == 'true' else "❌ No"
-        elif key == 'BrickState':
-            # BrickState is a negative state, so we invert the logic
-            return "❌ Bricked" if value.lower() == 'true' else "✅ Not Bricked"
-        elif key == 'PasswordProtected':
-            return "🔒 Yes" if value.lower() == 'true' else "🔓 No"
-            
-        # Handle specific known fields with direct mappings
-        field_handlers = {
-            'SoftwareBehavior': lambda v: self._decode_software_behavior(v) if isinstance(v, str) else f"[Unhandled type: {type(v).__name__}]",
-            'ProximitySensorCalibration': lambda v: self._decode_proximity_sensor_data(v) if isinstance(v, str) else f"[Unhandled type: {type(v).__name__}]",
-            'SupportedDeviceFamilies': lambda v: f"Supports: {v}" if v else None,
-            'RegionInfo': lambda v: v if v != 'LL/A' else 'Australia',
-            'fm-activation-locked': lambda v: "🔒 Locked" if v == 'Tk8=' else "🔓 Unlocked",
-            'bootdelay': lambda v: "0 (immediate)" if v == 'MA==' else v,
-            'auto-boot': lambda v: "✅ Enabled" if v == 'dHJ1ZQ==' else "⏹ Disabled",
-            'fm-spstatus': lambda v: "📶 " + {
-                'WUVT': 'Wi-Fi and Cellular',
-                'WUVTQ0Y=': 'Wi-Fi, Cell, GPS',
-                'WQ==': 'Wi-Fi only',
-                'UQ==': 'Cellular only'
-            }.get(v, v),
-            'usbcfwflasherResult': lambda v: "✅ Success" if v == 'Tm8gZXJyb3Jz' else f"❌ {v}",
-            'DeviceColor': lambda v: self._get_color_name(v),
-            'Uses24HourClock': lambda v: "🕒 24-hour" if v.lower() == 'true' else "🕒 12-hour",
-            'TimeZoneOffsetFromUTC': lambda v: f"UTC{int(v)/3600:+.1f} hours"
-        }
-        
-        # Apply specific handler if exists
-        if key in field_handlers:
-            return field_handlers[key](value)
-            
-        # Handle base64 encoded values
-        if any(x in key.lower() for x in ['hash', 'key', 'token', 'cert', 'calibration', 'serial']) or \
-           any(key.lower().endswith(x) for x in ['status', 'state', 'result', 'locked', 'level', 'args', 'delay']):
-            if isinstance(value, str) and value.endswith('=='):
-                return self._decode_base64(value)
-        
-        # Handle hex values (long hex strings)
-        if isinstance(value, str) and all(c in '0123456789abcdefABCDEF' for c in value) and len(value) > 8:
-            return f"0x{value} (hex, {len(value)//2} bytes)"
-            
-        # Handle potential base64 values
-        if isinstance(value, str) and any(c in '+/=' for c in value) and len(value) % 4 == 0:
-            if len(value) < 50:  # Only decode short base64 strings
-                return self._decode_base64(value)
-            return f"{value[:20]}... (binary data, {len(value)} chars)"
-            
-        # Handle generic boolean-like values (only if not already handled)
-        if isinstance(value, str):
-            if value.lower() in ('true', 'yes', '1'):
-                return "✅ Yes"
-            if value.lower() in ('false', 'no', '0', 'none', 'null'):
-                return "❌ No"
-            
-        # Handle timestamps
-        if key.endswith('Since1970') and value.replace('.', '').isdigit():
-            try:
-                timestamp = float(value)
-                dt = datetime.datetime.fromtimestamp(timestamp)
-                return f"{dt.strftime('%Y-%m-%d %H:%M:%S')}"
-            except (ValueError, OSError):
-                pass
-                
-        return value  # Return original value if no special handling applies
-                
-    def _decode_software_behavior(self, value):
-        """Decode and interpret SoftwareBehavior binary data"""
-        try:
-            # Decode the base64 value
-            decoded = base64.b64decode(value)
-            if not decoded:
-                return "No behavior flags set"
-                
-            # Interpret the first 4 bytes as bitfields (little-endian)
-            flags = []
-            if len(decoded) >= 4:
-                # First byte (0x11 in the example)
-                byte1 = decoded[0]
-                if byte1 & 0x01: flags.append("Auto-Lock enabled")
-                if byte1 & 0x10: flags.append("Unknown flag (0x10)")
-                
-                # Second byte (0x00 in the example)
-                byte2 = decoded[1]
-                if byte2 & 0x01: flags.append("Unknown flag (0x0100)")
-                
-                # Third and fourth bytes (0x0000 in the example)
-                # These are often used for version or additional flags
-                
-                # Check if all bytes after the first are zero
-                if any(decoded[1:]):
-                    hex_str = decoded.hex()
-                    flags.append(f"Additional data: {hex_str[2:]}")
-            else:
-                # If we don't have 4 bytes, just show the hex
-                return f"[Raw data: {decoded.hex()}]"
-                
-            return ", ".join(flags) if flags else "No behavior flags set"
-            
-        except Exception as e:
-            return f"[Error decoding: {str(e)}]"
-
-    def _decode_proximity_sensor_data(self, value):
-        """Decode and format proximity sensor calibration data"""
-        try:
-            # Check if it's base64 encoded
-            if not value.endswith('==') and len(value) % 4 != 0:
-                # Not base64, might be raw hex
-                if len(value) > 32:  # If it's long, truncate for display
-                    return f"[Proximity Sensor Data: {len(value)} bytes]"
-                return value
-                
-            # Try to decode base64
-            decoded = base64.b64decode(value)
-            if not decoded:
-                return "No calibration data"
-                
-            # Format the decoded data
-            hex_str = decoded.hex()
-            if len(hex_str) > 40:  # Truncate long hex strings
-                hex_str = f"{hex_str[:40]}..."
-                
-            return f"[Calibration Data: {len(decoded)} bytes] {hex_str}"
-            
-        except Exception as e:
-            return f"[Sensor Data: {len(value)} bytes]"
-
-    def _get_color_name(self, color_code):
-        """Convert numeric color code to human-readable name"""
-        color_map = {
-            '1': 'Space Gray',
-            '2': 'White',
-            '3': 'Gold',
-            '4': 'Rose Gold',
-            '5': 'Silver',
-            '6': 'Black',
-            '7': 'Red',
-            '8': 'Blue',
-            '9': 'Green',
-            '10': 'Purple',
-            '11': 'Midnight Green',
-            '12': 'Pink',
-            '13': 'Yellow',
-            '14': 'Coral',
-            '15': 'Sierra Blue',
-            '16': 'Alpine Green',
-            '17': 'Purple',
-            '18': 'Deep Purple',
-            '19': 'Titanium',
-            '20': 'Natural Titanium',
-            '21': 'Blue Titanium',
-            '22': 'White Titanium',
-            '23': 'Black Titanium',
-            '24': 'Pink',
-            '25': 'Yellow'
-        }
-        return color_map.get(color_code, f"Color #{color_code}")
-                
-        # Handle hex values
-        if all(c in '0123456789abcdefABCDEF' for c in value) and len(value) > 8:
-            return f"0x{value} (hex, {len(value)//2} bytes)"
-                
-        # Handle potential base64 values
-        if any(c in '+/=' for c in value) and len(value) % 4 == 0:
-            if len(value) < 50:  # Only decode short base64 strings
-                return self._decode_base64(value)
-            return f"{value[:20]}... (binary data, {len(value)} chars)"
-                
-        return value
-        
     def _parse_system_info(self, info_text):
         """Parse raw system info into categorized sections"""
         # First, clean up the HTML formatting
@@ -583,7 +323,7 @@ class IOSToolsModule(QMainWindow):
             for key in keys:
                 if key in info_dict and info_dict[key]:
                     # Get and format the value
-                    value = self._format_system_value(key, info_dict[key])
+                    value = utils.format_system_value(key, info_dict[key])
                     if value is None:
                         continue
                         
@@ -616,7 +356,7 @@ class IOSToolsModule(QMainWindow):
             
             for key in sorted(remaining_keys):
                 if info_dict[key]:  # Only show non-empty values
-                    value = self._format_system_value(key, info_dict[key])
+                    value = utils.format_system_value(key, info_dict[key])
                     if value is None:
                         continue
                         
@@ -883,7 +623,7 @@ class IOSToolsModule(QMainWindow):
         tools_layout.setSpacing(5)
         
         # Add a button to install libimobiledevice if not installed
-        if not check_ios_tools_installed():
+        if not utils.check_ios_tools_installed():
             self.libmd_btn = QPushButton("Install libimobiledevice")
             self.libmd_btn.setFixedWidth(200)
             self.libmd_btn.clicked.connect(self.install_libimobiledevice)
@@ -958,122 +698,15 @@ class IOSToolsModule(QMainWindow):
         main_layout.addWidget(self.status_bar)
         
         # Setup the tabs
-        self.setup_device_info_tab()
-        self.setup_tools_tab()
-        self.setup_log_console_tab()
+        device_info.setup_device_info_tab(self)
+        tools.setup_tools_tab(self)
+        log_console.setup_log_console_tab(self)
         
         # Update status message when status_var changes
         def update_status_message():
             self.status_bar.setText(self.status_var.text())
             
         self.status_var.textChanged.connect(update_status_message)
-
-    def setup_device_info_tab(self):
-        """Set up the device info tab"""
-        # Create main layout for device info tab
-        layout = self.device_layout  # Use the existing layout
-        
-        # Device connection frame
-        connection_frame = QGroupBox("Device Connection")
-        connection_layout = QVBoxLayout(connection_frame)
-        
-        # Connection buttons
-        conn_buttons_frame = QHBoxLayout()
-        
-        # Connect button
-        self.connect_button = QPushButton("Connect iPhone")
-        self.connect_button.clicked.connect(self.connect_device)
-        conn_buttons_frame.addWidget(self.connect_button)
-        
-        # Refresh button
-        self.refresh_button = QPushButton("Refresh Devices")
-        self.refresh_button.clicked.connect(self.refresh_device_list)
-        conn_buttons_frame.addWidget(self.refresh_button)
-        
-        # Add stretch to push buttons to the left
-        conn_buttons_frame.addStretch()
-        
-        connection_layout.addLayout(conn_buttons_frame)
-        
-        # Connection instructions
-        instructions = QLabel(
-            "1. Make sure your iPhone is unlocked\n"
-            "2. Connect your iPhone via USB cable\n"
-            "3. On your iPhone, tap 'Trust' when prompted\n"
-            "4. Click 'Connect iPhone' above"
-        )
-        connection_layout.addWidget(instructions)
-        
-        # Add connection frame to main layout
-        layout.addWidget(connection_frame)
-        
-        # Device information display
-        info_frame = QGroupBox("Device Information")
-        info_layout = QGridLayout(info_frame)
-        
-        # Create info field labels and values
-        self.info_fields = {}
-        basic_fields = ["Model", "Manufacturer", "iOS Version", "Serial Number", "UDID", "Battery Level"]
-        
-        for i, field in enumerate(basic_fields):
-            label = QLabel(f"{field}:")
-            label.setStyleSheet("font-weight: bold;")
-            value = QLabel("N/A")
-            value.setTextInteractionFlags(Qt.TextSelectableByMouse)
-            
-            info_layout.addWidget(label, i, 0)
-            info_layout.addWidget(value, i, 1)
-            
-            # Add to the dictionary inside the loop
-            self.info_fields[field] = value
-        
-        # Debug info section
-        debug_label = QLabel("Debug Information")
-        debug_label.setStyleSheet("font-weight: bold;")
-        info_layout.addWidget(debug_label, len(basic_fields) + 1, 0, 1, 2)
-        
-        self.debug_text = QTextEdit()
-        self.debug_text.setReadOnly(True)
-        self.debug_text.setMaximumHeight(100)
-        info_layout.addWidget(self.debug_text, len(basic_fields) + 2, 0, 1, 2)
-        
-        layout.addWidget(info_frame)
-        layout.addStretch()
-
-    def setup_log_console_tab(self):
-        """Set up the log console tab"""
-        # Create a layout for the log console tab
-        layout = self.log_layout  # Use the existing layout
-        
-        # Controls layout
-        controls_layout = QHBoxLayout()
-        
-        # Clear button
-        clear_btn = QPushButton("Clear Log")
-        clear_btn.clicked.connect(lambda: self.log_text.clear())
-        controls_layout.addWidget(clear_btn)
-        
-        # Save button
-        save_btn = QPushButton("Save Log...")
-        save_btn.clicked.connect(self.save_log)
-        controls_layout.addWidget(save_btn)
-        
-        # Add stretch to push controls to the left
-        controls_layout.addStretch()
-        
-        # Add controls layout to main layout
-        layout.addLayout(controls_layout)
-        
-        # Create log text area
-        self.log_text = QTextEdit()
-        self.log_text.setReadOnly(True)
-        self.log_text.setFont(QFont("Monospace", 10))
-        
-        # Add log text to main layout
-        layout.addWidget(self.log_text)
-        
-        # Add initial message
-        self.log_message("Log console initialized")
 
     @Slot(str)
     def log_message(self, message):
@@ -5052,81 +4685,9 @@ class IOSToolsModule(QMainWindow):
         finally:
             self.status_var.setText("Ready")
     
-    def setup_tools_tab(self):
-        """Set up the tools tab with scrollable categories"""
-        # Create main layout for tools tab
-        tools_layout = self.tools_layout  # Use the existing layout
-        tools_layout.setContentsMargins(0, 0, 0, 0)
-        
-        # Create scroll area
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        
-        # Create widget that will contain the scrollable content
-        scroll_content = QWidget()
-        scroll_layout = QVBoxLayout(scroll_content)
-        scroll_layout.setContentsMargins(10, 10, 10, 10)
-        scroll_layout.setSpacing(15)
-        
-        # Create a grid layout for the tool categories
-        grid_layout = QGridLayout()
-        grid_layout.setContentsMargins(0, 0, 0, 0)
-        grid_layout.setSpacing(15)
-        
-        # Define tool categories and their corresponding methods
-        tool_categories = [
-            ("Device Control", self._add_device_control_widgets, 0, 0),
-            ("App Management", self._add_app_management_widgets, 0, 1),
-            ("System Tools", self._add_system_tools_widgets, 1, 0),
-            ("iOS Tools", self._add_ios_tools_widgets, 1, 1),
-            ("Debugging", self._add_debugging_widgets, 2, 0),
-            ("File Operations", self._add_file_operations_widgets, 2, 1),
-            ("Security", self._add_security_widgets, 3, 0),
-            ("Automation", self._add_automation_widgets, 3, 1),
-            ("Advanced Tests", self._add_advanced_tests_widgets, 4, 0)
-        ]
-        
-        # Add each category as a group box
-        for title, method, row, col in tool_categories:
-            group_box = QGroupBox(title)
-            group_box.setStyleSheet("""
-                QGroupBox {
-                    font-weight: bold;
-                    font-size: 14px;
-                    margin-top: 12px;
-                    padding-top: 15px;
-                }
-                QGroupBox::title {
-                    subcontrol-origin: margin;
-                    left: 10px;
-                    padding: 0 3px 0 3px;
-                }
-            """)
-            
-            content_layout = QVBoxLayout()
-            content_layout.setContentsMargins(10, 20, 10, 10)
-            content_layout.setSpacing(8)
-            
-            # Call the appropriate method to add widgets
-            method(content_layout)
-            
-            group_box.setLayout(content_layout)
-            grid_layout.addWidget(group_box, row, col)
-        
-        # Add the grid to the scroll layout
-        scroll_layout.addLayout(grid_layout)
-        scroll_layout.addStretch()
-        
-        # Set the scroll content widget
-        scroll_area.setWidget(scroll_content)
-        
-        # Add the scroll area to the tools layout
-        tools_layout.addWidget(scroll_area)
-
     def check_dependencies(self):
         """Check for required tools"""
-        if not check_ios_tools_installed():
+        if not utils.check_ios_tools_installed():
             self.show_info(
                 "Required Tools Missing",
                 "libimobiledevice is required to connect to iOS devices. Please install it first."
@@ -6133,7 +5694,7 @@ class IOSToolsModule(QMainWindow):
                 )
                 
                 # Check if tools are now installed
-                if check_ios_tools_installed():
+                if utils.check_ios_tools_installed():
                     self.log_message("All required tools are now installed")
                     
                     # Remove the install button if present
@@ -6167,12 +5728,3 @@ class IOSToolsModule(QMainWindow):
             )
 
 # Main execution
-if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    app.setApplicationVersion("1.0.0")
-    
-    # Create and show the main window
-    window = IOSToolsModule()
-    window.show()
-    
-    sys.exit(app.exec())
