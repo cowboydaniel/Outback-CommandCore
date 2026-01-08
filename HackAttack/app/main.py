@@ -7,8 +7,24 @@ import logging
 import sys
 from pathlib import Path
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from HackAttack.app.config import LOGGING_CONFIG, application_title
+from HackAttack.tabs import get_tab_definitions
+from HackAttack.ui.themes import APP_STYLESHEET
+
+logging.basicConfig(**LOGGING_CONFIG)
+logger = logging.getLogger(__name__)
+
 if importlib.util.find_spec("PySide6") is None:
-    print("Error: PySide6 is required. Please install PySide6.")
+    message = (
+        "Error: PySide6 is required. Install dependencies with "
+        "`pip install -r HackAttack/requirements.txt` (see HackAttack/README.md)."
+    )
+    logger.error(message)
+    print(message)
     sys.exit(1)
 
 from PySide6.QtGui import QFont
@@ -21,17 +37,6 @@ from PySide6.QtWidgets import (
     QStatusBar,
     QWidget,
 )
-
-REPO_ROOT = Path(__file__).resolve().parents[2]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
-
-from HackAttack.app.config import LOGGING_CONFIG, application_title
-from HackAttack.tabs import get_tab_definitions
-from HackAttack.ui.themes import APP_STYLESHEET
-
-logging.basicConfig(**LOGGING_CONFIG)
-logger = logging.getLogger(__name__)
 
 
 class HackAttackGUI(QMainWindow):
