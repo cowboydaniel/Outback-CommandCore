@@ -14,14 +14,22 @@ from typing import Optional
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QTabWidget, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QFileDialog, QPlainTextEdit, QSpinBox, QDoubleSpinBox,
-    QLabel, QProgressBar, QLineEdit, QMessageBox, QMenuBar, QMenu, QDialog,
-    QFormLayout, QGroupBox, QStatusBar, QSizePolicy
+    QLabel, QProgressBar, QLineEdit, QMessageBox, QDialog,
+    QFormLayout, QGroupBox, QStatusBar, QCheckBox
 )
 from PySide6.QtCore import Qt, QThread, QObject, Slot, QTimer, Signal
-from PySide6.QtGui import QAction, QTextCursor, QFont, QPalette, QColor, QIcon
+from PySide6.QtGui import QAction, QTextCursor, QPalette, QColor, QIcon
 
 # Import the orchestrator
 from Codex.ai.orchestrator import Orchestrator
+from Codex.app.config import AppConfig, DEFAULT_CONFIG
+from Codex.tabs import (
+    setup_data_prep_tab,
+    setup_generation_tab,
+    setup_logs_tab,
+    setup_training_tab,
+    setup_validation_tab,
+)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -144,15 +152,16 @@ class SettingsDialog(QDialog):
 class CommandCoreGUI(QMainWindow):
     """Main application window for the CommandCoreCodex control center."""
     
-    def __init__(self):
+    def __init__(self, config: AppConfig = DEFAULT_CONFIG):
         super().__init__()
+        self.config = config
         self.orchestrator = Orchestrator()
         self.worker_thread = None
         self.worker = None
         self.dark_mode = False
 
-        self.setWindowTitle("CommandCoreCodex AI Pipeline Control Center")
-        self.setMinimumSize(1000, 700)
+        self.setWindowTitle(self.config.window_title)
+        self.setMinimumSize(self.config.min_width, self.config.min_height)
 
         # Set window icon
         icon_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'icons', 'codex.png')
@@ -178,11 +187,11 @@ class CommandCoreGUI(QMainWindow):
         self.tab_widget = QTabWidget()
         
         # Add tabs
-        self.setup_data_prep_tab()
-        self.setup_training_tab()
-        self.setup_generation_tab()
-        self.setup_validation_tab()
-        self.setup_logs_tab()
+        setup_data_prep_tab(self)
+        setup_training_tab(self)
+        setup_generation_tab(self)
+        setup_validation_tab(self)
+        setup_logs_tab(self)
         
         main_layout.addWidget(self.tab_widget)
         
@@ -215,216 +224,6 @@ class CommandCoreGUI(QMainWindow):
         about_action.triggered.connect(self.show_about)
         help_menu.addAction(about_action)
     
-    def setup_data_prep_tab(self):
-        """Set up the Data Preparation tab."""
-        tab = QWidget()
-        layout = QVBoxLayout(tab)
-        
-        # Dataset selection
-        dataset_group = QGroupBox("Dataset Selection")
-        dataset_layout = QVBoxLayout()
-        
-        # Directory selection
-        dir_layout = QHBoxLayout()
-        self.dataset_path_edit = QLineEdit()
-        self.dataset_path_edit.setPlaceholderText("Select dataset directory...")
-        self.dataset_path_edit.setReadOnly(True)
-        
-        browse_btn = QPushButton("Browse...")
-        browse_btn.clicked.connect(self.browse_dataset_dir)
-        
-        dir_layout.addWidget(self.dataset_path_edit)
-        dir_layout.addWidget(browse_btn)
-        
-        # Prepare button
-        prepare_btn = QPushButton("Prepare Dataset")
-        prepare_btn.clicked.connect(self.prepare_dataset)
-        
-        # Status output
-        self.data_prep_status = QPlainTextEdit()
-        self.data_prep_status.setReadOnly(True)
-        self.data_prep_status.setPlaceholderText("Status messages will appear here...")
-        
-        # Add widgets to layout
-        dataset_layout.addLayout(dir_layout)
-        dataset_layout.addWidget(prepare_btn)
-        dataset_group.setLayout(dataset_layout)
-        
-        layout.addWidget(dataset_group)
-        layout.addWidget(QLabel("Status:"))
-        layout.addWidget(self.data_prep_status)
-        
-        self.tab_widget.addTab(tab, "Data Preparation")
-    
-    def setup_training_tab(self):
-        """Set up the Training Control tab."""
-        tab = QWidget()
-        layout = QVBoxLayout(tab)
-        
-        # Training parameters
-        params_group = QGroupBox("Training Parameters")
-        params_layout = QFormLayout()
-        
-        self.batch_size = QSpinBox()
-        self.batch_size.setRange(1, 256)
-        self.batch_size.setValue(32)
-        
-        self.learning_rate = QDoubleSpinBox()
-        self.learning_rate.setRange(1e-6, 1.0)
-        self.learning_rate.setValue(1e-4)
-        self.learning_rate.setDecimals(6)
-        
-        self.num_epochs = QSpinBox()
-        self.num_epochs.setRange(1, 1000)
-        self.num_epochs.setValue(10)
-        
-        params_layout.addRow("Batch Size:", self.batch_size)
-        params_layout.addRow("Learning Rate:", self.learning_rate)
-        params_layout.addRow("Number of Epochs:", self.num_epochs)
-        
-        # Training controls
-        controls_layout = QHBoxLayout()
-        self.start_training_btn = QPushButton("Start Training")
-        self.stop_training_btn = QPushButton("Stop Training")
-        self.stop_training_btn.setEnabled(False)
-        
-        controls_layout.addWidget(self.start_training_btn)
-        controls_layout.addWidget(self.stop_training_btn)
-        
-        # Progress bar
-        self.training_progress = QProgressBar()
-        self.training_progress.setRange(0, 100)
-        
-        # Status display
-        self.training_status = QPlainTextEdit()
-        self.training_status.setReadOnly(True)
-        self.training_status.setPlaceholderText("Training status will appear here...")
-        
-        # Add widgets to layout
-        params_group.setLayout(params_layout)
-        
-        layout.addWidget(params_group)
-        layout.addLayout(controls_layout)
-        layout.addWidget(QLabel("Progress:"))
-        layout.addWidget(self.training_progress)
-        layout.addWidget(QLabel("Status:"))
-        layout.addWidget(self.training_status)
-        
-        self.tab_widget.addTab(tab, "Training Control")
-    
-    def setup_generation_tab(self):
-        """Set up the Code Generation tab."""
-        tab = QWidget()
-        layout = QVBoxLayout(tab)
-        
-        # Generation parameters
-        params_group = QGroupBox("Generation Parameters")
-        params_layout = QFormLayout()
-        
-        self.prompt_edit = QLineEdit()
-        self.prompt_edit.setPlaceholderText("Enter your prompt here...")
-        
-        self.max_length = QSpinBox()
-        self.max_length.setRange(10, 2048)
-        self.max_length.setValue(100)
-        
-        self.temperature = QDoubleSpinBox()
-        self.temperature.setRange(0.1, 2.0)
-        self.temperature.setValue(0.7)
-        self.temperature.setSingleStep(0.1)
-        
-        params_layout.addRow("Prompt:", self.prompt_edit)
-        params_layout.addRow("Max Length:", self.max_length)
-        params_layout.addRow("Temperature:", self.temperature)
-        
-        # Generate button
-        generate_btn = QPushButton("Generate Code")
-        generate_btn.clicked.connect(self.generate_code)
-        
-        # Generated code display
-        self.generated_code = QPlainTextEdit()
-        self.generated_code.setReadOnly(True)
-        self.generated_code.setPlaceholderText("Generated code will appear here...")
-        font = QFont("Monospace")
-        font.setStyleHint(QFont.TypeWriter)
-        self.generated_code.setFont(font)
-        
-        # Add widgets to layout
-        params_group.setLayout(params_layout)
-        
-        layout.addWidget(params_group)
-        layout.addWidget(generate_btn)
-        layout.addWidget(QLabel("Generated Code:"))
-        layout.addWidget(self.generated_code)
-        
-        self.tab_widget.addTab(tab, "Code Generation")
-    
-    def setup_validation_tab(self):
-        """Set up the Validation tab."""
-        tab = QWidget()
-        layout = QVBoxLayout(tab)
-        
-        # Buttons
-        btn_layout = QHBoxLayout()
-        lint_btn = QPushButton("Run Linter")
-        run_btn = QPushButton("Run in Sandbox")
-        
-        lint_btn.clicked.connect(self.run_linter)
-        run_btn.clicked.connect(self.run_in_sandbox)
-        
-        btn_layout.addWidget(lint_btn)
-        btn_layout.addWidget(run_btn)
-        
-        # Output tabs
-        output_tabs = QTabWidget()
-        
-        # Linter output
-        self.linter_output = QPlainTextEdit()
-        self.linter_output.setReadOnly(True)
-        self.linter_output.setPlaceholderText("Linter output will appear here...")
-        
-        # Sandbox output
-        self.sandbox_output = QPlainTextEdit()
-        self.sandbox_output.setReadOnly(True)
-        self.sandbox_output.setPlaceholderText("Sandbox output will appear here...")
-        
-        # Add tabs
-        output_tabs.addTab(self.linter_output, "Linter Output")
-        output_tabs.addTab(self.sandbox_output, "Sandbox Output")
-        
-        # Add widgets to layout
-        layout.addLayout(btn_layout)
-        layout.addWidget(output_tabs)
-        
-        self.tab_widget.addTab(tab, "Validation")
-    
-    def setup_logs_tab(self):
-        """Set up the Logs tab."""
-        tab = QWidget()
-        layout = QVBoxLayout(tab)
-        
-        # Log display
-        self.log_display = QPlainTextEdit()
-        self.log_display.setReadOnly(True)
-        self.log_display.setPlaceholderText("Log messages will appear here...")
-        
-        # Buttons
-        btn_layout = QHBoxLayout()
-        save_logs_btn = QPushButton("Save Logs")
-        clear_logs_btn = QPushButton("Clear Logs")
-        
-        save_logs_btn.clicked.connect(self.save_logs)
-        clear_logs_btn.clicked.connect(self.clear_logs)
-        
-        btn_layout.addWidget(save_logs_btn)
-        btn_layout.addWidget(clear_logs_btn)
-        btn_layout.addStretch()
-        
-        # Add widgets to layout
-        layout.addWidget(self.log_display)
-        layout.addLayout(btn_layout)
-        
-        self.tab_widget.addTab(tab, "Logs")
     
     def setup_connections(self):
         """Set up signal-slot connections."""

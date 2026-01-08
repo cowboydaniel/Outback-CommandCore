@@ -11,20 +11,15 @@ CommandCore Codex provides a PySide6 GUI for managing the AI training and code g
 ## Install
 
 ```bash
-cd Codex
 python -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r Codex/requirements.txt
 ```
 
 ## Run
 
-```bash
-python app/gui.py
-```
-
-If you want to run Codex from the repository root, use:
+From the repository root:
 
 ```bash
-python Codex/app/gui.py
+python -m Codex.app.main
 ```
