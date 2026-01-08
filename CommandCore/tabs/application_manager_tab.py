@@ -30,7 +30,19 @@ def get_version_from_module(module_path: str) -> Optional[str]:
         spec = importlib.util.spec_from_file_location("module.name", module_path)
         if spec and spec.loader:
             module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
+            module_dir = os.path.dirname(os.path.abspath(module_path))
+            repo_root = os.path.dirname(module_dir)
+            original_sys_path = list(sys.path)
+            try:
+                prepend_paths = [
+                    path for path in [module_dir, repo_root]
+                    if path and path not in sys.path
+                ]
+                if prepend_paths:
+                    sys.path[:0] = prepend_paths
+                spec.loader.exec_module(module)
+            finally:
+                sys.path[:] = original_sys_path
             
             # Check common version attributes
             for attr in ['__version__', 'version', 'VERSION', 'app']:
@@ -140,8 +152,26 @@ def detect_version(app_path: str) -> str:
     if not os.path.exists(app_path):
         return "not installed"
         
-    app_dir = os.path.dirname(app_path)
     app_name = os.path.basename(app_path).lower()
+    app_dir_path = Path(app_path).resolve().parent
+    repo_root = app_dir_path.parent
+
+    config_candidates = [
+        app_dir_path / "config.py",
+        app_dir_path / "app" / "config.py",
+        repo_root / "app" / "config.py",
+    ]
+    for config_path in config_candidates:
+        if config_path.is_file():
+            version = get_version_from_file(
+                str(config_path),
+                [r'APP_VERSION\s*=\s*["\']([^"\']+)["\']', r'VERSION\s*=\s*["\']([^"\']+)["\']']
+            )
+            if version:
+                return version
+            version = get_version_from_module(str(config_path))
+            if version:
+                return version
     
     # Special handling for specific applications
     if 'ares-i' in app_name or 'ares_i' in app_name:
