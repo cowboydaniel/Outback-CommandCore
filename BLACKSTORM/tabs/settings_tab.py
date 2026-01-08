@@ -3,6 +3,7 @@ Settings tab for BLACKSTORM - Application configuration.
 """
 import json
 import os
+import sys
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTabWidget, QPushButton,
@@ -87,13 +88,13 @@ class SettingsTab(BaseTab):
         btn_layout.addWidget(btn_save)
         
         layout.addLayout(btn_layout)
+
+        # Load saved settings after all tabs/widgets are created
+        self.load_settings()
         
     def setup_appearance_tab(self, parent):
         """Set up the Appearance settings tab with text size controls."""
         layout = QVBoxLayout(parent)
-        
-        # Load saved settings
-        self.load_settings()
         
         # Text Size Group
         text_group = QGroupBox("Text Size")
@@ -380,7 +381,7 @@ class SettingsTab(BaseTab):
                     print(f"Error setting font size: {e}")
             
             # Update font preview if possible
-            if hasattr(self, '_update_font_preview'):
+            if hasattr(self, 'font_family') and hasattr(self, 'font_size_slider'):
                 try:
                     self._update_font_preview()
                 except Exception as e:
