@@ -23,10 +23,19 @@ try:
                                    QHeaderView, QSplitter, QStatusBar)
     from PySide6.QtCore import Qt, QThread, Signal
     PYSIDE6_AVAILABLE = True
-except ImportError:
+except ImportError as e:
     PYSIDE6_AVAILABLE = False
-    print("Error: PySide6 is required to run this application.")
-    sys.exit(1)
+    print(f"GUI disabled: {e}")
+    # Define placeholder for when PySide6 is not available
+    QWidget = object
+    QThread = object
+    Signal = None
+    Qt = None
+    QTreeWidget = None
+    QTreeWidgetItem = None
+    QHeaderView = None
+    QSplitter = None
+    QStatusBar = None
 
 class FirmwareAnalysisGUI(QWidget):
     """

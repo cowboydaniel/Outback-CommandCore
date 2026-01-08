@@ -5182,6 +5182,7 @@ class IOSToolsModule(BaseWindow):
             logging.error(f"Error getting battery health: {e}")
             return "Unknown"
 
+    @Slot()
     def update_device_info(self):
         """Update the device info display with the connected device information"""
         if not hasattr(self, 'info_fields') or not self.device_connected:
@@ -5384,6 +5385,7 @@ class IOSToolsModule(BaseWindow):
                 Q_ARG(str, f"Error: {str(e)}")
             )
     
+    @Slot(str)
     def update_status_ui(self, message):
         """Update the status UI (to be called from other threads)"""
         self.status_var.setText(message)
