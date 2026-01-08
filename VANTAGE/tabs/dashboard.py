@@ -282,9 +282,11 @@ class AnimatedGaugeWidget(QWidget):
 class DashboardTab(QWidget):
     """Modern dashboard tab with smooth animated visualizations"""
     
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, main_window=None, tab_widget=None):
         """Initialize the dashboard tab with enhanced UI."""
         super().__init__(parent)
+        self.main_window = main_window
+        self.tab_widget = tab_widget
         self.chart_data_points = []  # Store time-series data
         self.max_data_points = 120   # 2 minutes of data at 1Hz
         self.health_history = []     # Store health scores for trend calculation
@@ -1230,17 +1232,20 @@ class DashboardTab(QWidget):
         Counts the number of devices listed in the DevicesTab plus the local device.
         """
         try:
-            # Get the main window
-            main_window = self.window()
-            if not main_window:
-                raise Exception("Could not find main window")
+            tab_widget = self.tab_widget
+            if tab_widget is None and self.main_window is not None:
+                tab_widget = self.main_window.tab_widget
+            if tab_widget is None:
+                logger.warning("DashboardTab has no tab widget reference for device count")
+                self.set_metric_unavailable(self.device_card)
+                return
                 
             # Initialize device count to 1 for local device
             device_count = 1
             
             # Try to find the DevicesTab
-            for i in range(main_window.tab_widget.count()):
-                widget = main_window.tab_widget.widget(i)
+            for i in range(tab_widget.count()):
+                widget = tab_widget.widget(i)
                 if widget and widget.objectName() == "DevicesTab":
                     # Found the DevicesTab, now count the rows in its table
                     if hasattr(widget, 'devices_table'):
