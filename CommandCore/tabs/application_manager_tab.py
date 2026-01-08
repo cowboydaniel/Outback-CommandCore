@@ -154,12 +154,13 @@ def detect_version(app_path: str) -> str:
         version = get_version_from_file(app_path, [r'root\.option_add\(\s*[\'\"]\*?applicationVersion[\'\"]\s*,\s*[\'\"]([^\'\"]+)[\'\"]\)'])
         if version:
             return version
-    elif 'pc_tools_linux' in app_name:
-        # PC-X tools module might have version in a different format
-        version = get_version_from_file(app_path, [r'__version__\s*=\s*["\']([^"\']+)["\']',
-                                                 r'Version\s*=\s*["\']([^"\']+)["\']'])
-        if version:
-            return version
+    elif 'pc_tools_linux' in app_name or 'pc-x' in app_path.lower():
+        # PC-X tools module stores version in app/config.py
+        config_py = os.path.join(os.path.dirname(app_path), 'config.py')
+        if os.path.exists(config_py):
+            version = get_version_from_file(config_py, [r'VERSION\s*=\s*["\']([^"\']+)["\']'])
+            if version:
+                return version
     elif 'launch_vantage' in app_name:
         # VANTAGE has version in app/config.py
         config_py = os.path.join(os.path.dirname(app_path), 'app', 'config.py')
@@ -795,7 +796,7 @@ class ApplicationManagerTab(QWidget):
                         if 'omniscribe.omniscribe' in cmdline_str:
                             return True
                     elif process_name == 'pc_tools_linux_process':
-                        if 'pc.pc_tools_linux' in cmdline_str:
+                        if 'pc-x/app/main.py' in cmdline_str or 'pc_x.app.main' in cmdline_str:
                             return True
                     elif process_name == 'vantage_process':
                         if 'vantage.launch_vantage' in cmdline_str:
@@ -909,7 +910,7 @@ class ApplicationManagerTab(QWidget):
                 "id": "pc_tools_linux",
                 "name": "PC Tools Linux",
                 "description": "PC tools for Linux system management.",
-                "path": os.path.join(base_dir, "PC-X/pc_tools_linux.py"),
+                "path": os.path.join(base_dir, "PC-X/app/main.py"),
                 'version': None,
                 'status': 'stopped',
                 'process_name': 'pc_tools_linux_process'
