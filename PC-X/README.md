@@ -22,9 +22,7 @@ Install via pip:
 pip install -r requirements.txt
 ```
 - `psutil>=5.9.0` – System and process monitoring library
-
-### Built-in Dependencies
-- `tkinter` – Standard Python GUI library (included with Python)
+- `PySide6>=6.5.0` – Qt6 bindings for Python (modern cross-platform GUI framework)
 
 ### Supported Platforms
 - Linux (primary target)
