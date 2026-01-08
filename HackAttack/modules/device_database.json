@@ -1181,6 +1181,9 @@
         "0x05c6": {
             "0x0001": {"name": "Qualcomm Modem", "type": "mobile", "category": "modem"}
         },
+        "0x138A": {
+            "0x003F": {"name": "Validity Sensors VFS495 Fingerprint Reader", "type": "biometric", "category": "fingerprint"}
+        },
         "0x147e": {
             "0x0001": {"name": "Upek Fingerprint", "type": "biometric", "category": "fingerprint"}
         },
@@ -1689,7 +1692,8 @@
             "0x0001": {"name": "Lite Metals Device", "type": "device", "category": "electronic"}
         },
         "0x04ca": {
-            "0x0001": {"name": "Lite-On Optical Drive", "type": "storage", "category": "optical"}
+            "0x0001": {"name": "Lite-On Optical Drive", "type": "storage", "category": "optical"},
+            "0x7053": {"name": "Lite-On Bluetooth Adapter", "type": "wireless", "category": "bluetooth"}
         },
         "0x0cca": {
             "0x0001": {"name": "Lite-On Storage", "type": "storage", "category": "ssd"}
@@ -1924,7 +1928,8 @@
             "0x0001": {"name": "Intel Processor", "type": "processor", "category": "cpu"}
         },
         "0x8087": {
-            "0x0001": {"name": "Intel Chipset", "type": "chipset", "category": "motherboard"}
+            "0x0001": {"name": "Intel Chipset", "type": "chipset", "category": "motherboard"},
+            "0x0A2B": {"name": "Intel Bluetooth 4.0", "type": "wireless", "category": "bluetooth"}
         },
         "0x042b": {
             "0x0001": {"name": "Intel Device", "type": "device", "category": "semiconductor"}
