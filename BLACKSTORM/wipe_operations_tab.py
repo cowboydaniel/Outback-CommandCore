@@ -1323,13 +1323,124 @@ Location Tracking Utility - Simple location tracking functionality
 """
 
 from datetime import datetime, timezone
+import logging
+import os
+import shutil
+import subprocess
+from urllib import request, error
 
 class LocationTracker:
     """Simple location tracking class."""
     
-    def __init__(self):
+    def __init__(self, provider_url=None, enabled=None, timeout=5):
         """Initialize the location tracker."""
         self.current_location = None
+        self.provider_url = provider_url or os.getenv(
+            "BLACKSTORM_GEOLOCATION_URL",
+            "https://ipinfo.io/json"
+        )
+        self.enabled = self._resolve_enabled(enabled)
+        self.timeout = timeout
+        self.last_error = None
+        self.logger = logging.getLogger(__name__)
+
+    def _resolve_enabled(self, enabled):
+        """Determine whether location tracking is enabled."""
+        if enabled is not None:
+            return bool(enabled)
+        env_value = os.getenv("BLACKSTORM_LOCATION_ENABLED", "").strip().lower()
+        if env_value in {"1", "true", "yes", "on"}:
+            return True
+        if env_value in {"0", "false", "no", "off"}:
+            return False
+        return False
+
+    def _log_disabled(self, reason):
+        """Log and store a disabled reason."""
+        self.last_error = reason
+        self.logger.warning("Location tracking disabled: %s", reason)
+
+    def _has_permission(self):
+        """Check for explicit permission to access location services."""
+        permission = os.getenv("BLACKSTORM_LOCATION_PERMISSION", "").strip().lower()
+        if permission in {"granted", "allow", "allowed", "yes", "true", "1"}:
+            return True
+        if permission:
+            self.last_error = f"Location permission not granted (BLACKSTORM_LOCATION_PERMISSION={permission})."
+        else:
+            self.last_error = "Location permission not granted (BLACKSTORM_LOCATION_PERMISSION is unset)."
+        return False
+
+    def _parse_provider_response(self, payload):
+        """Parse provider payload into the expected location shape."""
+        latitude = payload.get("latitude")
+        longitude = payload.get("longitude")
+        accuracy = payload.get("accuracy")
+        source = payload.get("source", "external")
+
+        if latitude is None or longitude is None:
+            loc_value = payload.get("loc")
+            if loc_value and "," in loc_value:
+                lat_str, lon_str = loc_value.split(",", 1)
+                latitude = float(lat_str.strip())
+                longitude = float(lon_str.strip())
+
+        if accuracy is None:
+            accuracy = payload.get("accuracy_radius") or payload.get("accuracy_m")
+
+        if accuracy is None:
+            accuracy = 0.0
+
+        return {
+            "latitude": float(latitude),
+            "longitude": float(longitude),
+            "accuracy": float(accuracy),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "source": source
+        }
+
+    def _get_gps_location(self):
+        """Attempt to read location from a GPS device via gpsd."""
+        gpspipe_path = shutil.which("gpspipe")
+        if not gpspipe_path:
+            return None
+
+        try:
+            result = subprocess.run(
+                [gpspipe_path, "-w", "-n", "10"],
+                capture_output=True,
+                text=True,
+                timeout=self.timeout
+            )
+        except Exception as exc:
+            self.logger.debug("GPS lookup failed: %s", exc)
+            return None
+
+        for line in result.stdout.splitlines():
+            line = line.strip()
+            if not line.startswith("{"):
+                continue
+            try:
+                payload = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if payload.get("class") != "TPV":
+                continue
+            latitude = payload.get("lat")
+            longitude = payload.get("lon")
+            if latitude is None or longitude is None:
+                continue
+            accuracy = payload.get("epx") or payload.get("epy") or payload.get("epv") or 0.0
+            timestamp = payload.get("time") or datetime.now(timezone.utc).isoformat()
+            return {
+                "latitude": float(latitude),
+                "longitude": float(longitude),
+                "accuracy": float(accuracy),
+                "timestamp": timestamp,
+                "source": "gps"
+            }
+
+        return None
     
     def get_location(self):
         """
@@ -1339,16 +1450,40 @@ class LocationTracker:
             dict: Location information or None if location services are disabled
         """
         try:
-            # This is a placeholder implementation
-            # In a real implementation, this would use geolocation services
-            return {
-                'latitude': 0.0,
-                'longitude': 0.0,
-                'accuracy': 0.0,
-                'timestamp': datetime.now(timezone.utc).isoformat(),
-                'source': 'mock'
-            }
-        except Exception:
+            self.last_error = None
+            if not self.enabled:
+                self._log_disabled("BLACKSTORM_LOCATION_ENABLED is not set to a truthy value.")
+                return None
+
+            if not self.provider_url:
+                self._log_disabled("No geolocation provider URL configured.")
+                return None
+
+            if not self._has_permission():
+                self._log_disabled(self.last_error)
+                return None
+
+            gps_location = self._get_gps_location()
+            if gps_location:
+                self.current_location = gps_location
+                return gps_location
+
+            req = request.Request(
+                self.provider_url,
+                headers={"User-Agent": "BLACKSTORM-LocationTracker/1.0"}
+            )
+            with request.urlopen(req, timeout=self.timeout) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+            location = self._parse_provider_response(payload)
+            self.current_location = location
+            return location
+        except (error.URLError, ValueError, KeyError) as exc:
+            self.last_error = f"Location lookup failed: {exc}"
+            self.logger.warning(self.last_error)
+            return None
+        except Exception as exc:
+            self.last_error = f"Unexpected location error: {exc}"
+            self.logger.exception(self.last_error)
             return None
 
 #!/usr/bin/env python3
@@ -1399,10 +1534,9 @@ class WipeWorker(QThread):
         self.location_tracker = None
         if enable_location:
             try:
-                from location_tracker import LocationTracker
                 self.location_tracker = LocationTracker()
-            except ImportError:
-                self.log_message.emit("Warning: location_tracker module not found. Location tracking disabled.")
+            except Exception as exc:
+                self.log_message.emit(f"Warning: failed to initialize location tracking: {exc}")
                 self.location_tracker = None
         
         # Create log directory if it doesn't exist
@@ -1517,6 +1651,10 @@ class WipeWorker(QThread):
                     location = self.location_tracker.get_location()
                     if location:
                         self.location_updated.emit(location)
+                    else:
+                        reason = getattr(self.location_tracker, "last_error", None)
+                        if reason:
+                            self.log_message.emit(f"Warning: Location unavailable: {reason}")
                 except Exception as e:
                     self.log_message.emit(f"Warning: Failed to get location: {str(e)}")
             
@@ -1566,6 +1704,10 @@ class WipeWorker(QThread):
                     f"Location updated: {self.location['latitude']:.6f}, "
                     f"{self.location['longitude']:.6f} ({self.location.get('source', 'unknown')})"
                 )
+            else:
+                reason = getattr(self.location_tracker, "last_error", None)
+                if reason:
+                    self.log_message.emit(f"Warning: Location update skipped: {reason}")
         except Exception as e:
             self.log_message.emit(f"Error updating location: {str(e)}")
     
