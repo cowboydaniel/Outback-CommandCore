@@ -1,6 +1,7 @@
 import sys
 import random
 import time
+import logging
 import psutil
 from datetime import datetime, timedelta
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
@@ -13,6 +14,8 @@ from PySide6.QtGui import QFont, QPalette, QColor, QPainter, QPen, QLinearGradie
 from PySide6.QtCharts import (QChart, QChartView, QLineSeries, QValueAxis, 
                             QPieSeries, QPieSlice, QBarSet, QBarSeries, 
                             QBarCategoryAxis, QBarLegendMarker, QSplineSeries)
+
+logger = logging.getLogger(__name__)
 
 class MetricCard(QFrame):
     """Custom widget for displaying metric cards with gradient styling"""
@@ -312,16 +315,37 @@ class DashboardTab(QWidget):
         # Header
         header = self.create_header()
         layout.addLayout(header)
+
+        initial_metrics = self.collect_initial_metrics()
         
         # Metrics row 1
         metrics_row1 = QHBoxLayout()
         metrics_row1.setSpacing(20)
         
-        # Initialize with placeholder values that will be updated immediately
-        self.health_card = MetricCard("System Health", "--", "%", 0)
-        self.device_card = MetricCard("Active Devices", "0", "", 0)
-        self.alerts_card = MetricCard("Security Alerts", "0", "")
-        self.performance_card = MetricCard("Performance", "--", "%", 0)
+        # Initialize with real data from system collectors
+        self.health_card = MetricCard(
+            "System Health",
+            initial_metrics["health_value"],
+            "%",
+            initial_metrics["health_trend"]
+        )
+        self.device_card = MetricCard(
+            "Active Devices",
+            initial_metrics["device_count"],
+            "",
+            initial_metrics["device_trend"]
+        )
+        self.alerts_card = MetricCard(
+            "Security Alerts",
+            initial_metrics["alerts_value"],
+            ""
+        )
+        self.performance_card = MetricCard(
+            "Performance",
+            initial_metrics["performance_value"],
+            "%",
+            initial_metrics["performance_trend"]
+        )
         
         metrics_row1.addWidget(self.health_card)
         metrics_row1.addWidget(self.device_card)
@@ -355,10 +379,10 @@ class DashboardTab(QWidget):
         metrics_row2 = QHBoxLayout()
         metrics_row2.setSpacing(20)
         
-        self.network_card = MetricCard("Network I/O", "0/0", "MB/s")
-        self.storage_card = MetricCard("Storage Used", "0.0", "TB")
-        self.temp_card = MetricCard("Avg. Temp", "--", "°C")
-        self.uptime_card = MetricCard("Uptime", "--", "")
+        self.network_card = MetricCard("Network I/O", initial_metrics["network_value"], "MB/s")
+        self.storage_card = MetricCard("Storage Used", initial_metrics["storage_value"], initial_metrics["storage_unit"])
+        self.temp_card = MetricCard("Avg. Temp", initial_metrics["temp_value"], "°C")
+        self.uptime_card = MetricCard("Uptime", initial_metrics["uptime_value"], "")
         
         metrics_row2.addWidget(self.network_card)
         metrics_row2.addWidget(self.storage_card)
@@ -604,10 +628,163 @@ class DashboardTab(QWidget):
         self.chart_animation_timer = QTimer(self)
         self.chart_animation_timer.timeout.connect(self.animate_chart_update)
         self.chart_animation_timer.start(16)  # ~60 FPS for smooth animation
-        
-        # Initialize health history with a few samples
-        current_time = time.time()
-        self.health_history = [(current_time - i, 100) for i in range(15, 0, -1)]  # Initialize with perfect scores
+
+    def collect_initial_metrics(self):
+        """Collect initial metric values for card initialization."""
+        metrics = {
+            "health_value": "Data unavailable",
+            "health_trend": 0,
+            "device_count": "Data unavailable",
+            "device_trend": 0,
+            "alerts_value": "Data unavailable",
+            "performance_value": "Data unavailable",
+            "performance_trend": 0,
+            "network_value": "Data unavailable",
+            "storage_value": "Data unavailable",
+            "storage_unit": "",
+            "temp_value": "Data unavailable",
+            "uptime_value": "Data unavailable"
+        }
+
+        try:
+            cpu_usage = psutil.cpu_percent(interval=None)
+            memory_usage = psutil.virtual_memory().percent
+            disk_usage = psutil.disk_usage('/')
+
+            health_score = self.calculate_system_health()
+            if health_score is not None:
+                metrics["health_value"] = f"{int(health_score)}"
+
+            performance_score = self.calculate_performance_score(cpu_usage, memory_usage)
+            if performance_score is not None:
+                metrics["performance_value"] = f"{int(performance_score)}"
+
+            metrics["alerts_value"] = str(
+                self.calculate_alert_count(cpu_usage, memory_usage, disk_usage.percent)
+            )
+
+            metrics["device_count"] = "1"
+
+            net_io = psutil.net_io_counters()
+            self._prev_net_io = net_io
+            self._prev_net_time = time.time()
+            metrics["network_value"] = "0.0/0.0"
+
+            storage_value, storage_unit = self.format_storage_usage(disk_usage)
+            metrics["storage_value"] = storage_value
+            metrics["storage_unit"] = storage_unit
+
+            avg_temp = self.get_average_cpu_temp()
+            if avg_temp is not None:
+                metrics["temp_value"] = f"{avg_temp:.0f}"
+
+            metrics["uptime_value"] = self.format_uptime(time.time() - psutil.boot_time())
+        except Exception as e:
+            logger.exception("Error collecting initial metrics: %s", e)
+
+        return metrics
+
+    def set_metric_unavailable(self, card, unit_text=""):
+        """Show a clear unavailable state on a metric card."""
+        card.value_label.setText("Data unavailable")
+        card.unit_label.setText(unit_text)
+        if hasattr(card, 'trend_label'):
+            card.trend_label.setText("!")
+            card.trend_label.setStyleSheet("color: #b0b0b0; font-size: 16px; font-weight: bold;")
+
+    def get_average_cpu_temp(self):
+        """Return average CPU temperature, or None if unavailable."""
+        try:
+            temps = psutil.sensors_temperatures()
+            if not temps:
+                return None
+
+            cpu_temps = []
+            for name, entries in temps.items():
+                if 'core' in name.lower() or 'cpu' in name.lower() or 'k10temp' in name.lower() or 'coretemp' in name.lower():
+                    for entry in entries:
+                        if entry.current and entry.current > 0:
+                            cpu_temps.append(entry.current)
+
+            if cpu_temps:
+                return sum(cpu_temps) / len(cpu_temps)
+            return None
+        except Exception as e:
+            logger.exception("Error reading CPU temperature: %s", e)
+            return None
+
+    def format_storage_usage(self, disk_usage):
+        """Format storage usage display values."""
+        def format_bytes(size):
+            power = 2**10  # 2**10 = 1024
+            n = 0
+            power_labels = {0: 'B', 1: 'KB', 2: 'MB', 3: 'GB', 4: 'TB'}
+            while size > power and n < len(power_labels) - 1:
+                size /= power
+                n += 1
+            return size, power_labels[n]
+
+        used, used_unit = format_bytes(disk_usage.used)
+        total, total_unit = format_bytes(disk_usage.total)
+        percent_used = disk_usage.percent
+
+        storage_value = (
+            f"{used:.1f}<span style='font-size: 18px; color: #b0b0b0;'>"
+            f" {used_unit} / {total:.1f} {total_unit}</span>"
+        )
+        storage_unit = f"({percent_used:.0f}% used)"
+        return storage_value, storage_unit
+
+    def calculate_alert_count(self, cpu_usage, memory_usage, disk_percent):
+        """Calculate a basic alert count based on system thresholds."""
+        alerts = 0
+
+        if cpu_usage >= 90:
+            alerts += 1
+        if memory_usage >= 90:
+            alerts += 1
+        if disk_percent >= 90:
+            alerts += 1
+
+        avg_temp = self.get_average_cpu_temp()
+        if avg_temp is not None and avg_temp >= 85:
+            alerts += 1
+
+        return alerts
+
+    def calculate_performance_score(self, cpu_usage, memory_usage):
+        """Calculate a performance score for the current system state."""
+        try:
+            cpu_score = max(0, 100 - (cpu_usage * 1.2))
+
+            if memory_usage < 60:
+                memory_score = 100 - (memory_usage * 0.5)
+            elif memory_usage < 85:
+                memory_score = 100 - (60 * 0.5) - ((memory_usage - 60) * 1.5)
+            else:
+                memory_score = max(0, 100 - (60 * 0.5) - (25 * 1.5) - ((memory_usage - 85) * 4))
+
+            try:
+                io_wait = psutil.cpu_times_percent().iowait
+                disk_io_score = max(0, 100 - (io_wait * 2))
+            except Exception as e:
+                logger.exception("Error reading I/O wait time: %s", e)
+                disk_io_score = 90
+
+            weights = {
+                'cpu': 0.5,
+                'memory': 0.3,
+                'disk_io': 0.2
+            }
+
+            return (
+                (cpu_score * weights['cpu']) +
+                (memory_score * weights['memory']) +
+                (disk_io_score * weights['disk_io'])
+            )
+        except Exception as e:
+            logger.exception("Error calculating performance score: %s", e)
+            return None
 
     def update_timestamp(self):
         """Update the timestamp with enhanced styling."""
@@ -659,21 +836,31 @@ class DashboardTab(QWidget):
             try:
                 disk_io_wait = psutil.cpu_times_percent().iowait
                 disk_io_score = max(0, 100 - (disk_io_wait * 2))  # Less aggressive I/O penalty
-            except:
+            except Exception as e:
+                logger.exception("Error reading disk I/O wait: %s", e)
                 disk_io_score = 100
                 
             disk_score = (disk_free_score * 0.8) + (disk_io_score * 0.2)  # Favor free space more
             
             # More granular temperature scoring
             try:
-                temp = psutil.sensors_temperatures()['coretemp'][0].current
-                if temp < 60: temp_score = 100
-                elif temp < 70: temp_score = 95
-                elif temp < 75: temp_score = 90
-                elif temp < 80: temp_score = 80
-                elif temp < 85: temp_score = 70
-                else: temp_score = 50
-            except:
+                temp = self.get_average_cpu_temp()
+                if temp is None:
+                    temp_score = 100
+                elif temp < 60:
+                    temp_score = 100
+                elif temp < 70:
+                    temp_score = 95
+                elif temp < 75:
+                    temp_score = 90
+                elif temp < 80:
+                    temp_score = 80
+                elif temp < 85:
+                    temp_score = 70
+                else:
+                    temp_score = 50
+            except Exception as e:
+                logger.exception("Error reading temperature: %s", e)
                 temp_score = 100  # If temp can't be read, assume it's fine
                 
             # Network score - check if there's any network activity
@@ -685,7 +872,8 @@ class DashboardTab(QWidget):
                     net_score = 100  # Network is active
                 else:
                     net_score = 90  # No network activity but interface is up
-            except:
+            except Exception as e:
+                logger.exception("Error reading network counters: %s", e)
                 net_score = 90  # Default if can't check
             
             # Get system uptime in hours
@@ -766,8 +954,8 @@ class DashboardTab(QWidget):
             return current_health_score  # Fallback if no history yet
             
         except Exception as e:
-            print(f"Error calculating system health: {e}")
-            return 85  # Default score if something goes wrong
+            logger.exception("Error calculating system health: %s", e)
+            return None
     
     def update_dashboard(self):
         """Update all dashboard metrics with real data."""
@@ -813,18 +1001,21 @@ class DashboardTab(QWidget):
         else:
             trend = 0.5  # Default neutral trend if not enough data
         
-        # Update health card with moving average if we have data
-        if self.health_history:
-            avg_health = sum(s for _, s in self.health_history) / len(self.health_history)
-            self.health_card.value_label.setText(f"{int(avg_health)}")
-            
-            # Update trend indicator if it exists
-            if hasattr(self.health_card, 'trend_label'):
-                color = "#00d4aa" if trend > 1 else ("#ff6b6b" if trend < 0 else "#b0b0b0")
-                self.health_card.trend_label.setStyleSheet(f"color: {color}; font-size: 16px; font-weight: bold;")
+        if health_score is None:
+            self.set_metric_unavailable(self.health_card, "%")
         else:
-            # Fallback to current health score if no history yet
-            self.health_card.value_label.setText(f"{int(health_score)}")
+            # Update health card with moving average if we have data
+            if self.health_history:
+                avg_health = sum(s for _, s in self.health_history) / len(self.health_history)
+                self.health_card.value_label.setText(f"{int(avg_health)}")
+                
+                # Update trend indicator if it exists
+                if hasattr(self.health_card, 'trend_label'):
+                    color = "#00d4aa" if trend > 1 else ("#ff6b6b" if trend < 0 else "#b0b0b0")
+                    self.health_card.trend_label.setStyleSheet(f"color: {color}; font-size: 16px; font-weight: bold;")
+            else:
+                # Fallback to current health score if no history yet
+                self.health_card.value_label.setText(f"{int(health_score)}")
         
         # Keep only recent data points
         if len(self.chart_data_points) > self.max_data_points:
@@ -834,46 +1025,16 @@ class DashboardTab(QWidget):
         self.update_system_metrics()
         self.update_uptime()
         self.update_device_count()
+        self.update_alerts(cpu_usage, memory_usage)
         
         # Calculate and update performance score with 3-second moving average
         try:
             current_time = time.time()
             
             # Get current metrics
-            cpu_usage = psutil.cpu_percent(interval=None)
-            memory = psutil.virtual_memory()
-            
-            # Calculate individual scores (0-100 scale)
-            cpu_score = max(0, 100 - (cpu_usage * 1.2))  # Slight penalty for high CPU
-            
-            # Memory scoring (more forgiving at higher usage)
-            memory_usage = memory.percent
-            if memory_usage < 60:
-                memory_score = 100 - (memory_usage * 0.5)  # 0-60% usage: 100-70% score
-            elif memory_usage < 85:
-                memory_score = 100 - (60 * 0.5) - ((memory_usage - 60) * 1.5)  # 60-85%: 70-32.5% score
-            else:
-                memory_score = max(0, 100 - (60 * 0.5) - (25 * 1.5) - ((memory_usage - 85) * 4))  # 85%+: 32.5-0% score
-            
-            # Disk I/O scoring (based on I/O wait time)
-            try:
-                io_wait = psutil.cpu_times_percent().iowait
-                disk_io_score = max(0, 100 - (io_wait * 2))
-            except:
-                disk_io_score = 90  # Default if can't measure I/O wait
-            
-            # Weighted average for current performance score
-            weights = {
-                'cpu': 0.5,      # 50% weight
-                'memory': 0.3,   # 30% weight
-                'disk_io': 0.2   # 20% weight
-            }
-            
-            current_score = (
-                (cpu_score * weights['cpu']) +
-                (memory_score * weights['memory']) +
-                (disk_io_score * weights['disk_io'])
-            )
+            current_score = self.calculate_performance_score(cpu_usage, memory_usage)
+            if current_score is None:
+                raise ValueError("Performance score unavailable")
             
             # Add current score to history with timestamp
             self.performance_history.append((current_time, current_score))
@@ -910,8 +1071,8 @@ class DashboardTab(QWidget):
                     self._last_performance_score = avg_score
             
         except Exception as e:
-            print(f"Error updating performance score: {e}")
-            self.performance_card.value_label.setText("--")
+            logger.exception("Error updating performance score: %s", e)
+            self.set_metric_unavailable(self.performance_card, "%")
     
     def animate_chart_update(self):
         """Smoothly animate chart updates with data flowing right to left."""
@@ -968,30 +1129,21 @@ class DashboardTab(QWidget):
                     mb_recv = bytes_recv_per_sec / (1024 * 1024)
                     
                     self.network_card.value_label.setText(f"{mb_recv:.1f}/{mb_sent:.1f}")
+                else:
+                    self.set_metric_unavailable(self.network_card, "MB/s")
+            else:
+                self.set_metric_unavailable(self.network_card, "MB/s")
             
             self._prev_net_io = net_io
             self._prev_net_time = time.time()
             
             # Storage usage for boot drive
             boot_drive = psutil.disk_usage('/')
-            
-            # Convert to appropriate units
-            def format_bytes(size):
-                power = 2**10  # 2**10 = 1024
-                n = 0
-                power_labels = {0: 'B', 1: 'KB', 2: 'MB', 3: 'GB', 4: 'TB'}
-                while size > power and n < len(power_labels) - 1:
-                    size /= power
-                    n += 1
-                return size, power_labels[n]
-            
-            used, used_unit = format_bytes(boot_drive.used)
-            total, total_unit = format_bytes(boot_drive.total)
-            percent_used = boot_drive.percent
-            
+
             # Update the storage card with formatted values
-            self.storage_card.value_label.setText(f"{used:.1f}<span style='font-size: 18px; color: #b0b0b0;'> {used_unit} / {total:.1f} {total_unit}</span>")
-            self.storage_card.unit_label.setText(f"({percent_used:.0f}% used)")
+            storage_value, storage_unit = self.format_storage_usage(boot_drive)
+            self.storage_card.value_label.setText(storage_value)
+            self.storage_card.unit_label.setText(storage_unit)
             
             # Update the card title to be more specific
             for i in range(self.storage_card.layout().count()):
@@ -1001,38 +1153,23 @@ class DashboardTab(QWidget):
                     break
             
             # CPU temperature (if available)
-            try:
-                temps = psutil.sensors_temperatures()
-                if temps:
-                    # Look for CPU temperature specifically
-                    cpu_temps = []
-                    for name, entries in temps.items():
-                        # Check for common CPU temperature sensor names
-                        if 'core' in name.lower() or 'cpu' in name.lower() or 'k10temp' in name.lower() or 'coretemp' in name.lower():
-                            for entry in entries:
-                                if entry.current and entry.current > 0:  # Only include valid temps
-                                    cpu_temps.append(entry.current)
-                    
-                    if cpu_temps:
-                        # Calculate average temperature across all CPU cores
-                        avg_cpu_temp = sum(cpu_temps) / len(cpu_temps)
-                        self.temp_card.value_label.setText(f"{avg_cpu_temp:.0f}")
-                        # Update the card title to be more specific by finding the title label
-                        for i in range(self.temp_card.layout().count()):
-                            widget = self.temp_card.layout().itemAt(i).widget()
-                            if isinstance(widget, QLabel) and widget.objectName() == "title":
-                                widget.setText("CPU Temp")
-                                break
-                    else:
-                        self.temp_card.value_label.setText("--")
-                else:
-                    self.temp_card.value_label.setText("--")
-            except Exception as e:
-                print(f"Error reading CPU temperature: {e}")
-                self.temp_card.value_label.setText("--")
+            avg_temp = self.get_average_cpu_temp()
+            if avg_temp is not None:
+                self.temp_card.value_label.setText(f"{avg_temp:.0f}")
+                # Update the card title to be more specific by finding the title label
+                for i in range(self.temp_card.layout().count()):
+                    widget = self.temp_card.layout().itemAt(i).widget()
+                    if isinstance(widget, QLabel) and widget.objectName() == "title":
+                        widget.setText("CPU Temp")
+                        break
+            else:
+                self.set_metric_unavailable(self.temp_card, "°C")
                 
         except Exception as e:
-            print(f"Error updating system metrics: {e}")
+            logger.exception("Error updating system metrics: %s", e)
+            self.set_metric_unavailable(self.network_card, "MB/s")
+            self.set_metric_unavailable(self.storage_card)
+            self.set_metric_unavailable(self.temp_card, "°C")
     
     def format_uptime(self, seconds):
         """Format uptime into a human-readable string with seconds."""
@@ -1057,8 +1194,23 @@ class DashboardTab(QWidget):
             uptime_seconds = (datetime.now() - boot_time).total_seconds()
             self.uptime_card.value_label.setText(self.format_uptime(uptime_seconds))
         except Exception as e:
-            print(f"Error updating uptime: {e}")
-            self.uptime_card.value_label.setText("--")
+            logger.exception("Error updating uptime: %s", e)
+            self.set_metric_unavailable(self.uptime_card)
+
+    def update_alerts(self, cpu_usage=None, memory_usage=None):
+        """Update the alert count based on current system thresholds."""
+        try:
+            if cpu_usage is None:
+                cpu_usage = psutil.cpu_percent(interval=None)
+            if memory_usage is None:
+                memory_usage = psutil.virtual_memory().percent
+
+            disk_percent = psutil.disk_usage('/').percent
+            alert_count = self.calculate_alert_count(cpu_usage, memory_usage, disk_percent)
+            self.alerts_card.value_label.setText(str(alert_count))
+        except Exception as e:
+            logger.exception("Error updating alert count: %s", e)
+            self.set_metric_unavailable(self.alerts_card)
             
     def on_device_changed(self, index):
         """Handle device selection change."""
@@ -1114,6 +1266,5 @@ class DashboardTab(QWidget):
             self.last_device_count = device_count
             
         except Exception as e:
-            print(f"Error updating device count: {e}")
-            # Fallback to showing just the local device on error
-            self.device_card.value_label.setText("1")
+            logger.exception("Error updating device count: %s", e)
+            self.set_metric_unavailable(self.device_card)

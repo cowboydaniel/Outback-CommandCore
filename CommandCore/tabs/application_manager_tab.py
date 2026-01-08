@@ -837,7 +837,7 @@ class ApplicationManagerTab(QWidget):
                 "id": "ares_i",
                 "name": "ARES-I",
                 "description": "AI-powered research and analysis tool.",
-                "path": os.path.join(base_dir, "ARES-i/ares-i.py"),
+                "path": os.path.join(base_dir, "ARES-i/app/main.py"),
                 'version': None,
                 'status': 'stopped',
                 'process_name': 'ares_i_process'
