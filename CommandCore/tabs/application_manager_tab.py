@@ -19,7 +19,8 @@ import signal
 
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QLabel, QListWidget, 
                              QHBoxLayout, QPushButton, QMessageBox, QFrame, 
-                             QGridLayout, QSizePolicy, QScrollArea, QSpacerItem)
+                             QGridLayout, QSizePolicy, QScrollArea, QSpacerItem,
+                             QApplication)
 from PySide6.QtCore import Qt, QSize, Signal, QThread, QTimer, QProcess, QObject, QMutex
 from PySide6.QtGui import QIcon, QFont, QPixmap, QColor, QPainter, QLinearGradient
 
@@ -249,8 +250,8 @@ class ProcessMonitor(QThread):
     """Monitors processes and emits signals when they exit."""
     process_exited = Signal(str, int)  # app_id, returncode
     
-    def __init__(self):
-        super().__init__()
+    def __init__(self, parent=None):
+        super().__init__(parent)
         self.processes = {}  # app_id -> (process, callback)
         self.running = True
         self.mutex = QMutex()
@@ -275,7 +276,6 @@ class ProcessMonitor(QThread):
     def stop(self):
         """Stop the monitor thread."""
         self.running = False
-        self.wait()
     
     def run(self):
         """Main monitoring loop."""
@@ -779,8 +779,9 @@ class ApplicationManagerTab(QWidget):
         super().__init__(parent)
         
         # Initialize process monitor FIRST
-        self.process_monitor = ProcessMonitor()
+        self.process_monitor = ProcessMonitor(self)
         self.process_monitor.start()
+        self._connect_shutdown_hook()
         
         # Then initialize apps and UI
         self.apps = self._get_installed_apps()
@@ -788,9 +789,18 @@ class ApplicationManagerTab(QWidget):
     
     def closeEvent(self, event):
         """Clean up when the tab is closed."""
-        if hasattr(self, 'process_monitor'):
-            self.process_monitor.stop()
+        self._shutdown_process_monitor()
         super().closeEvent(event)
+
+    def _connect_shutdown_hook(self):
+        app = QApplication.instance()
+        if app is not None:
+            app.aboutToQuit.connect(self._shutdown_process_monitor)
+
+    def _shutdown_process_monitor(self):
+        if hasattr(self, 'process_monitor') and self.process_monitor.isRunning():
+            self.process_monitor.stop()
+            self.process_monitor.wait()
     
     def _is_process_running(self, process_name):
         """Check if a process is running by name or module path for specific apps, with result output."""
