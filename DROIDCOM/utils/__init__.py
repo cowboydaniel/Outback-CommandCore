@@ -1,6 +1,5 @@
-"""
-DROIDCOM - Utility modules
-"""
+"""Utility module compatibility layer."""
 
-from .adb import find_adb_path, check_platform_tools, run_adb_command
-from .helpers import format_size, format_bytes
+from ..core.utils import format_bytes, format_size
+
+__all__ = ["format_bytes", "format_size"]

@@ -14,7 +14,7 @@ import threading
 
 from PySide6 import QtCore, QtWidgets
 
-from ..constants import IS_WINDOWS
+from ..app.config import IS_WINDOWS
 from ..utils.qt_dispatcher import emit_ui
 
 

@@ -9,7 +9,7 @@ import subprocess
 import shutil
 import logging
 
-from .constants import IS_WINDOWS
+from .app.config import IS_WINDOWS
 
 
 def check_and_install_android_dependencies():

@@ -5,23 +5,24 @@ Entry point for running the application standalone.
 
 from pathlib import Path
 import sys
-import os
 
 from PySide6 import QtCore, QtWidgets
 from PySide6.QtGui import QIcon
 
 if __package__:
-    from .app import AndroidToolsModule
+    from . import AndroidToolsModule
+    from .config import APP_VERSION
 else:
-    module_root = Path(__file__).resolve().parent.parent
+    module_root = Path(__file__).resolve().parent.parent.parent
     sys.path.append(str(module_root))
     from DROIDCOM.app import AndroidToolsModule
+    from DROIDCOM.app.config import APP_VERSION
 
 
 def main():
     """Main entry point for the application"""
     qt_app = QtWidgets.QApplication(sys.argv)
-    qt_app.setApplicationVersion("1.0.0")
+    qt_app.setApplicationVersion(APP_VERSION)
 
     window = QtWidgets.QWidget()
     window.setWindowTitle("Android Tools Module Test")
@@ -37,9 +38,9 @@ def main():
     window.setMinimumSize(800, 400)  # Set minimum size
 
     # Set window icon
-    icon_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'icons', 'droidcom.png')
-    if os.path.exists(icon_path):
-        window.setWindowIcon(QIcon(icon_path))
+    icon_path = Path(__file__).resolve().parents[2] / 'icons' / 'droidcom.png'
+    if icon_path.exists():
+        window.setWindowIcon(QIcon(str(icon_path)))
 
     layout = QtWidgets.QVBoxLayout(window)
     app = AndroidToolsModule(window)

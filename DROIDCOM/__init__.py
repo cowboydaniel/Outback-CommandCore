@@ -5,7 +5,7 @@ A comprehensive tool for managing Android devices via ADB.
 
 from .app import AndroidToolsModule
 from .dependencies import check_and_install_android_dependencies
-from .constants import IS_WINDOWS
+from .app.config import IS_WINDOWS
 
 __all__ = [
     'AndroidToolsModule',

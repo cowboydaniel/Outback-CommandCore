@@ -10,7 +10,7 @@ import shutil
 import time
 import platform
 
-from ..constants import IS_WINDOWS
+from ..app.config import IS_WINDOWS
 from ..utils.qt_dispatcher import emit_ui
 
 

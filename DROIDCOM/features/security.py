@@ -13,7 +13,7 @@ import threading
 import time
 from datetime import datetime
 
-from ..constants import IS_WINDOWS
+from ..app.config import IS_WINDOWS
 from ..utils.qt_dispatcher import emit_ui, append_text, clear_text, set_progress, set_text
 
 
