@@ -33,15 +33,24 @@ from PySide6.QtGui import (
     QFontDatabase, QGuiApplication
 )
 
-# Import tab modules
-from dashboard_tab import DashboardTab
-from wipe_operations_tab import WipeOperationsTab
-from forensic_tools_tab import ForensicToolsTab
-from device_management_tab import DeviceManagementTab
-from bulk_operations_tab import BulkOperationsTab
-from security_compliance_tab import SecurityComplianceTab
-from settings_tab import SettingsTab
-from advanced_tab import AdvancedTab
+from BLACKSTORM.app.config import (
+    APP_TITLE,
+    DEFAULT_FONT_FAMILY,
+    DEFAULT_FONT_SIZE,
+    DEFAULT_SETTINGS,
+    ICON_PATH,
+    SETTINGS_FILE,
+    WINDOW_MIN_SIZE,
+)
+from BLACKSTORM.core.utils import deep_merge
+from BLACKSTORM.tabs.advanced_tab import AdvancedTab
+from BLACKSTORM.tabs.bulk_operations_tab import BulkOperationsTab
+from BLACKSTORM.tabs.dashboard_tab import DashboardTab
+from BLACKSTORM.tabs.device_management_tab import DeviceManagementTab
+from BLACKSTORM.tabs.forensic_tools_tab import ForensicToolsTab
+from BLACKSTORM.tabs.security_compliance_tab import SecurityComplianceTab
+from BLACKSTORM.tabs.settings_tab import SettingsTab
+from BLACKSTORM.tabs.wipe_operations_tab import WipeOperationsTab
 
 class BlackStormLauncher(QMainWindow):
     """
@@ -49,20 +58,19 @@ class BlackStormLauncher(QMainWindow):
     """
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("BLACKSTORM - Secure Data Erasure & Forensic Suite")
-        self.setMinimumSize(1280, 800)
+        self.setWindowTitle(APP_TITLE)
+        self.setMinimumSize(*WINDOW_MIN_SIZE)
 
         # Set window icon
-        icon_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'icons', 'blackstorm.png')
-        if os.path.exists(icon_path):
-            self.setWindowIcon(QIcon(icon_path))
+        if ICON_PATH.exists():
+            self.setWindowIcon(QIcon(str(ICON_PATH)))
 
         # Initialize logging
         self._setup_logging()
         self.logger = logging.getLogger('BlackStormLauncher')
         
         # Initialize application state
-        self.settings_file = os.path.expanduser('~/.config/blackstorm/settings.json')
+        self.settings_file = SETTINGS_FILE
         
         # Load default settings first
         self.settings = self._load_settings()
@@ -276,41 +284,16 @@ class BlackStormLauncher(QMainWindow):
         
     def _load_settings(self):
         """Load application settings from file."""
-        default_settings = {
-            'window_geometry': None,
-            'window_state': None,
-            'recent_files': [],
-            'ui_theme': 'dark',
-            'font': {
-                'family': 'Segoe UI' if sys.platform == 'win32' else 'Noto Sans',
-                'size': 10
-            },
-            'show_statusbar': True,
-            'show_toolbar': True
-        }
-        
         if not os.path.exists(self.settings_file):
-            return default_settings
+            return DEFAULT_SETTINGS.copy()
             
         try:
             with open(self.settings_file, 'r') as f:
                 settings = json.load(f)
-                # Deep merge with defaults
-                def deep_merge(default, new):
-                    if isinstance(default, dict) and isinstance(new, dict):
-                        result = default.copy()
-                        for k, v in new.items():
-                            if k in result and isinstance(result[k], dict) and isinstance(v, dict):
-                                result[k] = deep_merge(result[k], v)
-                            else:
-                                result[k] = v
-                        return result
-                    return new if new is not None else default
-                
-                return deep_merge(default_settings, settings)
+                return deep_merge(DEFAULT_SETTINGS, settings)
         except Exception as e:
             print(f"Error loading settings: {e}")
-            return default_settings
+            return DEFAULT_SETTINGS.copy()
             
     def _save_settings(self):
         """Save current settings to file."""
@@ -359,9 +342,8 @@ class BlackStormLauncher(QMainWindow):
                 self.restoreState(self.settings['window_state'])
                 
             # Get font settings with defaults
-            font_family = self.settings.get('font', {}).get('family', 
-                'Segoe UI' if sys.platform == 'win32' else 'Noto Sans')
-            font_size = self.settings.get('font', {}).get('size', 10)
+            font_family = self.settings.get('font', {}).get('family', DEFAULT_FONT_FAMILY)
+            font_size = self.settings.get('font', {}).get('size', DEFAULT_FONT_SIZE)
             
             # Apply font settings to the application
             app = QApplication.instance()

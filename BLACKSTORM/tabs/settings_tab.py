@@ -3,7 +3,6 @@ Settings tab for BLACKSTORM - Application configuration.
 """
 import json
 import os
-import sys
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTabWidget, QPushButton,
@@ -13,12 +12,23 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QFont, QPalette, QColor, QAction
 from PySide6.QtCore import Qt, Signal, QSize
 
-class SettingsTab(QWidget):
+from BLACKSTORM.app.config import (
+    CONFIG_DIR,
+    DEFAULT_FONT_FAMILY,
+    DEFAULT_FONT_SIZE,
+    DEFAULT_SETTINGS,
+    SETTINGS_FILE,
+)
+from BLACKSTORM.core.base import BaseTab
+from BLACKSTORM.core.utils import deep_merge
+from BLACKSTORM.ui.styles.buttons import SAVE_BUTTON_STYLE
+
+class SettingsTab(BaseTab):
     """Tab for application settings and configuration."""
     
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.settings = {}
+        self.settings = deep_merge(DEFAULT_SETTINGS, {})
         self.setup_ui()
         
     def set_settings(self, settings):
@@ -68,20 +78,7 @@ class SettingsTab(QWidget):
         
         # Save button
         btn_save = QPushButton("Save Settings")
-        btn_save.setStyleSheet("""
-            QPushButton {
-                background: #2ECC71;
-                color: white;
-                padding: 8px 15px;
-                border: none;
-                border-radius: 4px;
-                font-weight: bold;
-                min-width: 150px;
-            }
-            QPushButton:hover {
-                background: #27AE60;
-            }
-        """)
+        btn_save.setStyleSheet(SAVE_BUTTON_STYLE)
         btn_save.clicked.connect(self.save_settings)
         
         # Button layout
@@ -121,7 +118,7 @@ class SettingsTab(QWidget):
         
         # Font family selection
         self.font_family = QFontComboBox()
-        self.font_family.setCurrentFont(QFont("Segoe UI" if sys.platform == 'win32' else "Noto Sans"))
+        self.font_family.setCurrentFont(QFont(DEFAULT_FONT_FAMILY))
         self.font_family.currentFontChanged.connect(self._update_font_preview)
         
         # Font preview
@@ -228,41 +225,32 @@ class SettingsTab(QWidget):
             # Try to load settings from the main application first
             if app and hasattr(app, 'settings'):
                 # Deep merge the settings
-                def deep_merge(d, u):
-                    for k, v in u.items():
-                        if isinstance(v, dict):
-                            d[k] = deep_merge(d.get(k, {}), v)
-                        else:
-                            d[k] = v
-                    return d
-                
                 # Merge the application settings with our defaults
                 self.settings = deep_merge(self.settings.copy(), app.settings)
             
             # Load language if the widget exists
             if hasattr(self, 'language'):
-                self.language.setCurrentText(self.settings.get('language', 'English'))
+                self.language.setCurrentText(self.settings.get('language', DEFAULT_SETTINGS['language']))
             
             # Load save location if the widget exists
             if hasattr(self, 'save_location'):
-                self.save_location.setText(self.settings.get('save_location', ''))
+                self.save_location.setText(self.settings.get('save_location', DEFAULT_SETTINGS['save_location']))
             
             # Load auto-update setting if the widget exists
             if hasattr(self, 'auto_update'):
-                self.auto_update.setChecked(self.settings.get('auto_update', True))
+                self.auto_update.setChecked(self.settings.get('auto_update', DEFAULT_SETTINGS['auto_update']))
             
             # Load theme if the widget exists
             if hasattr(self, 'theme_combo'):
-                theme = self.settings.get('theme', 'dark')
+                theme = self.settings.get('theme', DEFAULT_SETTINGS['ui_theme'])
                 if theme.lower() in ['dark', 'light', 'system']:
                     self.theme_combo.setCurrentText(theme.capitalize())
             
             # Load font settings if widgets exist
             if hasattr(self, 'font_family') and hasattr(self, 'font_size_slider'):
                 font_settings = self.settings.get('font', {})
-                font_family = font_settings.get('family', 
-                    'Segoe UI' if sys.platform == 'win32' else 'Noto Sans')
-                font_size = font_settings.get('size', 10)
+                font_family = font_settings.get('family', DEFAULT_FONT_FAMILY)
+                font_size = font_settings.get('size', DEFAULT_FONT_SIZE)
                 
                 # Create and set the font
                 font = QFont(font_family)
@@ -279,7 +267,7 @@ class SettingsTab(QWidget):
             
             # Load wipe method if the widget exists
             if hasattr(self, 'wipe_method'):
-                wipe_method = self.settings.get('wipe_method', 'DoD 5220.22-M (3-pass)')
+                wipe_method = self.settings.get('wipe_method', DEFAULT_SETTINGS['wipe_method'])
                 index = self.wipe_method.findText(wipe_method)
                 if index >= 0:
                     self.wipe_method.setCurrentIndex(index)
@@ -318,12 +306,10 @@ class SettingsTab(QWidget):
             }
             
             # Ensure config directory exists
-            config_dir = os.path.expanduser('~/.config/blackstorm')
-            os.makedirs(config_dir, exist_ok=True)
-            settings_file = os.path.join(config_dir, 'settings.json')
+            os.makedirs(CONFIG_DIR, exist_ok=True)
             
             # Save to file
-            with open(settings_file, 'w') as f:
+            with open(SETTINGS_FILE, 'w') as f:
                 json.dump(settings, f, indent=4)
             
             QMessageBox.information(

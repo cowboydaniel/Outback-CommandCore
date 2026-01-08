@@ -774,7 +774,7 @@ class ApplicationManagerTab(QWidget):
                         if 'ares_i.ares_i' in cmdline_str:
                             return True
                     elif process_name == 'blackstorm_launcher_process':
-                        if 'blackstorm.blackstorm_launcher' in cmdline_str:
+                        if 'blackstorm.app.main' in cmdline_str or 'blackstorm/app/main.py' in cmdline_str:
                             return True
                     elif process_name == 'commandcore_launcher_process':
                         if 'commandcore.app.main' in cmdline_str:
@@ -846,7 +846,7 @@ class ApplicationManagerTab(QWidget):
                 "id": "blackstorm_launcher",
                 "name": "Blackstorm Launcher",
                 "description": "Launcher for the Blackstorm suite of applications.",
-                "path": os.path.join(base_dir, "BLACKSTORM/blackstorm_launcher.py"),
+                "path": os.path.join(base_dir, "BLACKSTORM/app/main.py"),
                 'version': None,
                 'status': 'stopped',
                 'process_name': 'blackstorm_launcher_process'
