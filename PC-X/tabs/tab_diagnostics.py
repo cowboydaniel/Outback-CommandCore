@@ -4,6 +4,7 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QLabel,
     QPushButton,
+    QFrame,
     QScrollArea,
     QTextEdit,
     QVBoxLayout,
