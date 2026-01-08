@@ -336,11 +336,6 @@ class USBAnalyzer(QObject if GUI_AVAILABLE else object):
         Args:
             callback: Optional callback function for progress updates
         """
-        import traceback
-        logger.info("USBAnalyzer.__init__ called from:")
-        for line in traceback.format_stack()[:-1]:
-            logger.info(line.strip())
-
         if GUI_AVAILABLE:
             super().__init__()
         self.callback = callback
@@ -348,7 +343,6 @@ class USBAnalyzer(QObject if GUI_AVAILABLE else object):
         self.vendor_db = {}
         self.device_db = {}
         self._load_databases()
-        logger.info("USBAnalyzer.__init__ completed successfully")
         
     def update_progress(self, message: str, progress: int = None):
         """Update progress through the callback."""
@@ -1449,10 +1443,11 @@ class EmbeddedDeviceTester:
 
 class USBTab(QWidget):
     """Tab for USB device management and analysis."""
-    
-    # Define a signal for device updates
+
+    # Define signals for thread-safe UI updates
     devices_updated = Signal(list, str)
-    
+    log_message_signal = Signal(str)  # Signal for thread-safe logging to UI
+
     def __init__(self, parent=None):
         """Initialize the USB tab."""
         super().__init__(parent)
@@ -1460,9 +1455,16 @@ class USBTab(QWidget):
         self.scan_thread = None
         self._devices = []
         self.setup_ui()
-        
-        # Connect the signal to the update method
+
+        # Connect signals to update methods (QueuedConnection for thread safety)
         self.devices_updated.connect(self._update_device_list, Qt.ConnectionType.QueuedConnection)
+        self.log_message_signal.connect(self._append_log_message, Qt.ConnectionType.QueuedConnection)
+
+    @Slot(str)
+    def _append_log_message(self, message: str):
+        """Thread-safe slot to append log messages to device_info widget."""
+        if hasattr(self, 'device_info'):
+            self.device_info.append(message)
     
     def setup_ui(self):
         """Set up the USB tab UI."""
@@ -1529,7 +1531,6 @@ class USBTab(QWidget):
             
             # Create analyzer
             self.usb_analyzer = USBAnalyzer(self.update_status)
-            logger.info("DEBUG: USBAnalyzer created")
 
             if GUI_AVAILABLE:
                 # Clean up any existing thread
@@ -1537,29 +1538,21 @@ class USBTab(QWidget):
                     if self.scan_thread.isRunning():
                         self.scan_thread.quit()
                         self.scan_thread.wait()
-                logger.info("DEBUG: Cleaned up existing thread")
 
                 # Create new thread
                 self.scan_thread = QThread()
-                logger.info("DEBUG: QThread created")
                 self.usb_analyzer.moveToThread(self.scan_thread)
-                logger.info("DEBUG: moveToThread completed")
 
                 # Connect signals
                 self.scan_thread.started.connect(self.usb_analyzer.get_usb_devices)
-                logger.info("DEBUG: started signal connected")
                 self.scan_thread.finished.connect(self.scan_thread.deleteLater)
-                logger.info("DEBUG: finished->deleteLater connected")
                 self.scan_thread.finished.connect(self.scan_finished)
-                logger.info("DEBUG: finished->scan_finished connected")
 
                 # Store devices for later access
                 self._devices = []
 
                 # Start the thread
-                logger.info("DEBUG: About to start thread")
                 self.scan_thread.start()
-                logger.info("DEBUG: Thread started")
                 
                 # Ensure thread is cleaned up if the tab is closed
                 self.destroyed.connect(lambda: self.cleanup_scan_thread())
@@ -1666,14 +1659,15 @@ class USBTab(QWidget):
             self.device_info.append(f"<pre>{traceback.format_exc()}</pre>")
             
     def update_status(self, data):
-        """Update status from USB analyzer callbacks."""
+        """Update status from USB analyzer callbacks (thread-safe via signals)."""
         if data.get('type') == 'progress':
             # Update progress if needed
             pass
         elif data.get('type') == 'log':
             level = data.get('level', 'info').upper()
             message = data.get('message', '')
-            self.device_info.append(f"[{level}] {message}")
+            # Use signal for thread-safe UI update
+            self.log_message_signal.emit(f"[{level}] {message}")
         elif data.get('type') == 'devices':
             # Update device list in the UI thread using the signal
             if GUI_AVAILABLE:
