@@ -399,7 +399,7 @@ def main():
             
             # Step 3: Initialize tabs and start data collection
             update_splash_message("Loading dashboard...")
-            dashboard_tab = DashboardTab()
+            dashboard_tab = DashboardTab(main_window=main_window)
             time.sleep(0.5)  # 500ms delay
             
             # If your tabs have initialization methods that fetch data, call them here
