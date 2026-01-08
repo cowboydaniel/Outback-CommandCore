@@ -13,27 +13,27 @@ import tempfile
 import zipfile
 import urllib.request
 
-from .constants import IS_WINDOWS
-from .dependencies import check_and_install_android_dependencies
-from .utils.qt_dispatcher import emit_ui, get_ui_dispatcher
+from .config import IS_WINDOWS
+from ..dependencies import check_and_install_android_dependencies
+from ..utils.qt_dispatcher import emit_ui, get_ui_dispatcher
 
 # Import UI mixin
-from .ui.widgets import WidgetsMixin
+from ..ui.components.widgets import WidgetsMixin
 
 # Import feature mixins
-from .features.connection import ConnectionMixin
-from .features.device_info import DeviceInfoMixin
-from .features.screenshot import ScreenshotMixin
-from .features.backup import BackupMixin
-from .features.file_manager import FileManagerMixin
-from .features.app_manager import AppManagerMixin
-from .features.logcat import LogcatMixin
-from .features.system_tools import SystemToolsMixin
-from .features.device_control import DeviceControlMixin
-from .features.security import SecurityMixin
-from .features.debugging import DebuggingMixin
-from .features.advanced_tests import AdvancedTestsMixin
-from .features.automation import AutomationMixin
+from ..features.connection import ConnectionMixin
+from ..features.device_info import DeviceInfoMixin
+from ..features.screenshot import ScreenshotMixin
+from ..features.backup import BackupMixin
+from ..features.file_manager import FileManagerMixin
+from ..features.app_manager import AppManagerMixin
+from ..features.logcat import LogcatMixin
+from ..features.system_tools import SystemToolsMixin
+from ..features.device_control import DeviceControlMixin
+from ..features.security import SecurityMixin
+from ..features.debugging import DebuggingMixin
+from ..features.advanced_tests import AdvancedTestsMixin
+from ..features.automation import AutomationMixin
 
 
 class AndroidToolsModule(

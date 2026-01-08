@@ -7,7 +7,7 @@ import subprocess
 
 from PySide6 import QtCore, QtWidgets
 
-from ..constants import IS_WINDOWS
+from ..app.config import IS_WINDOWS
 
 
 class DeviceControlMixin:

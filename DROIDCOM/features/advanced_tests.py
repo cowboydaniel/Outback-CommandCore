@@ -29,7 +29,7 @@ import subprocess
 import threading
 import time
 
-from ..constants import IS_WINDOWS
+from ..app.config import IS_WINDOWS
 from ..utils.qt_dispatcher import append_text, emit_ui, set_text
 
 

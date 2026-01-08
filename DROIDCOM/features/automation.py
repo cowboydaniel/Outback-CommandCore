@@ -8,7 +8,7 @@ import subprocess
 import threading
 import os
 
-from ..constants import IS_WINDOWS
+from ..app.config import IS_WINDOWS
 from ..utils.qt_dispatcher import append_text, clear_text, emit_ui, set_progress
 
 
