@@ -33,6 +33,10 @@ from PySide6.QtGui import (
     QFontDatabase, QGuiApplication
 )
 
+BASE_DIR = Path(__file__).resolve().parents[1]
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
+
 from BLACKSTORM.app.config import (
     APP_TITLE,
     DEFAULT_FONT_FAMILY,
