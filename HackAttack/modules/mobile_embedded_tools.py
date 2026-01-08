@@ -414,6 +414,9 @@ class USBAnalyzer(QObject if GUI_AVAILABLE else object):
             device_data = self.get_device_info(device_info['vendor_id'], device_info['product_id'])
             if device_data:
                 device_info.update(device_data)
+                # Use database name as product_name if available
+                if 'name' in device_data and device_info.get('product_name') == 'Unknown':
+                    device_info['product_name'] = device_data['name']
             
             # Get vendor name from our database
             vendor_name = self.get_vendor_name(device_info['vendor_id'])
