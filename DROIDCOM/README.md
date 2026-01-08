@@ -23,6 +23,11 @@ pip install -r requirements.txt
 ```
 - `PySide6>=6.5.0` – Qt6 GUI framework
 
+### UI Baseline
+DROIDCOM now targets PySide6 exclusively. Legacy Tkinter compatibility has been
+removed in favor of native Qt widgets and dialogs (`QMessageBox`,
+`QFileDialog`, `QDialog`).
+
 ### Supported Platforms
 - Linux (primary – full ADB support)
 - Windows (with ADB drivers installed)
