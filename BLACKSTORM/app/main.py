@@ -33,9 +33,9 @@ from PySide6.QtGui import (
     QFontDatabase, QGuiApplication
 )
 
-BASE_DIR = Path(__file__).resolve().parents[1]
-if str(BASE_DIR) not in sys.path:
-    sys.path.insert(0, str(BASE_DIR))
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 from BLACKSTORM.app.config import (
     APP_TITLE,
