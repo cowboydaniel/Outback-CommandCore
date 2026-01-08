@@ -1,10 +1,6 @@
-# VANTAGE
+# VANTAGE Overview
 
 VANTAGE is an advanced analytics and device intelligence platform that provides deep insights into system status, performance, and security metrics across connected devices.
-
-## Documentation
-
-Start with the project overview at [docs/overview.md](docs/overview.md). The README keeps quick-start details and a high-level reference for the repository layout.
 
 ## Project Structure
 
@@ -38,7 +34,7 @@ VANTAGE/
 ├── docs/                # Documentation
 │   └── overview.md       # Project overview
 ├── requirements.txt       # Python dependencies
-└── README.md             # This file
+└── README.md             # Project entry point
 ```
 
 ## Key Features
