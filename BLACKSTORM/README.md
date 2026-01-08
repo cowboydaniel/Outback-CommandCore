@@ -134,6 +134,8 @@ pip install -r requirements.txt
 
 ### OS-Level Dependencies (Linux)
 
+> **See [docs/system-deps.md](../docs/system-deps.md#blackstorm) for comprehensive system dependency documentation.**
+
 **Debian/Ubuntu:**
 ```bash
 sudo apt-get install smartmontools wipe dcfldd hdparm

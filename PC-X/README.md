@@ -32,7 +32,9 @@ pip install -r requirements.txt
 - Windows (partial support)
 
 ### OS-Level Dependencies (Linux)
-For full hardware diagnostics functionality:
+For full hardware diagnostics functionality.
+
+> **See [docs/system-deps.md](../docs/system-deps.md#pc-x) for comprehensive system dependency documentation.**
 
 **Debian/Ubuntu:**
 ```bash

@@ -39,7 +39,9 @@ pip install -r requirements.txt
 
 ### OS-Level Dependencies (Linux)
 
-For full network analysis capabilities:
+For full network analysis capabilities.
+
+> **See [docs/system-deps.md](../docs/system-deps.md#hackattack) for comprehensive system dependency documentation.**
 
 **Debian/Ubuntu:**
 ```bash

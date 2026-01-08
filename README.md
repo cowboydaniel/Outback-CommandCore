@@ -29,6 +29,8 @@ Outback-CommandCore/
 ├── PC-X/                 # PC tools for Linux system management
 ├── VANTAGE/              # System monitoring and performance analysis
 │
+├── docs/                 # Documentation
+│   └── system-deps.md    # OS-level dependencies reference
 ├── icons/                # Application icons
 ├── STYLE_GUIDE.md        # Coding and UI/UX standards
 └── README.md             # This file
@@ -261,27 +263,51 @@ Application logs are stored in module-specific locations:
 
 ## OS-Level Dependencies
 
-Some modules require system packages:
+Some modules require system packages for hardware access, network analysis, or device communication.
 
-### Debian/Ubuntu
+> **See [docs/system-deps.md](docs/system-deps.md) for comprehensive system dependency documentation**, including per-module requirements, installation scripts, and troubleshooting guides.
+
+### Quick Reference
+
+| Module | System Packages Required |
+|--------|-------------------------|
+| **BLACKSTORM** | smartmontools, wipe, dcfldd, hdparm |
+| **HackAttack** | nmap, tshark/wireshark-cli |
+| **PC-X** | smartmontools, polkit, lm-sensors, dmidecode |
+| **ARES-i** | libimobiledevice-utils, ifuse, usbmuxd |
+| **DROIDCOM** | android-tools-adb, android-tools-fastboot |
+
+### Debian/Ubuntu Quick Install
 
 ```bash
-# For HackAttack (network analysis)
-sudo apt-get install nmap tshark
+# Install all system dependencies
+sudo apt-get install \
+    smartmontools wipe dcfldd hdparm \
+    nmap tshark \
+    policykit-1 lm-sensors dmidecode lshw \
+    libimobiledevice-utils ifuse usbmuxd \
+    android-tools-adb android-tools-fastboot
 
-# For BLACKSTORM (forensics)
-sudo apt-get install smartmontools wipe dcfldd hdparm
+# Add user to required groups
+sudo usermod -aG plugdev,wireshark,disk $USER
 ```
 
-### Fedora/RHEL
+### Fedora/RHEL Quick Install
 
 ```bash
-# For HackAttack
-sudo dnf install nmap wireshark-cli
+# Install all system dependencies
+sudo dnf install \
+    smartmontools wipe dcfldd hdparm \
+    nmap wireshark-cli \
+    polkit lm_sensors dmidecode lshw \
+    libimobiledevice-utils ifuse usbmuxd \
+    android-tools
 
-# For BLACKSTORM
-sudo dnf install smartmontools wipe dcfldd hdparm
+# Add user to required groups
+sudo usermod -aG plugdev,wireshark,disk $USER
 ```
+
+> **Note:** Log out and back in after adding groups for changes to take effect.
 
 ## Supported Platforms
 

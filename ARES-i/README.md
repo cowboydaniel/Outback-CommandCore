@@ -25,7 +25,9 @@ pip install -r requirements.txt
 - `requests>=2.28.0` – HTTP library
 
 ### OS-Level Dependencies
-ARES-i requires the `libimobiledevice` suite for iOS device communication:
+ARES-i requires the `libimobiledevice` suite for iOS device communication.
+
+> **See [docs/system-deps.md](../docs/system-deps.md#ares-i) for comprehensive system dependency documentation.**
 
 **Debian/Ubuntu:**
 ```bash
