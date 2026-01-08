@@ -88,7 +88,7 @@ class HackAttackGUI(QMainWindow):
         self.sidebar.currentRowChanged.connect(self.change_page)
         self.main_layout.addWidget(self.sidebar)
     
-    def create_placeholder_page(self, title, description, icon_name):
+    def create_placeholder_page(self, title, description, icon_name, show_description=True):
         """Create a modern module page with icon and description"""
         page = QWidget()
         layout = QVBoxLayout()
@@ -118,22 +118,23 @@ class HackAttackGUI(QMainWindow):
         
         layout.addWidget(header)
         
-        # Description card
-        desc_card = QWidget()
-        desc_card.setStyleSheet("""
-            background-color: #313244;
-            border-radius: 10px;
-            padding: 20px;
-            border-left: 4px solid #89b4fa;
-        """)
-        desc_layout = QVBoxLayout(desc_card)
-        
-        desc_text = QLabel(description)
-        desc_text.setWordWrap(True)
-        desc_text.setStyleSheet("color: #cdd6f4; font-size: 14px; line-height: 1.5;")
-        desc_layout.addWidget(desc_text)
-        
-        layout.addWidget(desc_card)
+        if show_description:
+            # Description card
+            desc_card = QWidget()
+            desc_card.setStyleSheet("""
+                background-color: #313244;
+                border-radius: 10px;
+                padding: 20px;
+                border-left: 4px solid #89b4fa;
+            """)
+            desc_layout = QVBoxLayout(desc_card)
+
+            desc_text = QLabel(description)
+            desc_text.setWordWrap(True)
+            desc_text.setStyleSheet("color: #cdd6f4; font-size: 14px; line-height: 1.5;")
+            desc_layout.addWidget(desc_text)
+
+            layout.addWidget(desc_card)
         
         # Add module-specific content
         if title == "Device Discovery & Info":
@@ -257,21 +258,24 @@ class HackAttackGUI(QMainWindow):
             layout.setSpacing(0)
             layout.addWidget(self.help_gui)
 
+        elif title == "Dashboard":
+            dashboard_widget = self.create_dashboard_widget()
+            layout.addWidget(dashboard_widget)
+
         else:
-            # Default banner for Dashboard (which doesn't need a full module)
-            banner = QLabel("Dashboard - Security Testing Overview")
-            banner.setStyleSheet("""
-                background: linear-gradient(90deg, #1e1e2e, #313244);
-                color: #a6e3a1;
+            missing = QLabel("Module UI not yet implemented. Please check back for updates.")
+            missing.setStyleSheet("""
+                background-color: #313244;
+                color: #f9e2af;
                 font-weight: bold;
-                padding: 15px;
+                padding: 16px;
                 border-radius: 8px;
                 text-align: center;
-                font-size: 16px;
-                border: 1px solid #45475a;
-                margin-top: 20px;
+                font-size: 14px;
+                border: 1px dashed #f9e2af;
             """)
-            layout.addWidget(banner)
+            missing.setAlignment(Qt.AlignCenter)
+            layout.addWidget(missing)
         
         # Add some space at the bottom
         layout.addStretch()
@@ -301,7 +305,8 @@ class HackAttackGUI(QMainWindow):
         
         # Create a page for each module
         for i, (title, desc, icon) in enumerate(module_descriptions):
-            page = self.create_placeholder_page(title, desc, icon)
+            show_description = title != "Dashboard"
+            page = self.create_placeholder_page(title, desc, icon, show_description)
             self.stacked_widget.addWidget(page)
         
         self.main_layout.addWidget(self.stacked_widget, 1)
@@ -315,6 +320,186 @@ class HackAttackGUI(QMainWindow):
     def run_device_scan(self):
         """This method is no longer used as we're using the full DeviceDiscoveryGUI"""
         pass
+
+    def create_dashboard_widget(self):
+        """Create the interactive dashboard widget."""
+        container = QWidget()
+        container_layout = QVBoxLayout(container)
+        container_layout.setContentsMargins(0, 0, 0, 0)
+        container_layout.setSpacing(16)
+
+        header = QWidget()
+        header_layout = QHBoxLayout(header)
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        header_title = QLabel("Security Operations Snapshot")
+        header_title.setStyleSheet("font-size: 20px; font-weight: bold; color: #cdd6f4;")
+        header_layout.addWidget(header_title)
+        header_layout.addStretch()
+
+        refresh_button = QPushButton("Run Quick Health Check")
+        refresh_button.setStyleSheet("""
+            QPushButton {
+                background-color: #89b4fa;
+                color: #1e1e2e;
+                padding: 8px 14px;
+                border-radius: 6px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #b4befe;
+            }
+        """)
+        header_layout.addWidget(refresh_button)
+        container_layout.addWidget(header)
+
+        metrics_row = QWidget()
+        metrics_layout = QHBoxLayout(metrics_row)
+        metrics_layout.setContentsMargins(0, 0, 0, 0)
+        metrics_layout.setSpacing(12)
+
+        self.dashboard_metrics = [
+            {"label": "Active Targets", "value": 12, "detail": "3 new today"},
+            {"label": "Open Findings", "value": 7, "detail": "2 critical"},
+            {"label": "Sensors Online", "value": 18, "detail": "100% operational"},
+            {"label": "Automations Running", "value": 5, "detail": "Next run in 15m"}
+        ]
+
+        self.metric_cards = []
+        for metric in self.dashboard_metrics:
+            card = QWidget()
+            card.setStyleSheet("""
+                background-color: #313244;
+                border-radius: 10px;
+                padding: 14px;
+                border: 1px solid #45475a;
+            """)
+            card_layout = QVBoxLayout(card)
+            card_layout.setContentsMargins(12, 12, 12, 12)
+            card_layout.setSpacing(6)
+
+            value_label = QLabel(str(metric["value"]))
+            value_label.setStyleSheet("font-size: 26px; font-weight: bold; color: #a6e3a1;")
+            name_label = QLabel(metric["label"])
+            name_label.setStyleSheet("font-size: 13px; color: #cdd6f4;")
+            detail_label = QLabel(metric["detail"])
+            detail_label.setStyleSheet("font-size: 12px; color: #a6adc8;")
+
+            card_layout.addWidget(value_label)
+            card_layout.addWidget(name_label)
+            card_layout.addWidget(detail_label)
+            metrics_layout.addWidget(card)
+            self.metric_cards.append((value_label, detail_label))
+
+        container_layout.addWidget(metrics_row)
+
+        status_and_activity = QWidget()
+        status_layout = QHBoxLayout(status_and_activity)
+        status_layout.setContentsMargins(0, 0, 0, 0)
+        status_layout.setSpacing(12)
+
+        status_column = QWidget()
+        status_column_layout = QVBoxLayout(status_column)
+        status_column_layout.setContentsMargins(0, 0, 0, 0)
+        status_column_layout.setSpacing(10)
+
+        status_title = QLabel("Live Status")
+        status_title.setStyleSheet("font-size: 16px; font-weight: bold; color: #cdd6f4;")
+        status_column_layout.addWidget(status_title)
+
+        self.status_tiles = [
+            {"name": "Threat Intel Feed", "state": "Streaming", "accent": "#a6e3a1"},
+            {"name": "Credential Watch", "state": "2 alerts", "accent": "#f38ba8"},
+            {"name": "Patch Compliance", "state": "92% ready", "accent": "#f9e2af"}
+        ]
+
+        self.status_tile_labels = []
+        for tile in self.status_tiles:
+            tile_card = QWidget()
+            tile_card.setStyleSheet(f"""
+                background-color: #313244;
+                border-radius: 10px;
+                padding: 12px;
+                border-left: 4px solid {tile["accent"]};
+                border-top: 1px solid #45475a;
+                border-right: 1px solid #45475a;
+                border-bottom: 1px solid #45475a;
+            """)
+            tile_layout = QVBoxLayout(tile_card)
+            tile_layout.setContentsMargins(10, 10, 10, 10)
+            tile_layout.setSpacing(4)
+            name_label = QLabel(tile["name"])
+            name_label.setStyleSheet("font-size: 13px; color: #cdd6f4;")
+            state_label = QLabel(tile["state"])
+            state_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #cdd6f4;")
+            tile_layout.addWidget(name_label)
+            tile_layout.addWidget(state_label)
+            status_column_layout.addWidget(tile_card)
+            self.status_tile_labels.append(state_label)
+
+        status_layout.addWidget(status_column, 1)
+
+        activity_column = QWidget()
+        activity_layout = QVBoxLayout(activity_column)
+        activity_layout.setContentsMargins(0, 0, 0, 0)
+        activity_layout.setSpacing(8)
+        activity_title = QLabel("Recent Activity")
+        activity_title.setStyleSheet("font-size: 16px; font-weight: bold; color: #cdd6f4;")
+        activity_layout.addWidget(activity_title)
+
+        self.activity_feed = QListWidget()
+        self.activity_feed.setStyleSheet("""
+            QListWidget {
+                background-color: #313244;
+                border-radius: 10px;
+                padding: 6px;
+                border: 1px solid #45475a;
+                color: #cdd6f4;
+                font-size: 13px;
+            }
+            QListWidget::item {
+                padding: 8px;
+                border-bottom: 1px solid rgba(205, 214, 244, 0.1);
+            }
+        """)
+
+        self.activity_entries = [
+            "09:12 - Firmware scan completed on 4 devices.",
+            "09:05 - New vulnerability advisory synced.",
+            "08:58 - Network sweep queued (segment 10.0.4.0/24).",
+            "08:47 - MFA audit report exported."
+        ]
+        for entry in self.activity_entries:
+            self.activity_feed.addItem(entry)
+
+        activity_layout.addWidget(self.activity_feed)
+        status_layout.addWidget(activity_column, 2)
+
+        container_layout.addWidget(status_and_activity)
+
+        def refresh_dashboard():
+            self.dashboard_metrics[0]["value"] += 1
+            self.dashboard_metrics[1]["value"] = max(0, self.dashboard_metrics[1]["value"] - 1)
+            self.dashboard_metrics[2]["value"] = 18
+            self.dashboard_metrics[3]["value"] = 5
+
+            for metric, labels in zip(self.dashboard_metrics, self.metric_cards):
+                value_label, detail_label = labels
+                value_label.setText(str(metric["value"]))
+                detail_label.setText(metric["detail"])
+
+            self.status_tiles[1]["state"] = "1 alert"
+            self.status_tiles[2]["state"] = "93% ready"
+            for tile, label in zip(self.status_tiles, self.status_tile_labels):
+                label.setText(tile["state"])
+
+            self.activity_entries.insert(0, "09:18 - Health check completed with 0 errors.")
+            self.activity_feed.clear()
+            for entry in self.activity_entries[:6]:
+                self.activity_feed.addItem(entry)
+
+        refresh_button.clicked.connect(refresh_dashboard)
+
+        return container
 
 def main():
     app = QApplication(sys.argv)
