@@ -1,11 +1,19 @@
 """System monitoring UI components for the dashboard."""
 from __future__ import annotations
 
+import logging
 import os
 import time
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import psutil
+
+logger = logging.getLogger(__name__)
+
+# Cache configuration for device detection
+_device_cache: Optional[List[Dict]] = None
+_device_cache_timestamp: float = 0.0
+DEVICE_CACHE_TTL: float = 30.0  # Cache TTL in seconds
 from PySide6.QtCore import Qt, QTimer, QRectF
 from PySide6.QtGui import QPainter, QColor
 from PySide6.QtWidgets import (
@@ -167,30 +175,46 @@ class SystemMonitor:
             print(f"Error showing memory monitor: {e}")
 
     @staticmethod
-    def get_connected_devices() -> List[Dict[str, any]]:
+    def get_connected_devices(force_refresh: bool = False) -> List[Dict[str, any]]:
         """
         Get a list of connected physical storage devices with their partitions.
+
+        Uses caching to avoid rescanning on every call. Results are cached for
+        DEVICE_CACHE_TTL seconds (default 30s).
+
+        Args:
+            force_refresh: If True, bypass the cache and rescan devices.
 
         Returns:
             List[Dict[str, any]]: List of dictionaries containing device and partition information
         """
-        print("\n=== Starting device detection ===")
+        global _device_cache, _device_cache_timestamp
+
+        # Check cache validity
+        current_time = time.time()
+        if not force_refresh and _device_cache is not None:
+            cache_age = current_time - _device_cache_timestamp
+            if cache_age < DEVICE_CACHE_TTL:
+                logger.debug("Using cached device list (age: %.1fs)", cache_age)
+                return _device_cache
+
+        logger.debug("Starting device detection (cache expired or forced refresh)")
         devices = []
         try:
             # First, get all physical block devices
             if not os.path.exists('/sys/block'):
-                print("Error: /sys/block does not exist")
+                logger.debug("/sys/block does not exist")
                 return []
 
-            print(f"Found devices in /sys/block: {os.listdir('/sys/block')}")
+            logger.debug("Found devices in /sys/block: %s", os.listdir('/sys/block'))
 
             for dev in os.listdir('/sys/block'):
-                print(f"\nChecking device: {dev}")
+                logger.debug("Checking device: %s", dev)
 
                 # Skip virtual and non-physical devices
                 skip_prefixes = ['loop', 'ram', 'sr', 'dm-', 'zram', 'md', 'nbd', 'fd']
                 if any(dev.startswith(x) for x in skip_prefixes):
-                    print("  - Skipping (virtual/ignored device type)")
+                    logger.debug("  - Skipping %s (virtual/ignored device type)", dev)
                     continue
 
                 # Check if it's a partition (for non-NVMe devices)
@@ -199,16 +223,16 @@ class SystemMonitor:
                 if is_nvme:
                     # For NVMe, check if it's a partition (ends with pX where X is a number)
                     if any(dev.endswith(f'p{i}') for i in range(10)):
-                        print(f"  - Skipping (NVMe partition: {dev})")
+                        logger.debug("  - Skipping (NVMe partition: %s)", dev)
                         continue
                 else:
                     # For non-NVMe (sda, hda, etc.), check if it ends with a number
                     if any(dev[-1] == str(i) for i in range(10)):
-                        print(f"  - Skipping (partition: {dev})")
+                        logger.debug("  - Skipping (partition: %s)", dev)
                         continue
 
                 dev_path = f"/dev/{dev}"
-                print(f"  - Found potential storage device: {dev_path}")
+                logger.debug("  - Found potential storage device: %s", dev_path)
 
                 try:
                     # Get device information
@@ -293,21 +317,30 @@ class SystemMonitor:
                     devices.append(device_info)
 
                 except (PermissionError, OSError, ValueError) as e:
-                    print(f"Error processing device {dev_path}: {e}")
+                    logger.debug("Error processing device %s: %s", dev_path, e)
                     continue
 
         except Exception as e:
-            print(f"Error getting connected devices: {e}")
+            logger.debug("Error getting connected devices: %s", e)
+
+        # Update cache
+        _device_cache = devices
+        _device_cache_timestamp = current_time
+        logger.debug("Device detection complete, found %d devices (cached)", len(devices))
 
         return devices
 
     @staticmethod
     def get_connected_devices_count() -> int:
-        """Get the count of connected storage devices."""
+        """Get the count of connected storage devices.
+
+        Uses the cached device list from get_connected_devices() to avoid
+        repeated scans.
+        """
         try:
             return len(SystemMonitor.get_connected_devices())
         except Exception as e:
-            print(f"Error getting connected devices count: {e}")
+            logger.debug("Error getting connected devices count: %s", e)
             return 0
 
 

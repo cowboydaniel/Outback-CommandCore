@@ -82,24 +82,23 @@ class DashboardTab(QWidget):
             self.monitor_timer.stop()
             self.monitor_timer.timeout.disconnect()
     
-    def update_activities(self):
-        """Update activity-related UI elements in the dashboard."""
+    def _update_status_bar(self):
+        """Update the status bar with current time and system status."""
         try:
-            # Update the status bar with current time and system status
             current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             if hasattr(self, 'status_bar'):
                 self.status_bar.showMessage(f"Last updated: {current_time} | System monitoring active")
         except Exception as e:
-            print(f"Error updating activities: {e}")
+            print(f"Error updating status bar: {e}")
             import traceback
             traceback.print_exc()
-    
+
     def update_system_stats(self):
         """Update system statistics in the status bar."""
         try:
-            # Update activities (status bar, etc.)
-            self.update_activities()
-            
+            # Update status bar timestamp
+            self._update_status_bar()
+
             # Update system stats
             if hasattr(self, 'system_monitor') and self.system_monitor is not None:
                 cpu_usage = self.system_monitor.get_cpu_usage()
@@ -117,8 +116,14 @@ class DashboardTab(QWidget):
             self.update_system_stats()
     
     def update_activities(self):
-        """Update the Recent Activities section with latest system and application events."""
+        """Update the Recent Activities section with latest system and application events.
+
+        Also updates the status bar via _update_status_bar().
+        """
         try:
+            # Update status bar
+            self._update_status_bar()
+
             # Skip if the activities layout doesn't exist yet
             if not hasattr(self, 'activities_layout') or not self.activities_layout:
                 return
@@ -853,14 +858,8 @@ class DashboardTab(QWidget):
         
         # Mark as initialized
         self._initialized = True
-        
-        # Set up the timer to update system stats every second
-        self.monitor_timer.timeout.connect(self.update_system_stats)
-        self.monitor_timer.start(1000)  # Update every second
-        
-        # Initial update
-        self.update_system_stats()
-            
+        # Note: Timer is already set up in start_monitoring() called from __init__
+
         main_layout = QVBoxLayout(tab)
         main_layout.setContentsMargins(15, 15, 15, 15)
         main_layout.setSpacing(20)
