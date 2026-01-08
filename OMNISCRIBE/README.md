@@ -44,14 +44,14 @@ No additional OS-level dependencies are required.
 ### Entry Point
 ```bash
 # Run from repository root
-python OMNISCRIBE/omniscribe.py
+python OMNISCRIBE/app/main.py
 
 # Or directly
-cd OMNISCRIBE && python omniscribe.py
+cd OMNISCRIBE && python app/main.py
 ```
 
 ### Module Path
-`OMNISCRIBE.omniscribe` (main module: `omniscribe.py`)
+`OMNISCRIBE.app.main` (main module: `app/main.py`)
 
 ### Supported Script Languages
 - Python (`.py`)
@@ -61,7 +61,7 @@ cd OMNISCRIBE && python omniscribe.py
 ### Examples
 ```bash
 # Launch the OMNISCRIBE GUI
-python OMNISCRIBE/omniscribe.py
+python OMNISCRIBE/app/main.py
 ```
 
 **Creating a new script:**

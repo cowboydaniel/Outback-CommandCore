@@ -47,7 +47,7 @@ Outback-CommandCore/
 | **DROIDCOM** | Android device management and debugging | `DROIDCOM/main.py` |
 | **HackAttack** | Penetration testing and vulnerability assessment | `HackAttack/launch.py` |
 | **NIGHTFIRE** | System monitor and controller | `NIGHTFIRE/nightfire.py` |
-| **OMNISCRIBE** | Transcription and analysis tool | `OMNISCRIBE/omniscribe.py` |
+| **OMNISCRIBE** | Transcription and analysis tool | `OMNISCRIBE/app/main.py` |
 | **PC-X** | PC tools for Linux system management | `PC-X/pc_tools_linux.py` |
 | **VANTAGE** | Advanced system monitoring and performance analysis | `VANTAGE/launch_vantage.py` |
 

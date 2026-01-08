@@ -900,7 +900,7 @@ class ApplicationManagerTab(QWidget):
                 "id": "omniscribe",
                 "name": "Omniscribe",
                 "description": "Omniscribe transcription and analysis tool.",
-                "path": os.path.join(base_dir, "OMNISCRIBE/omniscribe.py"),
+                "path": os.path.join(base_dir, "OMNISCRIBE/app/main.py"),
                 'version': None,
                 'status': 'stopped',
                 'process_name': 'omniscribe_process'
