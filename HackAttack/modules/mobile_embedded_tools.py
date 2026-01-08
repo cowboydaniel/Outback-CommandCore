@@ -181,13 +181,7 @@ logger = logging.getLogger('mobile_embedded_tools')
 
 class USBAnalyzer(QObject if GUI_AVAILABLE else object):
     """Class for analyzing USB devices with support for Android, iOS, and embedded devices."""
-    
-    def __init__(self):
-        super().__init__()
-        self.vendor_db = {}
-        self.device_db = {}
-        self._load_databases()
-    
+
     def _load_databases(self):
         """Load vendor and device databases from JSON files."""
         import json
