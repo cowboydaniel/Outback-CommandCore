@@ -1,31 +1,35 @@
 from setuptools import setup, find_packages
 
+from HackAttack.app.config import (
+    APP_AUTHOR,
+    APP_AUTHOR_EMAIL,
+    APP_DESCRIPTION,
+    APP_NAME,
+    APP_VERSION,
+    PROJECT_URLS,
+)
+
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setup(
     name="hack-attack",
-    version="0.1.0",
-    author="Hack Attack Team",
-    author_email="security@hackattack.example",
-    description="Enterprise-Grade Security Testing and Ethical Hacking Platform",
+    version=APP_VERSION,
+    author=APP_AUTHOR,
+    author_email=APP_AUTHOR_EMAIL,
+    description=APP_DESCRIPTION,
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/hack-attack/security-platform",
-    project_urls={
-        "Bug Tracker": "https://github.com/hack-attack/security-platform/issues",
-        "Documentation": "https://hack-attack.readthedocs.io/",
-        "Source Code": "https://github.com/hack-attack/security-platform",
-    },
-    packages=find_packages(where="src"),
-    package_dir={"": "src"},
+    project_urls=PROJECT_URLS,
+    packages=find_packages(),
     python_requires=">=3.8",
     install_requires=[
         # Dependencies will be installed from requirements.txt
     ],
     entry_points={
         "console_scripts": [
-            "hack-attack=hack_attack.main:main",
+            "hack-attack=HackAttack.app.main:main",
         ],
     },
     classifiers=[

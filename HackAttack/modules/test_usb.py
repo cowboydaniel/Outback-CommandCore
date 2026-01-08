@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 import sys
-import os
-import json
 import logging
+from pathlib import Path
 
-# Add parent directory to path so we can import the module
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Add repo root to path so we can import the HackAttack package
+repo_root = Path(__file__).resolve().parents[2]
+sys.path.append(str(repo_root))
 
 # Now import USBAnalyzer
-from modules.mobile_embedded_tools import USBAnalyzer
+from HackAttack.modules.mobile_embedded_tools import USBAnalyzer
 
 # Set up logging
 logging.basicConfig(
@@ -19,19 +19,6 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger('test_usb')
-
-def load_json_file(path):
-    """Helper to load and log JSON file contents."""
-    try:
-        with open(path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            logger.info(f"Loaded {path} successfully")
-            if isinstance(data, dict):
-                logger.info(f"Keys in {os.path.basename(path)}: {list(data.keys())}")
-            return data
-    except Exception as e:
-        logger.error(f"Error loading {path}: {str(e)}")
-        return None
 
 def test_vendor_lookup(analyzer, vendor_id):
     """Test vendor lookup and log detailed results."""
