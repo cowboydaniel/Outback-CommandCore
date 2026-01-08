@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import importlib.util
 import logging
 import sys
 from pathlib import Path
+
+if importlib.util.find_spec("PySide6") is None:
+    print("Error: PySide6 is required. Please install PySide6.")
+    sys.exit(1)
 
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
