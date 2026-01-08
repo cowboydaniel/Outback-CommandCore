@@ -65,25 +65,29 @@ Required tools: `idevice_id`, `ideviceinfo`, `idevicebackup2`, `ifuse`
 ### Entry Point
 ```bash
 # Run as module from repository root
-python ARES-i/ares-i.py
+python ARES-i/app/main.py
 
 # Or directly
-cd ARES-i && python ares-i.py
+cd ARES-i && python app/main.py
 ```
 
 ### Module Path
-`ARES-i.ares-i` (main module: `ares-i.py`)
+`ARES-i/app/main.py` (main module)
 
 ### Examples
 ```bash
 # Launch the ARES-i GUI
-python ARES-i/ares-i.py
+python ARES-i/app/main.py
 
 # The application will:
 # - Detect connected iOS devices automatically
 # - Display device information and status
 # - Provide access to filesystem exploration, backup, and diagnostic tools
 ```
+
+## Documentation
+
+Additional documentation lives in `ARES-i/docs/README.md` and the `ARES-i/docs/` directory.
 
 ## License
 

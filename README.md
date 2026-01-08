@@ -44,6 +44,8 @@ Outback-CommandCore/
 | **ARES-i** | AI-powered research and analysis tool | `ARES-i/ares-i.py` |
 | **BLACKSTORM** | Forensic disk cloning and secure data erasure | `BLACKSTORM/blackstorm_launcher.py` |
 | **Codex** | AI-powered code generation and analysis | `Codex/app/main.py` |
+| **BLACKSTORM** | Forensic disk cloning and secure data erasure | `BLACKSTORM/app/main.py` |
+| **Codex** | AI-powered code generation and analysis | `Codex/app/gui.py` |
 | **DROIDCOM** | Android device management and debugging | `DROIDCOM/main.py` |
 | **HackAttack** | Penetration testing and vulnerability assessment | `HackAttack/launch.py` |
 | **NIGHTFIRE** | System monitor and controller | `NIGHTFIRE/nightfire.py` |
@@ -227,7 +229,7 @@ sudo python HackAttack/launch.py
 python VANTAGE/launch_vantage.py
 
 # BLACKSTORM (requires sudo for disk operations)
-sudo python BLACKSTORM/blackstorm_launcher.py
+sudo python BLACKSTORM/app/main.py
 
 # PC-X
 python PC-X/pc_tools_linux.py
