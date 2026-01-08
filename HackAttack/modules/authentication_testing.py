@@ -22,6 +22,8 @@ import string
 import os
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+import requests
+
 # Configure logging with both file and console handlers
 log_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'authentication_testing.log')
 logging.basicConfig(
@@ -850,7 +852,14 @@ class AuthenticationTester:
             
         return result
     
-    def test_http_auth(self, url: str, username: str, password: str) -> Dict[str, Any]:
+    def test_http_auth(
+        self,
+        url: str,
+        username: str,
+        password: str,
+        verify_ssl: bool = True,
+        timeout: float = 10.0,
+    ) -> Dict[str, Any]:
         """
         Test HTTP Basic Authentication.
         
@@ -858,12 +867,12 @@ class AuthenticationTester:
             url: The URL to test
             username: Username to test
             password: Password to test
+            verify_ssl: Whether to verify SSL certificates
+            timeout: Request timeout in seconds
             
         Returns:
             Dictionary containing test results
         """
-        # This is a placeholder - in a real application, you would use requests or similar
-        # to test the authentication
         result = {
             'success': False,
             'status_code': 0,
@@ -871,21 +880,22 @@ class AuthenticationTester:
             'error': None
         }
         
+        start_time = time.monotonic()
         try:
-            # Simulate network delay
-            time.sleep(0.5)
-            
-            # This is just a simulation - in a real app, you'd make an actual HTTP request
-            if username == 'admin' and password == 'admin':
-                result['success'] = True
-                result['status_code'] = 200
-            else:
-                result['status_code'] = 401
-                
-            result['time_taken'] = 0.5
-            
-        except Exception as e:
+            response = requests.get(
+                url,
+                auth=(username, password),
+                timeout=timeout,
+                verify=verify_ssl
+            )
+            result['status_code'] = response.status_code
+            result['success'] = 200 <= response.status_code < 300
+            if not result['success']:
+                result['error'] = response.reason or "Authentication failed"
+        except requests.exceptions.RequestException as e:
             result['error'] = str(e)
+        finally:
+            result['time_taken'] = time.monotonic() - start_time
             
         return result
 
@@ -1501,6 +1511,18 @@ class AuthenticationTestingGUI(QMainWindow):
         self.auth_password_input = QLineEdit()
         self.auth_password_input.setEchoMode(QLineEdit.EchoMode.Password)
         form_layout.addRow("Password:", self.auth_password_input)
+
+        self.auth_verify_ssl_checkbox = QCheckBox("Verify SSL certificates")
+        self.auth_verify_ssl_checkbox.setChecked(True)
+        form_layout.addRow("SSL Verification:", self.auth_verify_ssl_checkbox)
+
+        self.auth_timeout_input = QDoubleSpinBox()
+        self.auth_timeout_input.setRange(1.0, 120.0)
+        self.auth_timeout_input.setDecimals(1)
+        self.auth_timeout_input.setSingleStep(1.0)
+        self.auth_timeout_input.setValue(10.0)
+        self.auth_timeout_input.setSuffix(" s")
+        form_layout.addRow("Timeout:", self.auth_timeout_input)
         
         # Test button
         self.test_auth_button = QPushButton("Test Authentication")
@@ -1718,6 +1740,8 @@ class AuthenticationTestingGUI(QMainWindow):
         url = self.auth_url_input.text().strip()
         username = self.auth_username_input.text().strip()
         password = self.auth_password_input.text()
+        verify_ssl = self.auth_verify_ssl_checkbox.isChecked()
+        timeout = self.auth_timeout_input.value()
         
         if not url:
             QMessageBox.warning(self, "Error", "Please enter a URL")
@@ -1733,40 +1757,46 @@ class AuthenticationTestingGUI(QMainWindow):
         self.auth_result_label.setText("Testing authentication...")
         
         # Use a timer to prevent UI freeze
-        QTimer.singleShot(100, lambda: self._perform_http_auth_test(url, username, password))
+        QTimer.singleShot(
+            100,
+            lambda: self._perform_http_auth_test(
+                url,
+                username,
+                password,
+                verify_ssl,
+                timeout
+            )
+        )
     
-    def _perform_http_auth_test(self, url, username, password):
+    def _perform_http_auth_test(self, url, username, password, verify_ssl, timeout):
         """Perform the actual HTTP authentication test."""
         try:
-            # Simulate network delay
-            time.sleep(1)
-            
-            # In a real application, you would make an actual HTTP request here
-            # For simulation, we'll just check if the password is "password"
-            if password == "password":
-                result = {
-                    'success': True,
-                    'status_code': 200,
-                    'time_taken': 1.2,
-                    'message': 'Authentication successful!'
-                }
-            else:
-                result = {
-                    'success': False,
-                    'status_code': 401,
-                    'time_taken': 1.1,
-                    'message': 'Invalid credentials'
-                }
+            result = self.authentication_tester.test_http_auth(
+                url,
+                username,
+                password,
+                verify_ssl=verify_ssl,
+                timeout=timeout
+            )
                 
             # Update UI with results
             if result['success']:
                 self.auth_result_label.setText(
-                    f"✅ {result['message']} (Status: {result['status_code']}, "
+                    f"✅ Authentication successful! (Status: {result['status_code']}, "
                     f"Time: {result['time_taken']:.2f}s)"
                 )
             else:
+                error_detail = result.get('error') or "Authentication failed"
+                status_code = result.get('status_code')
+                if status_code:
+                    message = (
+                        f"❌ Authentication failed: {error_detail} "
+                        f"(Status: {status_code}, Time: {result['time_taken']:.2f}s)"
+                    )
+                else:
+                    message = f"❌ Authentication failed: {error_detail}"
                 self.auth_result_label.setText(
-                    f"❌ {result['message']} (Status: {result['status_code']})"
+                    message
                 )
                 
         except Exception as e:
