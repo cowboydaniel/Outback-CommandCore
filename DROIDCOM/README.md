@@ -29,7 +29,9 @@ pip install -r requirements.txt
 - macOS (with ADB installed)
 
 ### OS-Level Dependencies
-DROIDCOM requires Android Debug Bridge (ADB) and related tools:
+DROIDCOM requires Android Debug Bridge (ADB) and related tools.
+
+> **See [docs/system-deps.md](../docs/system-deps.md#droidcom) for comprehensive system dependency documentation.**
 
 **Debian/Ubuntu:**
 ```bash
