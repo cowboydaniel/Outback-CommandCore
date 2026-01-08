@@ -334,6 +334,8 @@ class PCToolsModule(QWidget):
 
     def update_last_update_time(self):
         """Update the last update time display."""
+        if not hasattr(self, "last_update_label"):
+            return
         current_time = datetime.now().strftime("%H:%M:%S")
         self.last_update_label.setText(f"Last update: {current_time}")
 
