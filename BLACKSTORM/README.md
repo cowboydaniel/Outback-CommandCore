@@ -173,14 +173,14 @@ Required system tools:
 ### Entry Point
 ```bash
 # Run from repository root (may require sudo for full functionality)
-python BLACKSTORM/blackstorm_launcher.py
+python BLACKSTORM/app/main.py
 
 # Or with elevated privileges
-sudo python BLACKSTORM/blackstorm_launcher.py
+sudo python BLACKSTORM/app/main.py
 ```
 
 ### Module Path
-`BLACKSTORM.blackstorm_launcher` (main launcher: `blackstorm_launcher.py`)
+`BLACKSTORM.app.main` (main launcher: `app/main.py`)
 
 ### Application Tabs
 - **Dashboard** – System overview and quick actions
@@ -195,7 +195,7 @@ sudo python BLACKSTORM/blackstorm_launcher.py
 ### Examples
 ```bash
 # Launch BLACKSTORM GUI
-sudo python BLACKSTORM/blackstorm_launcher.py
+sudo python BLACKSTORM/app/main.py
 
 # Configuration is stored in:
 # ~/.config/blackstorm/settings.json
