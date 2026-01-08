@@ -140,12 +140,6 @@ class DashboardTab(QWidget):
                     # Store the layout in a local variable before clearing
                     layout = self.activities_layout
                     if self._is_widget_valid(layout):
-                        # Disconnect any signals first to prevent callbacks during cleanup
-                        try:
-                            layout.destroyed.disconnect()
-                        except (TypeError, RuntimeError):
-                            pass
-                            
                         # Clear the layout
                         while layout.count() > 0:
                             item = layout.takeAt(0)
