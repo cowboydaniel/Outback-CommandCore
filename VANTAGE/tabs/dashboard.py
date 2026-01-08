@@ -2,6 +2,7 @@ import sys
 import random
 import time
 import logging
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 import psutil
 from datetime import datetime, timedelta
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
@@ -292,6 +293,9 @@ class DashboardTab(QWidget):
         self.health_history = []     # Store health scores for trend calculation
         self.max_health_history = 6  # Keep last 6 scores for trend (30s history at 5s updates)
         self.health_window_seconds = 15  # Time window for health score calculation (seconds)
+        self._temp_probe_executor = ThreadPoolExecutor(max_workers=1)
+        self._temp_probe_timeout = 0.75
+        self._last_cpu_temp = None
         
         # Performance score tracking
         self.performance_history = []  # Store (timestamp, score) tuples
@@ -694,26 +698,50 @@ class DashboardTab(QWidget):
             card.trend_label.setText("!")
             card.trend_label.setStyleSheet("color: #b0b0b0; font-size: 16px; font-weight: bold;")
 
+    def _read_average_cpu_temp(self):
+        """Probe CPU temperature from sensors (blocking)."""
+        temps = psutil.sensors_temperatures()
+        if not temps:
+            return None
+
+        cpu_temps = []
+        for name, entries in temps.items():
+            if 'core' in name.lower() or 'cpu' in name.lower() or 'k10temp' in name.lower() or 'coretemp' in name.lower():
+                for entry in entries:
+                    if entry.current and entry.current > 0:
+                        cpu_temps.append(entry.current)
+
+        if cpu_temps:
+            return sum(cpu_temps) / len(cpu_temps)
+        return None
+
+    def _reset_temp_probe_executor(self):
+        """Reset the temperature probe executor to avoid stalled threads."""
+        if self._temp_probe_executor:
+            self._temp_probe_executor.shutdown(wait=False, cancel_futures=True)
+        self._temp_probe_executor = ThreadPoolExecutor(max_workers=1)
+
     def get_average_cpu_temp(self):
-        """Return average CPU temperature, or None if unavailable."""
+        """Return average CPU temperature with bounded probe time."""
+        avg_temp = None
         try:
-            temps = psutil.sensors_temperatures()
-            if not temps:
-                return None
+            future = self._temp_probe_executor.submit(self._read_average_cpu_temp)
+            avg_temp = future.result(timeout=self._temp_probe_timeout)
+        except FuturesTimeoutError:
+            logger.warning(
+                "CPU temperature probe timed out after %.2fs",
+                self._temp_probe_timeout
+            )
+            self._reset_temp_probe_executor()
+        except BaseException as e:
+            logger.warning("CPU temperature probe failed: %s", e, exc_info=True)
 
-            cpu_temps = []
-            for name, entries in temps.items():
-                if 'core' in name.lower() or 'cpu' in name.lower() or 'k10temp' in name.lower() or 'coretemp' in name.lower():
-                    for entry in entries:
-                        if entry.current and entry.current > 0:
-                            cpu_temps.append(entry.current)
-
-            if cpu_temps:
-                return sum(cpu_temps) / len(cpu_temps)
-            return None
-        except Exception as e:
-            logger.exception("Error reading CPU temperature: %s", e)
-            return None
+        if avg_temp is not None:
+            self._last_cpu_temp = avg_temp
+            return avg_temp
+        if self._last_cpu_temp is not None:
+            return self._last_cpu_temp
+        return None
 
     def format_storage_usage(self, disk_usage):
         """Format storage usage display values."""
