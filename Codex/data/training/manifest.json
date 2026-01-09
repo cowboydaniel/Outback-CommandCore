@@ -1,0 +1,8 @@
+{
+  "dataset": "python_basics",
+  "version": "1.2.0",
+  "license": "MIT",
+  "file_count": 40,
+  "total_bytes": 22384,
+  "description": "Curated, permissively-licensed Python basics for local CPU training."
+}
