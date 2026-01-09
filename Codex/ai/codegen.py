@@ -106,59 +106,67 @@ class Transformer(nn.Module):
 def train_transformer(
     model: Transformer,
     dataset: CodeDataset,
-    epochs: int = 10,
-    batch_size: int = 32,
-    learning_rate: float = 1e-3,
-    print_every: int = 10
+    num_epochs: int = 10,
+    device: Optional[torch.device] = None,
+    criterion: Optional[nn.Module] = None,
+    optimizer: Optional[torch.optim.Optimizer] = None,
+    on_epoch_end=None,
+    on_batch_end=None,
 ) -> None:
     """Train the transformer model.
-    
+
     Args:
         model: Transformer model to train
         dataset: CodeDataset instance
-        epochs: Number of training epochs
-        batch_size: Batch size for training
-        learning_rate: Learning rate for optimizer
-        print_every: Print loss every N batches
+        num_epochs: Number of training epochs
+        device: Device to run training on
+        criterion: Loss function to use
+        optimizer: Optimizer instance to use
+        on_epoch_end: Optional callback for epoch completion
+        on_batch_end: Optional callback for batch completion
     """
-    device = get_device()
+    if device is None:
+        device = get_device()
+    if criterion is None:
+        criterion = nn.CrossEntropyLoss()
+    if optimizer is None:
+        optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+
     model = model.to(device)
-    criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-    
     model.train()
-    
-    for epoch in range(epochs):
-        dataset.reset()  # Reshuffle the dataset
-        total_loss = 0
-        
-        for batch_idx, (inputs, targets) in enumerate(dataset.get_batches(batch_size)):
-            inputs = inputs.to(device)  # [batch_size, seq_len]
-            targets = targets.to(device)  # [batch_size, seq_len]
-            
-            # Forward pass
+
+    for epoch in range(num_epochs):
+        dataset.reset()
+        batches = dataset.get_batches()
+        total_batches = len(batches)
+        epoch_loss = 0.0
+
+        for batch_idx, (inputs, targets) in enumerate(batches, start=1):
+            inputs_tensor = torch.tensor(inputs, device=device)
+            targets_tensor = torch.tensor(targets, device=device)
+
             optimizer.zero_grad()
-            outputs = model(inputs)  # [batch_size, seq_len, vocab_size]
-            
-            # Reshape for loss calculation
-            loss = criterion(
-                outputs.view(-1, outputs.size(-1)),  # [batch_size * seq_len, vocab_size]
-                targets.reshape(-1)  # [batch_size * seq_len]
-            )
-            
-            # Backward pass and optimize
+            outputs = model(inputs_tensor)
+            logits = outputs[:, -1, :]
+            loss = criterion(logits, targets_tensor)
+
             loss.backward()
             optimizer.step()
-            
-            total_loss += loss.item()
-            
-            # Print training progress
-            if (batch_idx + 1) % print_every == 0:
-                avg_loss = total_loss / print_every
-                print(f'Epoch [{epoch+1}/{epochs}], '
-                      f'Batch [{batch_idx+1}/{len(dataset)//batch_size}], '
-                      f'Loss: {avg_loss:.4f}')
-                total_loss = 0
+
+            epoch_loss += loss.item()
+
+            if on_batch_end is not None:
+                on_batch_end(
+                    epoch,
+                    num_epochs,
+                    batch_idx,
+                    total_batches,
+                    loss.item(),
+                )
+
+        avg_loss = epoch_loss / max(total_batches, 1)
+        if on_epoch_end is not None:
+            on_epoch_end(epoch, num_epochs, avg_loss, total_batches)
 
 
 def save_model(model: Transformer, path: str) -> None:
@@ -204,18 +212,21 @@ if __name__ == "__main__":
         def reset(self):
             self.current_idx = 0
         
-        def get_batches(self, batch_size: int):
+        def get_batches(self):
+            batches = []
             for i in range(0, len(self.data) - batch_size, batch_size):
                 batch = self.data[i:i + batch_size]
-                # For next-token prediction, targets are shifted by 1
-                yield batch[:, :-1], batch[:, 1:]
+                inputs = batch[:, :-1]
+                targets = batch[:, -1]
+                batches.append((inputs, targets))
+            return batches
     
     # Initialize model and dataset
     model = Transformer(vocab_size=vocab_size)
     dataset = DummyDataset()
     
     # Train
-    train_transformer(model, dataset, epochs=2, batch_size=batch_size)
+    train_transformer(model, dataset, num_epochs=2)
     
     # Save and load example
     save_model(model, "model.pt")
