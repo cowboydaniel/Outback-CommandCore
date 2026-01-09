@@ -146,6 +146,8 @@ def main() -> int:
         if hasattr(splash, "set_progress"):
             worker.progress.connect(splash.set_progress)
 
+        main_windows = []
+
         def show_main() -> None:
             elapsed = time.time() - splash_start_time
             remaining = max(0, minimum_splash_duration - elapsed)
@@ -155,6 +157,7 @@ def main() -> int:
                     splash.close()
                 window = HackAttackGUI()
                 window.sidebar.setCurrentRow(0)
+                main_windows.append(window)
                 window.show()
 
             QTimer.singleShot(int(remaining * 1000), finish_startup)

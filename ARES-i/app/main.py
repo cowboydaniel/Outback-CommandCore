@@ -61,7 +61,7 @@ def main() -> int:
     if hasattr(splash, "set_progress"):
         worker.progress.connect(splash.set_progress)
 
-    main_window = None
+    main_windows = []
 
     def show_main() -> None:
         elapsed = time.time() - splash_start_time
@@ -71,8 +71,9 @@ def main() -> int:
             nonlocal main_window
             if splash and splash.isVisible():
                 splash.close()
-            main_window = IOSToolsModule()
-            main_window.show()
+            window = IOSToolsModule()
+            main_windows.append(window)
+            window.show()
 
         QTimer.singleShot(int(remaining * 1000), finish_startup)
 

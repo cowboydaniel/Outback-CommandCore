@@ -56,7 +56,7 @@ def main() -> None:
     if hasattr(splash, "set_progress"):
         worker.progress.connect(splash.set_progress)
 
-    main_window = None
+    main_windows = []
     nightfire = None
 
     def show_main() -> None:
@@ -64,28 +64,29 @@ def main() -> None:
         remaining = max(0, minimum_splash_duration - elapsed)
 
         def finish_startup() -> None:
-            nonlocal main_window, nightfire
+            nonlocal nightfire
             if splash and splash.isVisible():
                 splash.close()
-            main_window = NightfireUI()
-            nightfire = NightfireCore(main_window.signal_emitter)
-            main_window.nightfire = nightfire
+            window = NightfireUI()
+            nightfire = NightfireCore(window.signal_emitter)
+            window.nightfire = nightfire
 
             # Connect UI buttons to nightfire methods
-            main_window.btn_start.clicked.connect(nightfire.start_monitoring)
-            main_window.btn_stop.clicked.connect(nightfire.stop_monitoring)
+            window.btn_start.clicked.connect(nightfire.start_monitoring)
+            window.btn_stop.clicked.connect(nightfire.stop_monitoring)
 
             # Start with monitoring off
-            main_window.btn_start.setEnabled(True)
-            main_window.btn_stop.setEnabled(False)
-            main_window.show()
+            window.btn_start.setEnabled(True)
+            window.btn_stop.setEnabled(False)
+            main_windows.append(window)
+            window.show()
 
             # Simulate some initial threats for demo
             def simulate_threats() -> None:
                 for _ in range(3):
                     threat = random.choice(config.DEMO_THREAT_TYPES)
                     nightfire.detected_threats[threat] = nightfire.detected_threats.get(threat, 0) + 1
-                    main_window.signal_emitter.alert_triggered.emit(
+                    window.signal_emitter.alert_triggered.emit(
                         threat,
                         f"Detected {nightfire.detected_threats[threat]} occurrences"
                     )

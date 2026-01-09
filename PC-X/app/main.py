@@ -908,7 +908,7 @@ if __name__ == "__main__":
     if hasattr(splash, "set_progress"):
         worker.progress.connect(splash.set_progress)
 
-    main_window = None
+    main_windows = []
 
     def show_main() -> None:
         elapsed = time.time() - splash_start_time
@@ -918,14 +918,15 @@ if __name__ == "__main__":
             nonlocal main_window
             if splash and splash.isVisible():
                 splash.close()
-            main_window = QMainWindow()
-            main_window.setWindowTitle("PC-X - Linux System Management")
-            main_window.setGeometry(100, 100, 1024, 768)
+            window = QMainWindow()
+            window.setWindowTitle("PC-X - Linux System Management")
+            window.setGeometry(100, 100, 1024, 768)
 
             # Create and set central widget
-            pc_tools = PCToolsModule(main_window, {"name": "Test User"})
-            main_window.setCentralWidget(pc_tools)
-            main_window.show()
+            pc_tools = PCToolsModule(window, {"name": "Test User"})
+            window.setCentralWidget(pc_tools)
+            main_windows.append(window)
+            window.show()
 
         QTimer.singleShot(int(remaining * 1000), finish_startup)
 

@@ -59,7 +59,7 @@ def main() -> None:
     if hasattr(splash, "set_progress"):
         worker.progress.connect(splash.set_progress)
 
-    main_window = None
+    main_windows = []
 
     def show_main() -> None:
         elapsed = time.time() - splash_start_time
@@ -70,9 +70,10 @@ def main() -> None:
             if splash and splash.isVisible():
                 splash.close()
             omni = Omniscribe()
-            main_window = OmniscribeMainWindow(omni)
-            create_sample_scripts(omni, main_window.script_tab)
-            main_window.show()
+            window = OmniscribeMainWindow(omni)
+            create_sample_scripts(omni, window.script_tab)
+            main_windows.append(window)
+            window.show()
 
         QTimer.singleShot(int(remaining * 1000), finish_startup)
 

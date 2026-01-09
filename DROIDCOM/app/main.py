@@ -58,7 +58,7 @@ def main():
     if hasattr(splash, "set_progress"):
         worker.progress.connect(splash.set_progress)
 
-    main_window = None
+    main_windows = []
 
     def show_main() -> None:
         elapsed = time.time() - splash_start_time
@@ -68,28 +68,29 @@ def main():
             nonlocal main_window
             if splash and splash.isVisible():
                 splash.close()
-            main_window = QtWidgets.QWidget()
-            main_window.setWindowTitle("DROIDCOM - Android Device Management")
+            window = QtWidgets.QWidget()
+            window.setWindowTitle("DROIDCOM - Android Device Management")
             # Ensure window has minimize, maximize and close buttons
-            main_window.setWindowFlags(
+            window.setWindowFlags(
                 QtCore.Qt.Window |
                 QtCore.Qt.WindowMinimizeButtonHint |
                 QtCore.Qt.WindowMaximizeButtonHint |
                 QtCore.Qt.WindowCloseButtonHint
             )
             # Set a smaller default size that fits most screens
-            main_window.resize(800, 600)  # Wider but shorter
-            main_window.setMinimumSize(800, 400)  # Set minimum size
+            window.resize(800, 600)  # Wider but shorter
+            window.setMinimumSize(800, 400)  # Set minimum size
 
             # Set window icon
             icon_path = Path(__file__).resolve().parents[2] / 'icons' / 'droidcom.png'
             if icon_path.exists():
-                main_window.setWindowIcon(QIcon(str(icon_path)))
+                window.setWindowIcon(QIcon(str(icon_path)))
 
-            layout = QtWidgets.QVBoxLayout(main_window)
-            app = AndroidToolsModule(main_window)
+            layout = QtWidgets.QVBoxLayout(window)
+            app = AndroidToolsModule(window)
             layout.addWidget(app)
-            main_window.show()
+            main_windows.append(window)
+            window.show()
 
         QTimer.singleShot(int(remaining * 1000), finish_startup)
 
