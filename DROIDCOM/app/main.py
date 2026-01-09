@@ -8,15 +8,18 @@ import sys
 
 from PySide6 import QtCore, QtWidgets
 from PySide6.QtGui import QIcon
+from PySide6.QtCore import QTimer
 
 if __package__:
     from . import AndroidToolsModule
     from .config import APP_VERSION
+    from ..ui.splash_screen import show_splash_screen
 else:
     module_root = Path(__file__).resolve().parent.parent.parent
     sys.path.append(str(module_root))
     from DROIDCOM.app import AndroidToolsModule
     from DROIDCOM.app.config import APP_VERSION
+    from DROIDCOM.ui.splash_screen import show_splash_screen
 
 
 def main():
@@ -24,8 +27,15 @@ def main():
     qt_app = QtWidgets.QApplication(sys.argv)
     qt_app.setApplicationVersion(APP_VERSION)
 
+    # Show splash screen
+    splash = show_splash_screen()
+    qt_app.processEvents()
+
+    splash.update_status("Scanning for devices...")
+    qt_app.processEvents()
+
     window = QtWidgets.QWidget()
-    window.setWindowTitle("Android Tools Module Test")
+    window.setWindowTitle("DROIDCOM - Android Device Management")
     # Ensure window has minimize, maximize and close buttons
     window.setWindowFlags(
         QtCore.Qt.Window |
@@ -46,7 +56,16 @@ def main():
     app = AndroidToolsModule(window)
     layout.addWidget(app)
 
-    window.show()
+    splash.update_status("Ready!")
+    qt_app.processEvents()
+
+    # Close splash and show main window after animation completes
+    def show_main():
+        splash.close()
+        window.show()
+
+    QTimer.singleShot(5900, show_main)
+
     qt_app.exec()
 
 

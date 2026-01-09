@@ -28,6 +28,7 @@ if importlib.util.find_spec("PySide6") is None:
     sys.exit(1)
 
 from PySide6.QtGui import QFont
+from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -37,6 +38,8 @@ from PySide6.QtWidgets import (
     QStatusBar,
     QWidget,
 )
+
+from HackAttack.ui.splash_screen import show_splash_screen
 
 
 class HackAttackGUI(QMainWindow):
@@ -102,8 +105,25 @@ def main() -> int:
         app.setStyle("Fusion")
         app.setFont(QFont("Segoe UI", 10))
 
+        # Show splash screen
+        splash = show_splash_screen()
+        app.processEvents()
+
+        splash.update_status("Loading penetration testing modules...")
+        app.processEvents()
+
         window = HackAttackGUI()
-        window.show()
+
+        splash.update_status("Ready!")
+        app.processEvents()
+
+        # Close splash and show main window after animation completes
+        def show_main():
+            splash.close()
+            window.show()
+
+        QTimer.singleShot(5900, show_main)
+
         return app.exec()
     except Exception as exc:
         logger.error("Application error: %s", exc, exc_info=True)

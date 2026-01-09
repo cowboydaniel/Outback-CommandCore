@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 
 from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import QTimer
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
@@ -11,6 +12,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from Codex.app.config import DEFAULT_CONFIG
 from Codex.app.gui import CommandCoreGUI
+from Codex.ui.splash_screen import show_splash_screen
 
 
 def create_app() -> QApplication:
@@ -21,8 +23,27 @@ def create_app() -> QApplication:
 def main() -> int:
     """Run the CommandCoreCodex GUI."""
     app = create_app()
+
+    # Show splash screen
+    splash = show_splash_screen()
+    app.processEvents()
+
+    # Create main window while splash is showing
+    splash.update_status("Loading AI models...")
+    app.processEvents()
+
     window = CommandCoreGUI(config=DEFAULT_CONFIG)
-    window.show()
+
+    splash.update_status("Ready!")
+    app.processEvents()
+
+    # Close splash and show main window after animation completes
+    def show_main():
+        splash.close()
+        window.show()
+
+    QTimer.singleShot(5900, show_main)
+
     return app.exec()
 
 

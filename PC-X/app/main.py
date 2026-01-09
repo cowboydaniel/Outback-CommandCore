@@ -65,6 +65,7 @@ from tabs import (
     tab_system,
     tab_utilities,
 )
+from ui.splash_screen import show_splash_screen
 
 configure_logging()
 
@@ -878,14 +879,30 @@ if __name__ == "__main__":
         if icon_path.exists():
             app.setWindowIcon(QIcon(str(icon_path)))
 
+    # Show splash screen
+    splash = show_splash_screen()
+    app.processEvents()
+
+    splash.update_status("Loading system tools...")
+    app.processEvents()
+
     # Create main window
     main_window = QMainWindow()
-    main_window.setWindowTitle("PC Tools Module")
+    main_window.setWindowTitle("PC-X - Linux System Management")
     main_window.setGeometry(100, 100, 1024, 768)
 
     # Create and set central widget
     pc_tools = PCToolsModule(main_window, {"name": "Test User"})
     main_window.setCentralWidget(pc_tools)
 
-    main_window.show()
+    splash.update_status("Ready!")
+    app.processEvents()
+
+    # Close splash and show main window after animation completes
+    def show_main():
+        splash.close()
+        main_window.show()
+
+    QTimer.singleShot(5900, show_main)
+
     sys.exit(app.exec())
