@@ -54,6 +54,9 @@ class Orchestrator:
         """
         self.batch_size = batch_size
         self.num_epochs = num_epochs
+        self.embedding_size = embedding_size
+        self.num_heads = num_heads
+        self.num_layers = num_layers
         self.learning_rate = learning_rate
         self.max_sequence_length = max_sequence_length
         self.device = device
@@ -70,42 +73,110 @@ class Orchestrator:
         
         logger.info(f"Orchestrator initialized with device: {device}")
     
+    def _prepare_from_source(self, source_code: str) -> Dict[str, int]:
+        tokens = self.tokenizer.tokenize(source_code)
+        if not tokens:
+            raise ValueError("No tokens were generated from the provided source code.")
+
+        context_size = min(self.max_sequence_length, len(tokens) - 1)
+        if context_size <= 0:
+            raise ValueError("Not enough tokens to build training sequences.")
+
+        sequences = self.tokenizer.prepare_training_sequences(
+            tokens,
+            context_size=context_size
+        )
+        if not sequences:
+            raise ValueError("Not enough tokens to build training sequences.")
+
+        self.dataset = CodeDataset(
+            sequences=sequences,
+            batch_size=self.batch_size
+        )
+
+        self.vocab_size = self.tokenizer.vocab_size
+        self.pad_token_id = 0
+
+        self.model = Transformer(
+            vocab_size=self.vocab_size,
+            d_model=self.embedding_size,
+            nhead=self.num_heads,
+            num_layers=self.num_layers,
+            max_len=self.max_sequence_length
+        ).to(self.device)
+
+        return {
+            "token_count": len(tokens),
+            "sequence_count": len(sequences),
+        }
+
     def prepare_data(self, source_code: str) -> None:
         """
         Prepare training data from source code.
-        
+
         Args:
             source_code: Input source code as a string
         """
         try:
-            # Tokenize the source code
-            tokens = self.tokenizer.tokenize(source_code)
-            
-            # Initialize dataset with tokenized data
-            self.dataset = CodeDataset(
-                tokens=tokens,
-                max_sequence_length=self.max_sequence_length,
-                batch_size=self.batch_size
+            stats = self._prepare_from_source(source_code)
+            logger.info(
+                "Prepared data with %s tokens and %s sequences",
+                stats["token_count"],
+                stats["sequence_count"]
             )
-            
-            # Initialize model with the correct vocab size
-            self.vocab_size = len(self.tokenizer.vocab)
-            self.pad_token_id = self.tokenizer.pad_token_id
-            
-            self.model = Transformer(
-                vocab_size=self.vocab_size,
-                embedding_size=256,
-                num_heads=8,
-                num_layers=6,
-                max_sequence_length=self.max_sequence_length,
-                pad_token_id=self.pad_token_id
-            ).to(self.device)
-            
-            logger.info(f"Prepared data with {len(tokens)} tokens and vocab size {self.vocab_size}")
-            
         except Exception as e:
             logger.error(f"Error preparing data: {str(e)}")
             raise
+
+    def prepare_data_from_path(self, path: str) -> Dict[str, int]:
+        """
+        Prepare training data from a directory of Python files.
+
+        Args:
+            path: Path to the dataset directory.
+
+        Returns:
+            Dict with counts for loaded files, tokens, and sequences.
+        """
+        if not os.path.isdir(path):
+            raise ValueError(f"Dataset path does not exist or is not a directory: {path}")
+
+        python_files = []
+        for root, _, files in os.walk(path):
+            for filename in files:
+                if filename.endswith(".py"):
+                    python_files.append(os.path.join(root, filename))
+
+        if not python_files:
+            raise ValueError(f"No .py files found in directory: {path}")
+
+        python_files.sort()
+        sources = []
+        for file_path in python_files:
+            try:
+                with open(file_path, "r", encoding="utf-8") as file_handle:
+                    content = file_handle.read()
+            except UnicodeDecodeError as exc:
+                raise ValueError(
+                    f"File is not valid UTF-8 text: {file_path}"
+                ) from exc
+
+            sources.append(content)
+
+        combined_source = "\n\n".join(sources).strip()
+        if not combined_source:
+            raise ValueError("No readable Python source found in the selected directory.")
+
+        stats = self._prepare_from_source(combined_source)
+        stats["file_count"] = len(python_files)
+
+        logger.info(
+            "Prepared data from %s files with %s tokens and %s sequences",
+            stats["file_count"],
+            stats["token_count"],
+            stats["sequence_count"]
+        )
+        return stats
     
     def train_model(self, on_epoch_end=None, on_batch_end=None) -> None:
         """Train the transformer model on the prepared dataset."""
