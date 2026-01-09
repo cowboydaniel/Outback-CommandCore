@@ -7,7 +7,7 @@ import sys
 import time
 from typing import Optional, Dict, Any
 
-from PySide6.QtCore import Qt, Signal, QSize, QTimer, QCoreApplication
+from PySide6.QtCore import Qt, Signal, QSize, QTimer, QCoreApplication, QObject, QThread
 from PySide6.QtGui import QPalette, QColor, QFont, QIcon
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QVBoxLayout, QWidget, QTabWidget, QStatusBar
@@ -322,6 +322,79 @@ class VantageUI(QMainWindow):
             tab_text = self.tab_widget.tabText(index)
             self.setWindowTitle(f"VANTAGE - {tab_text}")
 
+
+class StartupWorker(QObject):
+    status = Signal(str)
+    progress = Signal(int)
+    finished = Signal(object, dict)
+    failed = Signal(str)
+
+    def run(self) -> None:
+        try:
+            # Step 1: Update splash and import modules
+            self.status.emit("Loading modules...")
+            from tabs.dashboard import DashboardTab
+            from tabs.devices import DevicesTab
+            from tabs.performance_analytics import PerformanceAnalyticsTab
+
+            time.sleep(0.5)  # 500ms delay
+
+            # Step 2: Create main window (but don't show it yet)
+            self.status.emit("Initializing interface...")
+            main_window = VantageUI(show_immediately=False)  # Don't show until splash is done
+            time.sleep(0.5)  # 500ms delay
+
+            # Step 3: Initialize tabs and start data collection
+            self.status.emit("Loading dashboard...")
+            dashboard_tab = DashboardTab(main_window=main_window)
+            time.sleep(0.5)  # 500ms delay
+
+            # If your tabs have initialization methods that fetch data, call them here
+            if hasattr(dashboard_tab, 'initialize_data'):
+                dashboard_tab.initialize_data()
+
+            self.status.emit("Initializing performance analytics...")
+            performance_tab = PerformanceAnalyticsTab()
+            time.sleep(0.5)  # 500ms delay
+
+            # Start any background data collection
+            if hasattr(performance_tab, 'start_data_collection'):
+                performance_tab.start_data_collection()
+
+            self.status.emit("Scanning devices...")
+            devices_tab = DevicesTab()
+            time.sleep(0.5)  # 500ms delay
+
+            # Perform device discovery/scanning during splash
+            if hasattr(devices_tab, 'scan_devices'):
+                devices_tab.scan_devices()
+
+            # Step 4: Add tabs to main window
+            self.status.emit("Finalizing interface...")
+            time.sleep(0.5)  # 500ms delay
+            main_window.add_tab(dashboard_tab, "Dashboard")
+            time.sleep(0.2)  # 200ms between tab additions
+            main_window.add_tab(performance_tab, "Performance Analytics")
+            time.sleep(0.2)  # 200ms between tab additions
+            main_window.add_tab(devices_tab, "Devices")
+            time.sleep(0.5)  # 500ms delay
+
+            # Set Dashboard as the default tab
+            main_window.tab_widget.setCurrentWidget(dashboard_tab)
+
+            # Store references for later use
+            tabs_data = {
+                'dashboard': dashboard_tab,
+                'performance': performance_tab,
+                'devices': devices_tab
+            }
+
+            self.status.emit("Ready!")
+            self.finished.emit(main_window, tabs_data)
+        except Exception as exc:
+            logger.error("Error during background initialization: %s", exc, exc_info=True)
+            self.failed.emit(str(exc))
+
 def main():
     """Main entry point for the VANTAGE UI application."""
     app = QApplication(sys.argv)
@@ -341,170 +414,61 @@ def main():
     
     # Store the main window in a list to prevent garbage collection
     main_windows = []
-    
-    # Track initialization progress and timing
-    initialization_complete = False
-    main_window = None
-    tabs_data = {}
+
     splash_start_time = time.time()  # Record when splash started
-    last_message_time = 0  # Track time of last message update
-    MINIMUM_SPLASH_DURATION = 5.9  # Minimum splash screen time in seconds
-    
-    def update_splash_message(message: str, progress: int = None):
-        """Update splash screen with current loading status and progress.
-        
-        Args:
-            message: The status message to display
-            progress: Optional progress percentage (0-100)
-        """
-        _update_message(message, progress)
-        app.processEvents()  # Ensure UI updates happen
-    
-    def _update_message(message: str, progress: int = None):
-        """Internal function to update the splash screen message and progress.
-        
-        Args:
-            message: Status message to display
-            progress: Optional progress percentage (0-100)
-        """
+    minimum_splash_duration = 5.9  # Minimum splash screen time in seconds
+
+    def update_splash_message(message: str) -> None:
+        """Update splash screen with current loading status."""
         if splash and splash.isVisible():
             try:
                 if hasattr(splash, 'update_status'):
                     splash.update_status(message)
-                if progress is not None and hasattr(splash, 'set_progress'):
-                    splash.set_progress(progress)
-                app.processEvents()  # Force UI update
             except RuntimeError:
                 # Handle case where app is shutting down
                 pass
-    
-    def background_initialization():
-        """Perform all heavy initialization tasks in background."""
-        nonlocal initialization_complete, main_window, tabs_data
-        
-        try:
-            # Step 1: Update splash and import modules
-            update_splash_message("Loading modules...")
-            from tabs.dashboard import DashboardTab
-            from tabs.devices import DevicesTab  
-            from tabs.performance_analytics import PerformanceAnalyticsTab
-            
-            time.sleep(0.5)  # 500ms delay
-            
-            # Step 2: Create main window (but don't show it yet)
-            update_splash_message("Initializing interface...")
-            main_window = VantageUI(show_immediately=False)  # Don't show until splash is done
-            main_windows.append(main_window)  # Prevent garbage collection
-            time.sleep(0.5)  # 500ms delay
-            
-            # Step 3: Initialize tabs and start data collection
-            update_splash_message("Loading dashboard...")
-            dashboard_tab = DashboardTab(main_window=main_window)
-            time.sleep(0.5)  # 500ms delay
-            
-            # If your tabs have initialization methods that fetch data, call them here
-            if hasattr(dashboard_tab, 'initialize_data'):
-                dashboard_tab.initialize_data()
-            
-            update_splash_message("Initializing performance analytics...")
-            performance_tab = PerformanceAnalyticsTab()
-            time.sleep(0.5)  # 500ms delay
-            
-            # Start any background data collection
-            if hasattr(performance_tab, 'start_data_collection'):
-                performance_tab.start_data_collection()
-            
-            update_splash_message("Scanning devices...")
-            devices_tab = DevicesTab()
-            time.sleep(0.5)  # 500ms delay
-            
-            # Perform device discovery/scanning during splash
-            if hasattr(devices_tab, 'scan_devices'):
-                devices_tab.scan_devices()
-            
-            # Step 4: Add tabs to main window
-            update_splash_message("Finalizing interface...")
-            time.sleep(0.5)  # 500ms delay
-            main_window.add_tab(dashboard_tab, "Dashboard")
-            time.sleep(0.2)  # 200ms between tab additions
-            main_window.add_tab(performance_tab, "Performance Analytics") 
-            time.sleep(0.2)  # 200ms between tab additions
-            main_window.add_tab(devices_tab, "Devices")
-            time.sleep(0.5)  # 500ms delay
-            
-            # Set Dashboard as the default tab
-            main_window.tab_widget.setCurrentWidget(dashboard_tab)
-            
-            # Store references for later use
-            tabs_data = {
-                'dashboard': dashboard_tab,
-                'performance': performance_tab,
-                'devices': devices_tab
-            }
-            
-            update_splash_message("Ready!")
-            
-            # Mark initialization as complete
-            initialization_complete = True
-            
-        except Exception as e:
-            logger.error(f"Error during background initialization: {e}")
-            update_splash_message(f"Error: {e}")
-            # Still mark as complete to avoid hanging
-            initialization_complete = True
-    
-    def check_initialization_and_show():
-        """Check if initialization is complete AND minimum splash time has elapsed."""
-        nonlocal initialization_complete, main_window, splash_start_time
-        
-        # Check if both conditions are met:
-        # 1. Initialization is complete
-        # 2. Minimum splash duration has elapsed
+
+    thread = QThread()
+    worker = StartupWorker()
+    worker.moveToThread(thread)
+
+    worker.status.connect(update_splash_message)
+    if splash and hasattr(splash, 'set_progress'):
+        worker.progress.connect(splash.set_progress)
+
+    def show_main(main_window: VantageUI, tabs_data: dict) -> None:
         elapsed_time = time.time() - splash_start_time
-        minimum_time_elapsed = elapsed_time >= MINIMUM_SPLASH_DURATION
-        
-        if initialization_complete and minimum_time_elapsed:
-            try:
-                if main_window:
-                    # Show the fully initialized window
-                    main_window.showMaximized()
-                    
-                    # Close splash screen
-                    if splash and splash.isVisible():
-                        splash.close()
-                    
-                    # Optional: Trigger any post-show initialization
-                    for tab_name, tab_widget in tabs_data.items():
-                        if hasattr(tab_widget, 'on_show'):
-                            tab_widget.on_show()
-                    
-                    logger.info(f"VANTAGE application fully loaded and ready (took {elapsed_time:.1f}s)")
-                else:
-                    logger.error("Main window not created during initialization")
-                    if splash and splash.isVisible():
-                        splash.close()
-                    sys.exit(1)
-            except Exception as e:
-                logger.error(f"Error showing main window: {e}")
-                if splash and splash.isVisible():
-                    splash.close()
-                sys.exit(1)
-        else:
-            # Show status of what we're waiting for
-            if initialization_complete and not minimum_time_elapsed:
-                remaining_time = MINIMUM_SPLASH_DURATION - elapsed_time
-                update_splash_message(f"Ready! Starting in {remaining_time:.1f}s...")
-            elif not initialization_complete and minimum_time_elapsed:
-                update_splash_message("Finishing initialization...")
-            
-            # Check again in 100ms
-            QTimer.singleShot(100, check_initialization_and_show)
-    
-    # Start background initialization immediately
-    QTimer.singleShot(100, background_initialization)  # Small delay to ensure splash is shown
-    
-    # Start checking for completion
-    QTimer.singleShot(200, check_initialization_and_show)
+        remaining = max(0, minimum_splash_duration - elapsed_time)
+
+        def finish_startup() -> None:
+            main_windows.append(main_window)
+            main_window.showMaximized()
+
+            # Close splash screen
+            if splash and splash.isVisible():
+                splash.close()
+
+            # Optional: Trigger any post-show initialization
+            for tab_widget in tabs_data.values():
+                if hasattr(tab_widget, 'on_show'):
+                    tab_widget.on_show()
+
+            logger.info("VANTAGE application fully loaded and ready (took %.1fs)", elapsed_time)
+
+        QTimer.singleShot(int(remaining * 1000), finish_startup)
+
+    def handle_error(message: str) -> None:
+        update_splash_message(f"Error: {message}")
+        QTimer.singleShot(2000, QCoreApplication.quit)
+
+    worker.finished.connect(show_main)
+    worker.failed.connect(handle_error)
+    worker.finished.connect(thread.quit)
+    worker.failed.connect(thread.quit)
+    worker.finished.connect(worker.deleteLater)
+    thread.finished.connect(thread.deleteLater)
+    thread.started.connect(worker.run)
+    thread.start()
     
     # Start the event loop
     sys.exit(app.exec())
