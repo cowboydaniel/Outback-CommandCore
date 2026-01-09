@@ -886,24 +886,14 @@ if __name__ == "__main__":
     class StartupWorker(QObject):
         status = Signal(str)
         progress = Signal(int)
-        finished = Signal(object)
+        finished = Signal()
         failed = Signal(str)
 
         def run(self) -> None:
             try:
                 self.status.emit("Loading system tools...")
-
-                # Create main window
-                main_window = QMainWindow()
-                main_window.setWindowTitle("PC-X - Linux System Management")
-                main_window.setGeometry(100, 100, 1024, 768)
-
-                # Create and set central widget
-                pc_tools = PCToolsModule(main_window, {"name": "Test User"})
-                main_window.setCentralWidget(pc_tools)
-
                 self.status.emit("Ready!")
-                self.finished.emit(main_window)
+                self.finished.emit()
             except Exception as exc:
                 self.failed.emit(str(exc))
 
@@ -918,14 +908,24 @@ if __name__ == "__main__":
     if hasattr(splash, "set_progress"):
         worker.progress.connect(splash.set_progress)
 
-    def show_main(main_window: QMainWindow) -> None:
+    main_windows = []
+
+    def show_main() -> None:
         elapsed = time.time() - splash_start_time
         remaining = max(0, minimum_splash_duration - elapsed)
 
         def finish_startup() -> None:
             if splash and splash.isVisible():
                 splash.close()
-            main_window.show()
+            window = QMainWindow()
+            window.setWindowTitle("PC-X - Linux System Management")
+            window.setGeometry(100, 100, 1024, 768)
+
+            # Create and set central widget
+            pc_tools = PCToolsModule(window, {"name": "Test User"})
+            window.setCentralWidget(pc_tools)
+            main_windows.append(window)
+            window.show()
 
         QTimer.singleShot(int(remaining * 1000), finish_startup)
 

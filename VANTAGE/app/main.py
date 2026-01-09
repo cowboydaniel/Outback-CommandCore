@@ -326,71 +326,31 @@ class VantageUI(QMainWindow):
 class StartupWorker(QObject):
     status = Signal(str)
     progress = Signal(int)
-    finished = Signal(object, dict)
+    finished = Signal()
     failed = Signal(str)
 
     def run(self) -> None:
         try:
-            # Step 1: Update splash and import modules
             self.status.emit("Loading modules...")
-            from tabs.dashboard import DashboardTab
-            from tabs.devices import DevicesTab
-            from tabs.performance_analytics import PerformanceAnalyticsTab
-
             time.sleep(0.5)  # 500ms delay
 
-            # Step 2: Create main window (but don't show it yet)
             self.status.emit("Initializing interface...")
-            main_window = VantageUI(show_immediately=False)  # Don't show until splash is done
             time.sleep(0.5)  # 500ms delay
 
-            # Step 3: Initialize tabs and start data collection
             self.status.emit("Loading dashboard...")
-            dashboard_tab = DashboardTab(main_window=main_window)
             time.sleep(0.5)  # 500ms delay
-
-            # If your tabs have initialization methods that fetch data, call them here
-            if hasattr(dashboard_tab, 'initialize_data'):
-                dashboard_tab.initialize_data()
 
             self.status.emit("Initializing performance analytics...")
-            performance_tab = PerformanceAnalyticsTab()
             time.sleep(0.5)  # 500ms delay
-
-            # Start any background data collection
-            if hasattr(performance_tab, 'start_data_collection'):
-                performance_tab.start_data_collection()
 
             self.status.emit("Scanning devices...")
-            devices_tab = DevicesTab()
             time.sleep(0.5)  # 500ms delay
 
-            # Perform device discovery/scanning during splash
-            if hasattr(devices_tab, 'scan_devices'):
-                devices_tab.scan_devices()
-
-            # Step 4: Add tabs to main window
             self.status.emit("Finalizing interface...")
             time.sleep(0.5)  # 500ms delay
-            main_window.add_tab(dashboard_tab, "Dashboard")
-            time.sleep(0.2)  # 200ms between tab additions
-            main_window.add_tab(performance_tab, "Performance Analytics")
-            time.sleep(0.2)  # 200ms between tab additions
-            main_window.add_tab(devices_tab, "Devices")
-            time.sleep(0.5)  # 500ms delay
-
-            # Set Dashboard as the default tab
-            main_window.tab_widget.setCurrentWidget(dashboard_tab)
-
-            # Store references for later use
-            tabs_data = {
-                'dashboard': dashboard_tab,
-                'performance': performance_tab,
-                'devices': devices_tab
-            }
 
             self.status.emit("Ready!")
-            self.finished.emit(main_window, tabs_data)
+            self.finished.emit()
         except Exception as exc:
             logger.error("Error during background initialization: %s", exc, exc_info=True)
             self.failed.emit(str(exc))
@@ -436,17 +396,43 @@ def main():
     if splash and hasattr(splash, 'set_progress'):
         worker.progress.connect(splash.set_progress)
 
-    def show_main(main_window: VantageUI, tabs_data: dict) -> None:
+    def show_main() -> None:
         elapsed_time = time.time() - splash_start_time
         remaining = max(0, minimum_splash_duration - elapsed_time)
 
         def finish_startup() -> None:
-            main_windows.append(main_window)
-            main_window.showMaximized()
-
-            # Close splash screen
             if splash and splash.isVisible():
                 splash.close()
+
+            from tabs.dashboard import DashboardTab
+            from tabs.devices import DevicesTab
+            from tabs.performance_analytics import PerformanceAnalyticsTab
+
+            main_window = VantageUI(show_immediately=False)
+            dashboard_tab = DashboardTab(main_window=main_window)
+            performance_tab = PerformanceAnalyticsTab()
+            devices_tab = DevicesTab()
+
+            if hasattr(dashboard_tab, 'initialize_data'):
+                dashboard_tab.initialize_data()
+            if hasattr(performance_tab, 'start_data_collection'):
+                performance_tab.start_data_collection()
+            if hasattr(devices_tab, 'scan_devices'):
+                devices_tab.scan_devices()
+
+            main_window.add_tab(dashboard_tab, "Dashboard")
+            main_window.add_tab(performance_tab, "Performance Analytics")
+            main_window.add_tab(devices_tab, "Devices")
+            main_window.tab_widget.setCurrentWidget(dashboard_tab)
+
+            tabs_data = {
+                'dashboard': dashboard_tab,
+                'performance': performance_tab,
+                'devices': devices_tab
+            }
+
+            main_windows.append(main_window)
+            main_window.showMaximized()
 
             # Optional: Trigger any post-show initialization
             for tab_widget in tabs_data.values():
