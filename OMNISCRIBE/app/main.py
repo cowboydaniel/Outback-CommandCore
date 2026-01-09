@@ -23,24 +23,14 @@ from OMNISCRIBE.ui.splash_screen import show_splash_screen
 class StartupWorker(QObject):
     status = Signal(str)
     progress = Signal(int)
-    finished = Signal(object)
+    finished = Signal()
     failed = Signal(str)
 
     def run(self) -> None:
         try:
             self.status.emit("Loading speech recognition models...")
-
-            # Create Omniscribe instance
-            omni = Omniscribe()
-
-            # Create the main window
-            ui = OmniscribeMainWindow(omni)
-
-            # Add some sample scripts if none exist
-            create_sample_scripts(omni, ui.script_tab)
-
             self.status.emit("Ready!")
-            self.finished.emit(ui)
+            self.finished.emit()
         except Exception as exc:
             self.failed.emit(str(exc))
 
@@ -69,14 +59,20 @@ def main() -> None:
     if hasattr(splash, "set_progress"):
         worker.progress.connect(splash.set_progress)
 
-    def show_main(ui: OmniscribeMainWindow) -> None:
+    main_window = None
+
+    def show_main() -> None:
         elapsed = time.time() - splash_start_time
         remaining = max(0, minimum_splash_duration - elapsed)
 
         def finish_startup() -> None:
+            nonlocal main_window
             if splash and splash.isVisible():
                 splash.close()
-            ui.show()
+            omni = Omniscribe()
+            main_window = OmniscribeMainWindow(omni)
+            create_sample_scripts(omni, main_window.script_tab)
+            main_window.show()
 
         QTimer.singleShot(int(remaining * 1000), finish_startup)
 

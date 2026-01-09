@@ -22,28 +22,14 @@ from NIGHTFIRE.ui.splash_screen import show_splash_screen
 class StartupWorker(QObject):
     status = Signal(str)
     progress = Signal(int)
-    finished = Signal(object, object)
+    finished = Signal()
     failed = Signal(str)
 
     def run(self) -> None:
         try:
             self.status.emit("Initializing defense systems...")
-
-            # Create UI and core logic
-            ui = NightfireUI()
-            nightfire = NightfireCore(ui.signal_emitter)
-            ui.nightfire = nightfire
-
-            # Connect UI buttons to nightfire methods
-            ui.btn_start.clicked.connect(nightfire.start_monitoring)
-            ui.btn_stop.clicked.connect(nightfire.stop_monitoring)
-
-            # Start with monitoring off
-            ui.btn_start.setEnabled(True)
-            ui.btn_stop.setEnabled(False)
-
             self.status.emit("Ready!")
-            self.finished.emit(ui, nightfire)
+            self.finished.emit()
         except Exception as exc:
             self.failed.emit(str(exc))
 
@@ -70,21 +56,36 @@ def main() -> None:
     if hasattr(splash, "set_progress"):
         worker.progress.connect(splash.set_progress)
 
-    def show_main(ui: NightfireUI, nightfire: NightfireCore) -> None:
+    main_window = None
+    nightfire = None
+
+    def show_main() -> None:
         elapsed = time.time() - splash_start_time
         remaining = max(0, minimum_splash_duration - elapsed)
 
         def finish_startup() -> None:
+            nonlocal main_window, nightfire
             if splash and splash.isVisible():
                 splash.close()
-            ui.show()
+            main_window = NightfireUI()
+            nightfire = NightfireCore(main_window.signal_emitter)
+            main_window.nightfire = nightfire
+
+            # Connect UI buttons to nightfire methods
+            main_window.btn_start.clicked.connect(nightfire.start_monitoring)
+            main_window.btn_stop.clicked.connect(nightfire.stop_monitoring)
+
+            # Start with monitoring off
+            main_window.btn_start.setEnabled(True)
+            main_window.btn_stop.setEnabled(False)
+            main_window.show()
 
             # Simulate some initial threats for demo
             def simulate_threats() -> None:
                 for _ in range(3):
                     threat = random.choice(config.DEMO_THREAT_TYPES)
                     nightfire.detected_threats[threat] = nightfire.detected_threats.get(threat, 0) + 1
-                    ui.signal_emitter.alert_triggered.emit(
+                    main_window.signal_emitter.alert_triggered.emit(
                         threat,
                         f"Detected {nightfire.detected_threats[threat]} occurrences"
                     )

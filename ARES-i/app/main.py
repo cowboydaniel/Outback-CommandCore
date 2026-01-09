@@ -20,15 +20,14 @@ from ui.splash_screen import show_splash_screen
 class StartupWorker(QObject):
     status = Signal(str)
     progress = Signal(int)
-    finished = Signal(object)
+    finished = Signal()
     failed = Signal(str)
 
     def run(self) -> None:
         try:
             self.status.emit("Loading modules...")
-            window = IOSToolsModule()
             self.status.emit("Ready!")
-            self.finished.emit(window)
+            self.finished.emit()
         except Exception as exc:
             logging.exception("Startup failed")
             self.failed.emit(str(exc))
@@ -62,14 +61,18 @@ def main() -> int:
     if hasattr(splash, "set_progress"):
         worker.progress.connect(splash.set_progress)
 
-    def show_main(window: IOSToolsModule) -> None:
+    main_window = None
+
+    def show_main() -> None:
         elapsed = time.time() - splash_start_time
         remaining = max(0, minimum_splash_duration - elapsed)
 
         def finish_startup() -> None:
+            nonlocal main_window
             if splash and splash.isVisible():
                 splash.close()
-            window.show()
+            main_window = IOSToolsModule()
+            main_window.show()
 
         QTimer.singleShot(int(remaining * 1000), finish_startup)
 
