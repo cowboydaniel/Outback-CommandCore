@@ -107,7 +107,7 @@ class Orchestrator:
             logger.error(f"Error preparing data: {str(e)}")
             raise
     
-    def train_model(self) -> None:
+    def train_model(self, on_epoch_end=None, on_batch_end=None) -> None:
         """Train the transformer model on the prepared dataset."""
         if self.model is None or self.dataset is None:
             raise ValueError("Data must be prepared before training")
@@ -124,7 +124,9 @@ class Orchestrator:
                 criterion=criterion,
                 optimizer=optimizer,
                 num_epochs=self.num_epochs,
-                device=self.device
+                device=self.device,
+                on_epoch_end=on_epoch_end,
+                on_batch_end=on_batch_end,
             )
             
             logger.info("Model training completed successfully")

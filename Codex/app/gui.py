@@ -45,6 +45,10 @@ class WorkerSignals(QObject):
     data_ready = Signal(dict)
 
 
+class TrainingStopped(Exception):
+    """Raised when training is stopped by the user."""
+
+
 class TrainingWorker(QObject):
     """Worker thread for running training in the background."""
     def __init__(self, orchestrator, params):
@@ -57,19 +61,38 @@ class TrainingWorker(QObject):
     def run(self):
         try:
             self.signals.status.emit("Starting training...")
-            # Replace with actual training call
-            # self.orchestrator.train_model(**self.params)
-            for i in range(101):
+
+            def handle_batch(epoch, num_epochs, batch_idx, total_batches, loss):
                 if not self.is_running:
-                    break
-                # Simulate training progress
-                QThread.msleep(50)
-                self.signals.progress.emit(i)
-                self.signals.status.emit(f"Epoch {i}/100")
-            
+                    raise TrainingStopped()
+                total_steps = max(num_epochs * total_batches, 1)
+                current_step = (epoch - 1) * total_batches + batch_idx
+                progress = int((current_step / total_steps) * 100)
+                status = (
+                    f"Epoch {epoch}/{num_epochs} - "
+                    f"Batch {batch_idx}/{total_batches} - "
+                    f"Loss: {loss:.4f}"
+                )
+                self.signals.progress.emit(progress)
+                self.signals.status.emit(status)
+
+            def handle_epoch(epoch, num_epochs, avg_loss, total_batches):
+                status = (
+                    f"Epoch {epoch}/{num_epochs} completed "
+                    f"(avg loss: {avg_loss:.4f}, batches: {total_batches})"
+                )
+                self.signals.status.emit(status)
+
+            self.orchestrator.train_model(
+                on_epoch_end=handle_epoch,
+                on_batch_end=handle_batch,
+            )
+
             if self.is_running:
+                self.signals.progress.emit(100)
                 self.signals.status.emit("Training completed successfully")
-                self.signals.finished.emit()
+        except TrainingStopped:
+            self.signals.status.emit("Training stopped.")
         except Exception as e:
             self.signals.error.emit(f"Training error: {str(e)}")
         finally:
@@ -276,6 +299,15 @@ class CommandCoreGUI(QMainWindow):
         if self.worker_thread is not None and self.worker_thread.isRunning():
             self.log_message("Training is already in progress.", is_error=True)
             return
+
+        if self.orchestrator.dataset is None:
+            QMessageBox.warning(
+                self,
+                "Error",
+                "Training data has not been prepared. Please prepare the dataset first.",
+            )
+            self.log_message("Training aborted: dataset not prepared.", is_error=True)
+            return
         
         # Get training parameters
         params = {
@@ -303,6 +335,7 @@ class CommandCoreGUI(QMainWindow):
         self.start_training_btn.setEnabled(False)
         self.stop_training_btn.setEnabled(True)
         self.training_status.clear()
+        self.training_progress.setValue(0)
         self.log_message("Training started...")
     
     def stop_training(self):
