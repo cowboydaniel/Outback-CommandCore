@@ -55,6 +55,7 @@ from BLACKSTORM.tabs.forensic_tools_tab import ForensicToolsTab
 from BLACKSTORM.tabs.security_compliance_tab import SecurityComplianceTab
 from BLACKSTORM.tabs.settings_tab import SettingsTab
 from BLACKSTORM.tabs.wipe_operations_tab import WipeOperationsTab
+from BLACKSTORM.ui.splash_screen import show_splash_screen
 
 class BlackStormLauncher(QMainWindow):
     """
@@ -539,15 +540,31 @@ def main():
     """Main entry point for the application."""
     app = QApplication(sys.argv)
     app.setApplicationVersion("1.0.0")
-    
+
     # Set application style
     app.setStyle('Fusion')
-    
-    # Create and show main window
+
+    # Show splash screen
+    splash = show_splash_screen()
+    app.processEvents()
+
+    # Create main window while splash is showing
+    splash.update_status("Loading forensic modules...")
+    app.processEvents()
+
     window = BlackStormLauncher()
-    window.show()
-    window.showMaximized()
-    
+
+    splash.update_status("Ready!")
+    app.processEvents()
+
+    # Close splash and show main window after animation completes
+    def show_main():
+        splash.close()
+        window.show()
+        window.showMaximized()
+
+    QTimer.singleShot(5900, show_main)
+
     # Start the event loop
     sys.exit(app.exec())
 
