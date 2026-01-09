@@ -46,15 +46,14 @@ from HackAttack.ui.splash_screen import show_splash_screen
 class StartupWorker(QObject):
     status = Signal(str)
     progress = Signal(int)
-    finished = Signal(object)
+    finished = Signal()
     failed = Signal(str)
 
     def run(self) -> None:
         try:
             self.status.emit("Loading penetration testing modules...")
-            window = HackAttackGUI()
             self.status.emit("Ready!")
-            self.finished.emit(window)
+            self.finished.emit()
         except Exception as exc:
             logger.error("Startup failed: %s", exc, exc_info=True)
             self.failed.emit(str(exc))
@@ -70,6 +69,7 @@ class HackAttackGUI(QMainWindow):
         self.setStyleSheet(APP_STYLESHEET)
 
         self.tab_definitions = get_tab_definitions()
+        self.tab_pages = {}
 
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
@@ -97,19 +97,27 @@ class HackAttackGUI(QMainWindow):
         """Create the main content area with stacked widgets."""
         self.stacked_widget = QStackedWidget()
 
-        for tab in self.tab_definitions:
-            try:
-                page = tab.builder(tab.title, tab.description, tab.icon)
-            except Exception as exc:
-                logger.error("Failed to build tab '%s': %s", tab.title, exc, exc_info=True)
-                page = QWidget()
-            self.stacked_widget.addWidget(page)
+        for _ in self.tab_definitions:
+            placeholder = QWidget()
+            self.stacked_widget.addWidget(placeholder)
 
         self.main_layout.addWidget(self.stacked_widget, 1)
 
     def change_page(self, index: int) -> None:
         """Change the current page based on sidebar selection."""
         if 0 <= index < self.stacked_widget.count():
+            if index not in self.tab_pages:
+                tab = self.tab_definitions[index]
+                try:
+                    page = tab.builder(tab.title, tab.description, tab.icon)
+                except Exception as exc:
+                    logger.error("Failed to build tab '%s': %s", tab.title, exc, exc_info=True)
+                    page = QWidget()
+                placeholder = self.stacked_widget.widget(index)
+                self.stacked_widget.removeWidget(placeholder)
+                placeholder.deleteLater()
+                self.stacked_widget.insertWidget(index, page)
+                self.tab_pages[index] = page
             self.stacked_widget.setCurrentIndex(index)
             current_item = self.sidebar.currentItem()
             if current_item is not None:
@@ -138,13 +146,15 @@ def main() -> int:
         if hasattr(splash, "set_progress"):
             worker.progress.connect(splash.set_progress)
 
-        def show_main(window: HackAttackGUI) -> None:
+        def show_main() -> None:
             elapsed = time.time() - splash_start_time
             remaining = max(0, minimum_splash_duration - elapsed)
 
             def finish_startup() -> None:
                 if splash and splash.isVisible():
                     splash.close()
+                window = HackAttackGUI()
+                window.sidebar.setCurrentRow(0)
                 window.show()
 
             QTimer.singleShot(int(remaining * 1000), finish_startup)
