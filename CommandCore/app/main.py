@@ -170,15 +170,14 @@ def show_splash_screen():
 class StartupWorker(QObject):
     status = Signal(str)
     progress = Signal(int)
-    finished = Signal(object)
+    finished = Signal()
     failed = Signal(str)
 
     def run(self) -> None:
         try:
             self.status.emit("Loading modules...")
-            window = CommandCoreLauncher()
             self.status.emit("Ready!")
-            self.finished.emit(window)
+            self.finished.emit()
         except Exception as exc:
             self.failed.emit(str(exc))
 
@@ -215,12 +214,13 @@ def main():
     if hasattr(splash, "set_progress"):
         worker.progress.connect(splash.set_progress)
 
-    def show_main(window: CommandCoreLauncher) -> None:
+    def show_main() -> None:
         nonlocal splash
         elapsed = time.time() - splash_start_time
         remaining = max(0, minimum_splash_duration - elapsed)
 
         def finish_startup() -> None:
+            window = CommandCoreLauncher()
             main_windows.append(window)
             window.show()
 
