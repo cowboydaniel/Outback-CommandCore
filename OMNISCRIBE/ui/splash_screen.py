@@ -43,7 +43,7 @@ class WaveformBackground(QWidget):
         self.title_font = QFont("Arial", 44, QFont.Bold)
         self.subtitle_font = QFont("Arial", 14)
         self.version_font = QFont("Arial", 10, QFont.Bold)
-        self.transcript_font = QFont("Georgia", 11, QFont.StyleItalic)
+        self.transcript_font = QFont("Georgia", 11, QFont.Normal, True)
 
         self.init_waveforms()
 
