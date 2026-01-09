@@ -9,7 +9,5 @@ linux-usb.org.
 
 ## Update notes
 
-* This update could not automatically pull `usb.ids` due to restricted network access
-  in the execution environment, so no new PID entries were added. Future updates should
-  re-run the PID comparison using a locally cached copy of `usb.ids` and record the
-  retrieval date in this file.
+* 2026-01-09: Added missing vendor IDs and product IDs using the locally cached
+  `docs/usb.ids` file in this repository.
