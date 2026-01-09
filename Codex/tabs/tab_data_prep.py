@@ -34,12 +34,15 @@ def setup_data_prep_tab(gui) -> None:
     prepare_btn = QPushButton("Prepare Dataset")
     prepare_btn.clicked.connect(gui.prepare_dataset)
 
+    gui.data_prep_summary = QLabel("No dataset prepared yet.")
+
     gui.data_prep_status = QPlainTextEdit()
     gui.data_prep_status.setReadOnly(True)
     gui.data_prep_status.setPlaceholderText("Status messages will appear here...")
 
     dataset_layout.addLayout(dir_layout)
     dataset_layout.addWidget(prepare_btn)
+    dataset_layout.addWidget(gui.data_prep_summary)
     dataset_group.setLayout(dataset_layout)
 
     layout.addWidget(dataset_group)

@@ -264,12 +264,22 @@ class CommandCoreGUI(QMainWindow):
             return
         
         try:
+            self.data_prep_status.clear()
+            self.update_data_prep_status("Preparing dataset...")
+            self.append_data_prep_status("Scanning for Python files...")
             self.log_message("Preparing dataset...")
-            # Call orchestrator to prepare dataset
-            # self.orchestrator.prepare_dataset(dataset_path)
+
+            stats = self.orchestrator.prepare_data_from_path(dataset_path)
+            summary = f"Loaded {stats['file_count']} files, {stats['token_count']} tokens."
+            self.append_data_prep_status(summary)
+            self.append_data_prep_status("Dataset prepared successfully.")
+            self.update_data_prep_status(summary)
             self.log_message("Dataset prepared successfully.")
         except Exception as e:
-            self.log_message(f"Error preparing dataset: {str(e)}", is_error=True)
+            error_message = f"Error preparing dataset: {str(e)}"
+            self.append_data_prep_status(str(e), is_error=True)
+            self.update_data_prep_status(f"Failed: {str(e)}", is_error=True)
+            self.log_message(error_message, is_error=True)
     
     def start_training(self):
         """Start the training process in a separate thread."""
@@ -461,6 +471,19 @@ class CommandCoreGUI(QMainWindow):
     def clear_logs(self):
         """Clear the log display."""
         self.log_display.clear()
+
+    def append_data_prep_status(self, message: str, is_error: bool = False) -> None:
+        """Append a message to the data preparation status panel."""
+        if is_error:
+            message = f"ERROR: {message}"
+        self.data_prep_status.appendPlainText(message)
+
+    def update_data_prep_status(self, message: str, is_error: bool = False) -> None:
+        """Update the data preparation summary label."""
+        if is_error:
+            self.data_prep_summary.setText(message)
+        else:
+            self.data_prep_summary.setText(message)
     
     def log_message(self, message, is_error=False):
         """Add a message to the log display."""
