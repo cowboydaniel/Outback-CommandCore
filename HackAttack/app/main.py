@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import logging
 import sys
+import time
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -28,7 +29,7 @@ if importlib.util.find_spec("PySide6") is None:
     sys.exit(1)
 
 from PySide6.QtGui import QFont
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QObject, QThread, QTimer, Signal
 from PySide6.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -40,6 +41,23 @@ from PySide6.QtWidgets import (
 )
 
 from HackAttack.ui.splash_screen import show_splash_screen
+
+
+class StartupWorker(QObject):
+    status = Signal(str)
+    progress = Signal(int)
+    finished = Signal(object)
+    failed = Signal(str)
+
+    def run(self) -> None:
+        try:
+            self.status.emit("Loading penetration testing modules...")
+            window = HackAttackGUI()
+            self.status.emit("Ready!")
+            self.finished.emit(window)
+        except Exception as exc:
+            logger.error("Startup failed: %s", exc, exc_info=True)
+            self.failed.emit(str(exc))
 
 
 class HackAttackGUI(QMainWindow):
@@ -109,20 +127,41 @@ def main() -> int:
         splash = show_splash_screen()
         app.processEvents()
 
-        splash.update_status("Loading penetration testing modules...")
-        app.processEvents()
+        splash_start_time = time.time()
+        minimum_splash_duration = 5.9
 
-        window = HackAttackGUI()
+        thread = QThread()
+        worker = StartupWorker()
+        worker.moveToThread(thread)
 
-        splash.update_status("Ready!")
-        app.processEvents()
+        worker.status.connect(splash.update_status)
+        if hasattr(splash, "set_progress"):
+            worker.progress.connect(splash.set_progress)
 
-        # Close splash and show main window after animation completes
-        def show_main():
-            splash.close()
-            window.show()
+        def show_main(window: HackAttackGUI) -> None:
+            elapsed = time.time() - splash_start_time
+            remaining = max(0, minimum_splash_duration - elapsed)
 
-        QTimer.singleShot(5900, show_main)
+            def finish_startup() -> None:
+                if splash and splash.isVisible():
+                    splash.close()
+                window.show()
+
+            QTimer.singleShot(int(remaining * 1000), finish_startup)
+
+        def handle_error(message: str) -> None:
+            if splash and splash.isVisible():
+                splash.update_status(f"Error: {message}")
+            QTimer.singleShot(2000, app.quit)
+
+        worker.finished.connect(show_main)
+        worker.failed.connect(handle_error)
+        worker.finished.connect(thread.quit)
+        worker.failed.connect(thread.quit)
+        worker.finished.connect(worker.deleteLater)
+        thread.finished.connect(thread.deleteLater)
+        thread.started.connect(worker.run)
+        thread.start()
 
         return app.exec()
     except Exception as exc:

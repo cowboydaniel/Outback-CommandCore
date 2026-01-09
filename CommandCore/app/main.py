@@ -6,6 +6,7 @@ Main entry point for the CommandCore launcher application.
 """
 import sys
 import os
+import time
 
 # Add parent directory to path to allow package imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -36,7 +37,7 @@ else:
     sys.argv.remove('--skip-deps')
 
 from PySide6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QTabWidget
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QObject, QThread, QTimer, Signal
 from PySide6.QtGui import QPalette, QColor, QFont, QIcon
 
 from app.config import Config
@@ -166,6 +167,22 @@ def show_splash_screen():
     return splash
 
 
+class StartupWorker(QObject):
+    status = Signal(str)
+    progress = Signal(int)
+    finished = Signal(object)
+    failed = Signal(str)
+
+    def run(self) -> None:
+        try:
+            self.status.emit("Loading modules...")
+            window = CommandCoreLauncher()
+            self.status.emit("Ready!")
+            self.finished.emit(window)
+        except Exception as exc:
+            self.failed.emit(str(exc))
+
+
 def main():
     """Main entry point for the application."""
     app = QApplication(sys.argv)
@@ -182,37 +199,53 @@ def main():
     
     # Process events to make sure the splash screen is shown immediately
     app.processEvents()
-    
+
     # Store the main window in a list to prevent garbage collection
     main_windows = []
-    
-    def initialize_and_show_main_window():
-        """Initialize and show the main window, then close splash."""
+
+    splash_start_time = time.time()
+    minimum_splash_duration = 5.9
+
+    thread = QThread()
+    worker = StartupWorker()
+    worker.moveToThread(thread)
+
+    if hasattr(splash, "update_status"):
+        worker.status.connect(splash.update_status)
+    if hasattr(splash, "set_progress"):
+        worker.progress.connect(splash.set_progress)
+
+    def show_main(window: CommandCoreLauncher) -> None:
         nonlocal splash
-        try:
-            # Create the main window
-            window = CommandCoreLauncher()
-            
-            # Store the window to prevent garbage collection
+        elapsed = time.time() - splash_start_time
+        remaining = max(0, minimum_splash_duration - elapsed)
+
+        def finish_startup() -> None:
             main_windows.append(window)
-            
-            # Show the main window
             window.show()
-            
+
             # Close the splash screen if it's still open
             if splash and splash.isVisible():
                 splash.finish(window)
                 splash = None  # Clear the reference to splash screen
-            
-        except Exception as e:
-            print(f"Error initializing application: {e}")
-            if splash and splash.isVisible():
-                splash.close()
-            sys.exit(1)
-    
-    # Schedule the main window initialization to start after 5.9 seconds
-    QTimer.singleShot(5900, initialize_and_show_main_window)
-    
+
+        QTimer.singleShot(int(remaining * 1000), finish_startup)
+
+    def handle_error(message: str) -> None:
+        if splash and splash.isVisible():
+            if hasattr(splash, "update_status"):
+                splash.update_status(f"Error: {message}")
+        QTimer.singleShot(2000, app.quit)
+
+    worker.finished.connect(show_main)
+    worker.failed.connect(handle_error)
+    worker.finished.connect(thread.quit)
+    worker.failed.connect(thread.quit)
+    worker.finished.connect(worker.deleteLater)
+    thread.finished.connect(thread.deleteLater)
+    thread.started.connect(worker.run)
+    thread.start()
+
     # Start the event loop
     sys.exit(app.exec())
 

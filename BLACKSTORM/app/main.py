@@ -7,6 +7,7 @@ import os
 import sys
 import json
 import logging
+import time
 from datetime import datetime, timezone
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -56,6 +57,23 @@ from BLACKSTORM.tabs.security_compliance_tab import SecurityComplianceTab
 from BLACKSTORM.tabs.settings_tab import SettingsTab
 from BLACKSTORM.tabs.wipe_operations_tab import WipeOperationsTab
 from BLACKSTORM.ui.splash_screen import show_splash_screen
+
+class StartupWorker(QObject):
+    status = Signal(str)
+    progress = Signal(int)
+    finished = Signal(object)
+    failed = Signal(str)
+
+    def run(self) -> None:
+        try:
+            self.status.emit("Loading forensic modules...")
+            window = BlackStormLauncher()
+            self.status.emit("Ready!")
+            self.finished.emit(window)
+        except Exception as exc:
+            logging.exception("BLACKSTORM startup failed")
+            self.failed.emit(str(exc))
+
 
 class BlackStormLauncher(QMainWindow):
     """
@@ -548,22 +566,42 @@ def main():
     splash = show_splash_screen()
     app.processEvents()
 
-    # Create main window while splash is showing
-    splash.update_status("Loading forensic modules...")
-    app.processEvents()
+    splash_start_time = time.time()
+    minimum_splash_duration = 5.9
 
-    window = BlackStormLauncher()
+    thread = QThread()
+    worker = StartupWorker()
+    worker.moveToThread(thread)
 
-    splash.update_status("Ready!")
-    app.processEvents()
+    worker.status.connect(splash.update_status)
+    if hasattr(splash, "set_progress"):
+        worker.progress.connect(splash.set_progress)
 
-    # Close splash and show main window after animation completes
-    def show_main():
-        splash.close()
-        window.show()
-        window.showMaximized()
+    def show_main(window: BlackStormLauncher) -> None:
+        elapsed = time.time() - splash_start_time
+        remaining = max(0, minimum_splash_duration - elapsed)
 
-    QTimer.singleShot(5900, show_main)
+        def finish_startup() -> None:
+            if splash and splash.isVisible():
+                splash.close()
+            window.show()
+            window.showMaximized()
+
+        QTimer.singleShot(int(remaining * 1000), finish_startup)
+
+    def handle_error(message: str) -> None:
+        if splash and splash.isVisible():
+            splash.update_status(f"Error: {message}")
+        QTimer.singleShot(2000, app.quit)
+
+    worker.finished.connect(show_main)
+    worker.failed.connect(handle_error)
+    worker.finished.connect(thread.quit)
+    worker.failed.connect(thread.quit)
+    worker.finished.connect(worker.deleteLater)
+    thread.finished.connect(thread.deleteLater)
+    thread.started.connect(worker.run)
+    thread.start()
 
     # Start the event loop
     sys.exit(app.exec())

@@ -1,10 +1,11 @@
 """Application entry point for CommandCoreCodex."""
 
 import sys
+import time
 from pathlib import Path
 
 from PySide6.QtWidgets import QApplication
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QObject, QThread, QTimer, Signal
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
@@ -13,6 +14,22 @@ if str(REPO_ROOT) not in sys.path:
 from Codex.app.config import DEFAULT_CONFIG
 from Codex.app.gui import CommandCoreGUI
 from Codex.ui.splash_screen import show_splash_screen
+
+
+class StartupWorker(QObject):
+    status = Signal(str)
+    progress = Signal(int)
+    finished = Signal(object)
+    failed = Signal(str)
+
+    def run(self) -> None:
+        try:
+            self.status.emit("Loading AI models...")
+            window = CommandCoreGUI(config=DEFAULT_CONFIG)
+            self.status.emit("Ready!")
+            self.finished.emit(window)
+        except Exception as exc:
+            self.failed.emit(str(exc))
 
 
 def create_app() -> QApplication:
@@ -28,21 +45,41 @@ def main() -> int:
     splash = show_splash_screen()
     app.processEvents()
 
-    # Create main window while splash is showing
-    splash.update_status("Loading AI models...")
-    app.processEvents()
+    splash_start_time = time.time()
+    minimum_splash_duration = 5.9
 
-    window = CommandCoreGUI(config=DEFAULT_CONFIG)
+    thread = QThread()
+    worker = StartupWorker()
+    worker.moveToThread(thread)
 
-    splash.update_status("Ready!")
-    app.processEvents()
+    worker.status.connect(splash.update_status)
+    if hasattr(splash, "set_progress"):
+        worker.progress.connect(splash.set_progress)
 
-    # Close splash and show main window after animation completes
-    def show_main():
-        splash.close()
-        window.show()
+    def show_main(window: CommandCoreGUI) -> None:
+        elapsed = time.time() - splash_start_time
+        remaining = max(0, minimum_splash_duration - elapsed)
 
-    QTimer.singleShot(5900, show_main)
+        def finish_startup() -> None:
+            if splash and splash.isVisible():
+                splash.close()
+            window.show()
+
+        QTimer.singleShot(int(remaining * 1000), finish_startup)
+
+    def handle_error(message: str) -> None:
+        if splash and splash.isVisible():
+            splash.update_status(f"Error: {message}")
+        QTimer.singleShot(2000, app.quit)
+
+    worker.finished.connect(show_main)
+    worker.failed.connect(handle_error)
+    worker.finished.connect(thread.quit)
+    worker.failed.connect(thread.quit)
+    worker.finished.connect(worker.deleteLater)
+    thread.finished.connect(thread.deleteLater)
+    thread.started.connect(worker.run)
+    thread.start()
 
     return app.exec()
 
