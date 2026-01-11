@@ -65,7 +65,6 @@ def main():
         remaining = max(0, minimum_splash_duration - elapsed)
 
         def finish_startup() -> None:
-            nonlocal main_window
             if splash and splash.isVisible():
                 splash.close()
             window = QtWidgets.QWidget()
