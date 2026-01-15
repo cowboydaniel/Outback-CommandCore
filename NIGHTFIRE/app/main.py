@@ -65,8 +65,6 @@ def main() -> None:
 
         def finish_startup() -> None:
             nonlocal nightfire
-            if splash and splash.isVisible():
-                splash.close()
             window = NightfireUI()
             nightfire = NightfireCore(window.signal_emitter)
             window.nightfire = nightfire
@@ -80,6 +78,8 @@ def main() -> None:
             window.btn_stop.setEnabled(False)
             main_windows.append(window)
             window.show()
+            if splash and splash.isVisible():
+                splash.finish(window)
 
             # Simulate some initial threats for demo
             def simulate_threats() -> None:

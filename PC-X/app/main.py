@@ -915,8 +915,6 @@ if __name__ == "__main__":
         remaining = max(0, minimum_splash_duration - elapsed)
 
         def finish_startup() -> None:
-            if splash and splash.isVisible():
-                splash.close()
             window = QMainWindow()
             window.setWindowTitle("PC-X - Linux System Management")
             window.setGeometry(100, 100, 1024, 768)
@@ -926,6 +924,8 @@ if __name__ == "__main__":
             window.setCentralWidget(pc_tools)
             main_windows.append(window)
             window.show()
+            if splash and splash.isVisible():
+                splash.finish(window)
 
         QTimer.singleShot(int(remaining * 1000), finish_startup)
 
