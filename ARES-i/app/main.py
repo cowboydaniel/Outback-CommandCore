@@ -68,11 +68,11 @@ def main() -> int:
         remaining = max(0, minimum_splash_duration - elapsed)
 
         def finish_startup() -> None:
-            if splash and splash.isVisible():
-                splash.close()
             window = IOSToolsModule()
             main_windows.append(window)
             window.show()
+            if splash and splash.isVisible():
+                splash.finish(window)
 
         QTimer.singleShot(int(remaining * 1000), finish_startup)
 

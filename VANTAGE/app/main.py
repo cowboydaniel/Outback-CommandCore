@@ -401,9 +401,6 @@ def main():
         remaining = max(0, minimum_splash_duration - elapsed_time)
 
         def finish_startup() -> None:
-            if splash and splash.isVisible():
-                splash.close()
-
             from tabs.dashboard import DashboardTab
             from tabs.devices import DevicesTab
             from tabs.performance_analytics import PerformanceAnalyticsTab
@@ -433,6 +430,10 @@ def main():
 
             main_windows.append(main_window)
             main_window.showMaximized()
+
+            # Close the splash screen
+            if splash and splash.isVisible():
+                splash.finish(main_window)
 
             # Optional: Trigger any post-show initialization
             for tab_widget in tabs_data.values():
