@@ -314,13 +314,27 @@ class SplashScreen(QMainWindow):
     
     def finish(self, main_window):
         """Finish the splash screen animation and show the main window."""
+        # Guard to prevent double-close
+        if hasattr(self, '_finish_called') and self._finish_called:
+            return
+        self._finish_called = True
+
+        def do_close():
+            """Close the splash if still visible."""
+            if self.isVisible():
+                self.close_splash(main_window)
+
         # Create fade out animation
         self.fade_out = QPropertyAnimation(self, b"windowOpacity")
         self.fade_out.setDuration(300)
         self.fade_out.setStartValue(1.0)
         self.fade_out.setEndValue(0.0)
-        self.fade_out.finished.connect(lambda: self.close_splash(main_window))
+        self.fade_out.finished.connect(do_close)
         self.fade_out.start()
+
+        # Safety fallback: windowOpacity animation may not work on translucent
+        # windows on some platforms. Ensure splash closes even if animation fails.
+        QTimer.singleShot(350, do_close)
     
     def close_splash(self, main_window):
         """Close the splash screen and show the main window."""
