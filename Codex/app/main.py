@@ -62,11 +62,13 @@ def main() -> int:
         remaining = max(0, minimum_splash_duration - elapsed)
 
         def finish_startup() -> None:
+            # Close splash FIRST before any potentially blocking operations
+            if splash and splash.isVisible():
+                splash.finish(None)
+
             window = CommandCoreGUI(config=DEFAULT_CONFIG)
             main_windows.append(window)
             window.show()
-            if splash and splash.isVisible():
-                splash.finish(window)
 
         QTimer.singleShot(int(remaining * 1000), finish_startup)
 

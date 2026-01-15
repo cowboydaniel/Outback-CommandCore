@@ -65,6 +65,10 @@ def main():
         remaining = max(0, minimum_splash_duration - elapsed)
 
         def finish_startup() -> None:
+            # Close splash FIRST before any potentially blocking operations
+            if splash and splash.isVisible():
+                splash.finish(None)
+
             window = QtWidgets.QWidget()
             window.setWindowTitle("DROIDCOM - Android Device Management")
             # Ensure window has minimize, maximize and close buttons
@@ -84,12 +88,10 @@ def main():
                 window.setWindowIcon(QIcon(str(icon_path)))
 
             layout = QtWidgets.QVBoxLayout(window)
-            app = AndroidToolsModule(window)
+            app = AndroidToolsModule(window)  # This may block for pkexec auth
             layout.addWidget(app)
             main_windows.append(window)
             window.show()
-            if splash and splash.isVisible():
-                splash.finish(window)
 
         QTimer.singleShot(int(remaining * 1000), finish_startup)
 
