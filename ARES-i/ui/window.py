@@ -2995,7 +2995,7 @@ class IOSToolsModule(BaseWindow):
                         layout.addWidget(button_box)
                         
                         dialog.setLayout(layout)
-                        dialog.exec_()
+                        dialog.exec()
             
         except Exception as e:
             QMessageBox.critical(
@@ -3200,7 +3200,7 @@ class IOSToolsModule(BaseWindow):
             update_process_list()
             
             dialog.setLayout(layout)
-            dialog.exec_()
+            dialog.exec()
             
         except Exception as e:
             QMessageBox.critical(
@@ -3265,7 +3265,7 @@ class IOSToolsModule(BaseWindow):
             layout.addWidget(button_box)
             
             dialog.setLayout(layout)
-            dialog.exec_()
+            dialog.exec()
             
         except Exception as e:
             QMessageBox.critical(
@@ -3667,7 +3667,7 @@ class IOSToolsModule(BaseWindow):
             load_logs()
             
             dialog.setLayout(layout)
-            dialog.exec_()
+            dialog.exec()
             
         except Exception as e:
             QMessageBox.critical(
