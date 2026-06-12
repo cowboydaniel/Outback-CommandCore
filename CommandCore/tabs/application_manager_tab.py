@@ -821,7 +821,7 @@ class ApplicationManagerTab(QWidget):
                         if 'commandcore.app.main' in cmdline_str or 'commandcore/app/main.py' in cmdline_str:
                             return True
                     elif process_name == 'commandcorecodex_process':
-                        if 'codex.gui' in cmdline_str or 'codex/app/gui.py' in cmdline_str:
+                        if 'codex.gui' in cmdline_str or 'codex/app/gui.py' in cmdline_str or 'codex/app/main.py' in cmdline_str:
                             return True
                     elif process_name == 'droidcom_process':
                         if 'android_tools_linux.android_tools_linux' in cmdline_str or 'droidcom/main.py' in cmdline_str:
@@ -905,7 +905,7 @@ class ApplicationManagerTab(QWidget):
                 "id": "commandcorecodex",
                 "name": "CommandCoreCodex",
                 "description": "AI-powered code generation and analysis tool.",
-                "path": os.path.join(base_dir, "Codex/app/gui.py"),
+                "path": os.path.join(base_dir, "Codex/app/main.py"),
                 'version': None,
                 'status': 'stopped',
                 'process_name': 'commandcorecodex_process'
