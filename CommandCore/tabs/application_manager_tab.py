@@ -547,18 +547,10 @@ class AppCard(QFrame):
             if not os.path.exists(script_path):
                 raise FileNotFoundError(f"Script not found: {script_path}")
             
-            # Special handling for specific applications
-            if 'vantage' in self.app_data['id']:
-                # For VANTAGE, we need to run it from its directory
-                script_dir = os.path.dirname(script_path)
-                cmd = [python_exec, 'launch_vantage.py']
-                cwd = script_dir
-            else:
-                # For other apps, just run the script directly
-                if not os.access(script_path, os.R_OK):
-                    raise PermissionError(f"Cannot read script: {script_path}")
-                cmd = [python_exec, script_path]
-                cwd = os.path.dirname(script_path)
+            if not os.access(script_path, os.R_OK):
+                raise PermissionError(f"Cannot read script: {script_path}")
+            cmd = [python_exec, script_path]
+            cwd = os.path.dirname(script_path)
             
             print(f"Starting command: {' '.join(cmd)} in {cwd}")
             
@@ -839,7 +831,10 @@ class ApplicationManagerTab(QWidget):
                         if 'pc-x/app/main.py' in cmdline_str or 'pc_x.app.main' in cmdline_str:
                             return True
                     elif process_name == 'vantage_process':
-                        if 'vantage.launch_vantage' in cmdline_str or 'vantage/launch_vantage.py' in cmdline_str:
+                        if ('vantage.launch_vantage' in cmdline_str or
+                                'vantage/launch_vantage.py' in cmdline_str or
+                                'launch_vantage.py' in cmdline_str or
+                                'vantage/app/main.py' in cmdline_str):
                             return True
                     # Otherwise, check if process name or command line contains process_name
                     elif (process_name.lower() in pname or

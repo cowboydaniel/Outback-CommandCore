@@ -63,4 +63,4 @@ class OmniscribeMainWindow(QMainWindow):
 
     @staticmethod
     def _project_root() -> str:
-        return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
