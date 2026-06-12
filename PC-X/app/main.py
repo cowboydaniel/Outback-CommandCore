@@ -54,6 +54,7 @@ from core.utils import (
     check_and_install_dependencies,
     check_and_setup_sudoers,
     configure_logging,
+    run_privileged_command,
     setup_passwordless_sudo,
 )
 from tabs import (
@@ -170,20 +171,18 @@ class PCToolsModule(QWidget):
         status_layout = QVBoxLayout(status_group)
 
         smartctl_available = shutil.which("smartctl") is not None
-        tools_status = "Available" if smartctl_available else "Not Available"
-        status_icon = "\u2705" if smartctl_available else "\u274C"
-
-        self.smartctl_label = QLabel(f"SMART Diagnostics Tools: {status_icon} {tools_status}")
-        self.smartctl_label.setFont(QFont("Arial", 10))
-        status_layout.addWidget(self.smartctl_label)
+        smartctl_row, self.smartctl_label = self.create_tool_status_row(
+            "SMART Diagnostics Tools",
+            smartctl_available,
+        )
+        status_layout.addWidget(smartctl_row)
 
         lshw_available = shutil.which("lshw") is not None
-        lshw_status = "Available" if lshw_available else "Not Available"
-        lshw_icon = "\u2705" if lshw_available else "\u274C"
-
-        self.lshw_label = QLabel(f"Hardware Info Tools: {lshw_icon} {lshw_status}")
-        self.lshw_label.setFont(QFont("Arial", 10))
-        status_layout.addWidget(self.lshw_label)
+        lshw_row, self.lshw_label = self.create_tool_status_row(
+            "Hardware Info Tools",
+            lshw_available,
+        )
+        status_layout.addWidget(lshw_row)
 
         main_layout.addWidget(status_group)
 
@@ -266,6 +265,30 @@ class PCToolsModule(QWidget):
 
         self.log_message("PC Tools module initialized")
         self.update_status("Ready")
+
+    def create_tool_status_row(self, label_text, available):
+        """Create a tool status row that uses SVG icons instead of emoji glyphs."""
+        row = QWidget()
+        layout = QHBoxLayout(row)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
+
+        icon_name = "status_available.svg" if available else "status_unavailable.svg"
+        icon_path = PCX_DIR / "ui" / "icons" / icon_name
+
+        icon_label = QLabel()
+        icon_label.setFixedSize(18, 18)
+        icon_label.setPixmap(QIcon(str(icon_path)).pixmap(16, 16))
+        icon_label.setToolTip("Available" if available else "Not Available")
+        layout.addWidget(icon_label)
+
+        status = "Available" if available else "Not Available"
+        text_label = QLabel(f"{label_text}: {status}")
+        text_label.setFont(QFont("Arial", 10))
+        layout.addWidget(text_label)
+        layout.addStretch()
+
+        return row, text_label
 
     def start_live_refresh(self):
         """Start the live refresh timer for real-time updates."""
@@ -474,8 +497,12 @@ class PCToolsModule(QWidget):
     def get_ram_speed(self):
         """Get RAM speed."""
         try:
-            result = subprocess.run(['sudo', 'dmidecode', '-t', 'memory'],
-                                  capture_output=True, text=True, timeout=5)
+            result = run_privileged_command(
+                ['dmidecode', '-t', 'memory'],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
             if result.returncode == 0:
                 for line in result.stdout.split('\n'):
                     if 'Speed:' in line and 'Unknown' not in line:
@@ -569,9 +596,10 @@ class PCToolsModule(QWidget):
                 if not dev_type:
                     return "Unknown device type"
 
-                result = subprocess.run(
-                    ['sudo', 'smartctl', '-a', '-d', dev_type, device],
-                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=30
+                result = run_privileged_command(
+                    ['smartctl', '-a', '-d', dev_type, device],
+                    text=True,
+                    timeout=30,
                 )
                 return result.stdout if result.returncode == 0 else result.stderr
             except Exception as e:
@@ -604,8 +632,12 @@ class PCToolsModule(QWidget):
 
             for disk in disks:
                 try:
-                    parted = subprocess.run(['sudo', 'parted', '-s', disk, 'print'],
-                                          capture_output=True, text=True, timeout=5)
+                    parted = run_privileged_command(
+                        ['parted', '-s', disk, 'print'],
+                        capture_output=True,
+                        text=True,
+                        timeout=5,
+                    )
                     for line in parted.stdout.splitlines():
                         if "Partition Table:" in line:
                             scheme = line.split(":")[1].strip()
@@ -802,10 +834,19 @@ class PCToolsModule(QWidget):
                 ['journalctl', '-n', '50', '--no-pager'],
                 capture_output=True, text=True, timeout=10
             )
+            if result.returncode != 0:
+                result = run_privileged_command(
+                    ['journalctl', '-n', '50', '--no-pager'],
+                    timeout=10,
+                )
+
             if result.returncode == 0:
                 self.log_text_widget.setText(result.stdout)
             else:
-                self.log_text_widget.setText("Failed to retrieve logs. Try running with sudo.")
+                self.log_text_widget.setText(
+                    "Failed to retrieve logs. Approve the desktop authentication prompt "
+                    "or configure PC-X elevated access."
+                )
         except Exception as e:
             self.log_text_widget.setText(f"Error: {e}")
 

@@ -23,6 +23,29 @@ class TestConfig(unittest.TestCase):
         self.assertIn("debian", config.REQUIRED_TOOLS)
         self.assertIn("redhat", config.REQUIRED_TOOLS)
 
+    def test_legacy_launcher_exists(self):
+        launcher = PCX_DIR / "pc_tools_linux.py"
+        self.assertTrue(launcher.is_file())
+
+        source = launcher.read_text(encoding="utf-8")
+        self.assertIn('APP_ENTRYPOINT', source)
+        self.assertTrue((PCX_DIR / "app" / "main.py").is_file())
+
+    def test_privileged_commands_use_gui_elevation_helper(self):
+        main_source = (PCX_DIR / "app" / "main.py").read_text(encoding="utf-8")
+        self.assertNotIn("['sudo'", main_source)
+
+        for command in ["dmidecode", "smartctl", "parted", "journalctl"]:
+            self.assertIn(command, main_source)
+
+        self.assertIn("run_privileged_command", main_source)
+
+    def test_privileged_helper_supports_desktop_authentication(self):
+        utils_source = (PCX_DIR / "core" / "utils.py").read_text(encoding="utf-8")
+        self.assertIn('["sudo", "-n"', utils_source)
+        self.assertIn('["pkexec"', utils_source)
+        self.assertIn("desktop authentication", utils_source)
+
     def test_paths_resolve(self):
         root_dir, pcx_dir = base.get_paths()
         self.assertTrue(root_dir.exists())
