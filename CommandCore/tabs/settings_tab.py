@@ -15,7 +15,7 @@ class SettingRow(QWidget):
         layout.setContentsMargins(0, 6, 0, 6)
 
         lbl = QLabel(label)
-        lbl.setStyleSheet("color: #ECF0F1; font-size: 13px;")
+        lbl.setStyleSheet("color: #ECF0F1; font-size: 13px; background: transparent;")
         lbl.setFixedWidth(220)
 
         layout.addWidget(lbl)
@@ -25,7 +25,7 @@ class SettingRow(QWidget):
 class SectionHeader(QLabel):
     def __init__(self, text, parent=None):
         super().__init__(text, parent)
-        self.setStyleSheet("color: #ECF0F1; font-size: 15px; font-weight: bold; margin-top: 12px;")
+        self.setStyleSheet("color: #ECF0F1; font-size: 15px; font-weight: bold; margin-top: 12px; background: transparent;")
 
 
 class SettingsTab(QWidget):
@@ -39,9 +39,9 @@ class SettingsTab(QWidget):
         layout.setSpacing(8)
 
         title = QLabel("Settings")
-        title.setStyleSheet("font-size: 24px; font-weight: bold; color: #ECF0F1;")
+        title.setStyleSheet("font-size: 24px; font-weight: bold; color: #ECF0F1; background: transparent;")
         subtitle = QLabel("Configure application preferences, themes, and system settings.")
-        subtitle.setStyleSheet("font-size: 14px; color: #B0B0B0;")
+        subtitle.setStyleSheet("font-size: 14px; color: #B0B0B0; background: transparent;")
         layout.addWidget(title)
         layout.addWidget(subtitle)
 
@@ -108,7 +108,7 @@ class SettingsTab(QWidget):
 
         for label, value in [("Version", "v1.0.0"), ("Author", "CommandCore Team"), ("License", "MIT")]:
             val_lbl = QLabel(value)
-            val_lbl.setStyleSheet("color: #B0B0B0; font-size: 13px;")
+            val_lbl.setStyleSheet("color: #B0B0B0; font-size: 13px; background: transparent;")
             card_layout.addWidget(SettingRow(label, val_lbl))
 
         card_layout.addStretch()

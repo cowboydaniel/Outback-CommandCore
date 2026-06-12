@@ -37,10 +37,10 @@ class StatCard(QFrame):
         layout.setSpacing(4)
 
         self.title_label = QLabel(title)
-        self.title_label.setStyleSheet("color: #B0B0B0; font-size: 12px;")
+        self.title_label.setStyleSheet("color: #B0B0B0; font-size: 12px; background: transparent;")
 
         self.value_label = QLabel(value)
-        self.value_label.setStyleSheet("color: #ECF0F1; font-size: 20px; font-weight: bold;")
+        self.value_label.setStyleSheet("color: #ECF0F1; font-size: 20px; font-weight: bold; background: transparent;")
 
         layout.addWidget(self.title_label)
         layout.addWidget(self.value_label)
@@ -56,11 +56,11 @@ class InfoRow(QWidget):
         layout.setContentsMargins(0, 4, 0, 4)
 
         lbl = QLabel(label)
-        lbl.setStyleSheet("color: #B0B0B0; font-size: 13px;")
+        lbl.setStyleSheet("color: #B0B0B0; font-size: 13px; background: transparent;")
         lbl.setFixedWidth(160)
 
         val = QLabel(value)
-        val.setStyleSheet("color: #ECF0F1; font-size: 13px;")
+        val.setStyleSheet("color: #ECF0F1; font-size: 13px; background: transparent;")
         val.setWordWrap(True)
 
         layout.addWidget(lbl)
@@ -70,7 +70,7 @@ class InfoRow(QWidget):
 class SectionHeader(QLabel):
     def __init__(self, text, parent=None):
         super().__init__(text, parent)
-        self.setStyleSheet("color: #ECF0F1; font-size: 15px; font-weight: bold; margin-top: 8px;")
+        self.setStyleSheet("color: #ECF0F1; font-size: 15px; font-weight: bold; margin-top: 8px; background: transparent;")
 
 
 class SystemStatusTab(QWidget):
@@ -91,9 +91,9 @@ class SystemStatusTab(QWidget):
         outer.setSpacing(16)
 
         title = QLabel("System Status")
-        title.setStyleSheet("font-size: 24px; font-weight: bold; color: #ECF0F1;")
+        title.setStyleSheet("font-size: 24px; font-weight: bold; color: #ECF0F1; background: transparent;")
         subtitle = QLabel("Live system resource and hardware overview")
-        subtitle.setStyleSheet("font-size: 14px; color: #B0B0B0;")
+        subtitle.setStyleSheet("font-size: 14px; color: #B0B0B0; background: transparent;")
         outer.addWidget(title)
         outer.addWidget(subtitle)
 
