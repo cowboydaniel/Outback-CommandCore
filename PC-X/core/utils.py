@@ -2,23 +2,26 @@
 
 from __future__ import annotations
 
+import atexit
 import getpass
 import importlib
 import importlib.util
+import json
 import logging
 import os
 import platform
+import shutil
 import subprocess
+import sys
 import tempfile
-from typing import Optional, Tuple
-
-from PySide6.QtWidgets import QMessageBox
+import threading
+from typing import Optional, Sequence, Tuple
 
 from app import config
-from core.base import get_paths
-
 
 _LOGGER_CONFIGURED = False
+_PRIVILEGED_HELPER = None
+_PRIVILEGED_HELPER_LOCK = threading.RLock()
 
 
 def configure_logging() -> None:
@@ -34,14 +37,232 @@ def configure_logging() -> None:
     _LOGGER_CONFIGURED = True
 
 
-def check_and_setup_sudoers(parent: Optional[object] = None) -> Tuple[bool, str]:
-    """Check if sudoers setup is needed and run it with a GUI prompt if required."""
-    try:
-        test_cmd = ["sudo", "-n", "smartctl", "--version"]
-        result = subprocess.run(test_cmd, capture_output=True, text=True, check=False)
+def _privileged_helper_script() -> str:
+    """Return the source for the long-lived root command helper."""
+    return r'''
+import json
+import subprocess
+import sys
 
-        if result.returncode == 0:
-            return True, "Already configured with passwordless sudo access"
+print(json.dumps({"ready": True}), flush=True)
+
+for line in sys.stdin:
+    try:
+        request = json.loads(line)
+        command = request["command"]
+        timeout = request.get("timeout")
+        completed = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
+        )
+        response = {
+            "returncode": completed.returncode,
+            "stdout": completed.stdout,
+            "stderr": completed.stderr,
+        }
+    except subprocess.TimeoutExpired as exc:
+        response = {
+            "returncode": 124,
+            "stdout": exc.stdout or "",
+            "stderr": f"Command timed out after {exc.timeout} seconds",
+        }
+    except Exception as exc:
+        response = {
+            "returncode": 1,
+            "stdout": "",
+            "stderr": f"Privileged helper error: {exc}",
+        }
+    print(json.dumps(response), flush=True)
+'''
+
+
+class _PrivilegedCommandHelper:
+    """Keep one authenticated PolicyKit session alive for the app lifetime."""
+
+    def __init__(self) -> None:
+        self._process: Optional[subprocess.Popen] = None
+        self._script_path: Optional[str] = None
+
+    def run(
+        self,
+        command: Sequence[str],
+        *,
+        timeout: Optional[float] = None,
+    ) -> subprocess.CompletedProcess:
+        """Run a command through the persistent root helper."""
+        self._ensure_started()
+        if not self._process or not self._process.stdin or not self._process.stdout:
+            raise RuntimeError("Privileged helper is not available")
+
+        payload = json.dumps({"command": list(command), "timeout": timeout})
+        try:
+            self._process.stdin.write(f"{payload}\n")
+            self._process.stdin.flush()
+            response_line = self._process.stdout.readline()
+        except BrokenPipeError:
+            self.stop()
+            raise RuntimeError("Privileged helper stopped unexpectedly") from None
+
+        if not response_line:
+            stderr = ""
+            if self._process.stderr:
+                stderr = self._process.stderr.read()
+            self.stop()
+            raise RuntimeError(f"Privileged helper exited without a response. {stderr}".strip())
+
+        response = json.loads(response_line)
+        return subprocess.CompletedProcess(
+            list(command),
+            response.get("returncode", 1),
+            response.get("stdout", ""),
+            response.get("stderr", ""),
+        )
+
+    def _ensure_started(self) -> None:
+        if self._process and self._process.poll() is None:
+            return
+
+        self.stop()
+        pkexec_path = shutil.which("pkexec")
+        if not pkexec_path:
+            raise RuntimeError(
+                "Elevated privileges are required, but PolicyKit pkexec is not available. "
+                "Install polkit/pkexec or configure passwordless sudo for PC-X hardware tools."
+            )
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as helper_file:
+            helper_file.write(_privileged_helper_script())
+            self._script_path = helper_file.name
+        os.chmod(self._script_path, 0o700)
+
+        self._process = subprocess.Popen(
+            [pkexec_path, sys.executable, "-u", self._script_path],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1,
+        )
+
+        if not self._process.stdout:
+            self.stop()
+            raise RuntimeError("Privileged helper did not provide stdout")
+
+        ready_line = self._process.stdout.readline()
+        if not ready_line:
+            stderr = ""
+            if self._process.stderr:
+                stderr = self._process.stderr.read()
+            self.stop()
+            raise RuntimeError(f"PolicyKit authentication failed. {stderr}".strip())
+
+        ready = json.loads(ready_line)
+        if not ready.get("ready"):
+            self.stop()
+            raise RuntimeError("Privileged helper did not start correctly")
+
+    def stop(self) -> None:
+        if self._process and self._process.poll() is None:
+            self._process.terminate()
+            try:
+                self._process.wait(timeout=1)
+            except subprocess.TimeoutExpired:
+                self._process.kill()
+                self._process.wait(timeout=1)
+        self._process = None
+
+        if self._script_path:
+            try:
+                os.unlink(self._script_path)
+            except OSError:
+                pass
+            self._script_path = None
+
+
+def _stop_privileged_helper() -> None:
+    """Stop the authenticated helper when PC-X exits."""
+    global _PRIVILEGED_HELPER
+    with _PRIVILEGED_HELPER_LOCK:
+        if _PRIVILEGED_HELPER:
+            _PRIVILEGED_HELPER.stop()
+            _PRIVILEGED_HELPER = None
+
+
+def _run_with_privileged_helper(
+    command: Sequence[str],
+    *,
+    timeout: Optional[float] = None,
+) -> subprocess.CompletedProcess:
+    """Run a command through one cached PolicyKit authentication session."""
+    global _PRIVILEGED_HELPER
+    with _PRIVILEGED_HELPER_LOCK:
+        if _PRIVILEGED_HELPER is None:
+            _PRIVILEGED_HELPER = _PrivilegedCommandHelper()
+        return _PRIVILEGED_HELPER.run(command, timeout=timeout)
+
+
+atexit.register(_stop_privileged_helper)
+
+
+def run_privileged_command(
+    command: Sequence[str],
+    *,
+    timeout: Optional[float] = None,
+    capture_output: bool = True,
+    text: bool = True,
+) -> subprocess.CompletedProcess:
+    """Run a privileged command from a GUI session.
+
+    PC-X is commonly launched from a desktop shortcut, so commands must not rely
+    on an interactive terminal for password entry. Prefer already-configured
+    passwordless sudo. If sudo is not ready, start one PolicyKit-authenticated
+    root helper and reuse it until the application exits, so the user only has
+    to approve one desktop authentication prompt per PC-X session.
+    """
+    command_list = list(command)
+    if command_list and os.sep not in command_list[0]:
+        resolved_binary = shutil.which(command_list[0])
+        if resolved_binary:
+            command_list[0] = resolved_binary
+
+    run_kwargs = {
+        "timeout": timeout,
+        "capture_output": capture_output,
+        "text": text,
+        "check": False,
+    }
+
+    if os.geteuid() == 0:
+        return subprocess.run(command_list, **run_kwargs)
+
+    if shutil.which("sudo"):
+        sudo_result = subprocess.run(["sudo", "-n", *command_list], **run_kwargs)
+        if sudo_result.returncode == 0:
+            return sudo_result
+
+    if not text:
+        raise RuntimeError("Binary privileged command output is not supported by the desktop helper")
+
+    return _run_with_privileged_helper(command_list, timeout=timeout)
+
+
+def check_and_setup_sudoers(parent: Optional[object] = None) -> Tuple[bool, str]:
+    """Offer GUI-driven setup for passwordless sudo if it is not configured."""
+    if parent:
+        from PySide6.QtWidgets import QMessageBox
+
+    try:
+        if os.geteuid() == 0:
+            return True, "Already running with root privileges"
+
+        if shutil.which("sudo"):
+            test_cmd = ["sudo", "-n", "smartctl", "--version"]
+            result = subprocess.run(test_cmd, capture_output=True, text=True, check=False)
+            if result.returncode == 0:
+                return True, "Already configured with passwordless sudo access"
 
         if parent:
             reply = QMessageBox.question(
@@ -49,36 +270,25 @@ def check_and_setup_sudoers(parent: Optional[object] = None) -> Tuple[bool, str]
                 "Elevated Permissions Required",
                 "PC Tools requires elevated permissions to access hardware information.\n\n"
                 "Would you like to set up passwordless sudo access now?\n\n"
-                "You will be prompted for your password once.",
+                "A desktop authentication prompt will ask for your password.",
                 QMessageBox.Yes | QMessageBox.No,
             )
             if reply == QMessageBox.No:
                 return False, "User declined to set up passwordless sudo"
 
-        _, pcx_dir = get_paths()
-        script_path = os.path.join(pcx_dir, "setup_sudoers.sh")
-
-        if not os.path.exists(script_path):
-            return False, f"Setup script not found at {script_path}"
-
-        os.chmod(script_path, 0o755)
-
-        username = getpass.getuser()
-
-        cmd = ["pkexec", "--user", "root", "bash", script_path]
-
-        if parent:
             QMessageBox.information(
                 parent,
                 "Authentication Required",
-                f"You will now be prompted for your password to set up passwordless sudo access for user '{username}'.",
+                "Approve the upcoming desktop authentication prompt to configure PC-X hardware access.",
             )
 
-        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
-
-        if result.returncode == 0:
+        if setup_passwordless_sudo():
             return True, "Successfully set up passwordless sudo access"
-        error_msg = f"Failed to set up passwordless sudo: {result.stderr or 'Unknown error'}"
+
+        error_msg = (
+            "Failed to set up passwordless sudo. Check that PolicyKit pkexec is installed "
+            "and a desktop authentication agent is running."
+        )
         if parent:
             QMessageBox.critical(parent, "Setup Failed", error_msg)
         return False, error_msg
@@ -125,15 +335,15 @@ def check_and_install_dependencies() -> None:
                 missing_tools.append(package)
 
     if missing_tools:
-        cmd = f"sudo {install_cmd} {' '.join(missing_tools)}"
-        print(f"Installing missing tools with: {cmd}")
+        install_args = install_cmd.split() + missing_tools
+        logging.info("Installing missing tools with elevated privileges: %s", " ".join(install_args))
         try:
-            subprocess.run(cmd, shell=True, check=True)
-        except subprocess.CalledProcessError as exc:
-            print(f"Failed to install packages: {exc}")
-            print("Please make sure you have sudo permissions or install the following packages manually:")
-            print(" ".join(missing_tools))
-            return
+            result = run_privileged_command(install_args, capture_output=False, text=True)
+            if result.returncode != 0:
+                print("Failed to install packages.")
+                print("Please make sure you have administrator permissions or install the following packages manually:")
+                print(" ".join(missing_tools))
+                return
         except Exception as exc:
             logging.error("Error installing system packages: %s", exc)
     else:
@@ -148,9 +358,16 @@ def setup_passwordless_sudo() -> bool:
     script_content = """#!/bin/bash
 set -e
 
-CURRENT_USER=$(who am i | awk '{print $1}')
+CURRENT_USER="$1"
 if [ -z "$CURRENT_USER" ]; then
-    CURRENT_USER=$(whoami)
+    CURRENT_USER=$(logname 2>/dev/null || true)
+fi
+if [ -z "$CURRENT_USER" ]; then
+    CURRENT_USER=$(who am i | awk '{print $1}')
+fi
+if [ -z "$CURRENT_USER" ]; then
+    echo "Unable to determine the desktop user for sudoers setup" >&2
+    exit 1
 fi
 
 echo "Setting up passwordless sudo for user: $CURRENT_USER"
@@ -207,12 +424,8 @@ echo "Passwordless sudo setup complete!"
 
         os.chmod(script_path, 0o755)
 
-        print("Setting up passwordless sudo. You may be prompted for your password...")
-        result = subprocess.run(["sudo", "bash", script_path],
-                                stderr=subprocess.PIPE,
-                                stdout=subprocess.PIPE,
-                                text=True,
-                                check=False)
+        print("Setting up passwordless sudo. A desktop authentication prompt may appear...")
+        result = run_privileged_command(["bash", script_path, getpass.getuser()])
 
         try:
             os.unlink(script_path)

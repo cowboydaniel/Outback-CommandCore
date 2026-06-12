@@ -54,6 +54,7 @@ from core.utils import (
     check_and_install_dependencies,
     check_and_setup_sudoers,
     configure_logging,
+    run_privileged_command,
     setup_passwordless_sudo,
 )
 from tabs import (
@@ -83,6 +84,7 @@ class PCToolsModule(QWidget):
     smart_cache_max_age = config.SMART_CACHE_MAX_AGE
     sudo_authenticated = False
     smartctl_capabilities_set = False
+    ui_update_requested = Signal(object)
 
     def __init__(self, parent=None, current_user=None):
         """Initialize the PC Tools module."""
@@ -140,9 +142,21 @@ class PCToolsModule(QWidget):
 
         # Update queue for thread-safe UI updates
         self.update_queue = queue.Queue()
+        self.ui_update_requested.connect(self._run_ui_update)
 
         # Create the UI
         self.create_widgets()
+
+    def post_ui_update(self, callback):
+        """Queue a callable to run on the Qt GUI thread."""
+        self.ui_update_requested.emit(callback)
+
+    def _run_ui_update(self, callback):
+        """Run a queued GUI-thread callback safely."""
+        try:
+            callback()
+        except Exception as exc:
+            logging.debug(f"Error running queued UI update: {exc}")
 
     def create_widgets(self):
         """Create the main UI widgets."""
@@ -170,20 +184,18 @@ class PCToolsModule(QWidget):
         status_layout = QVBoxLayout(status_group)
 
         smartctl_available = shutil.which("smartctl") is not None
-        tools_status = "Available" if smartctl_available else "Not Available"
-        status_icon = "\u2705" if smartctl_available else "\u274C"
-
-        self.smartctl_label = QLabel(f"SMART Diagnostics Tools: {status_icon} {tools_status}")
-        self.smartctl_label.setFont(QFont("Arial", 10))
-        status_layout.addWidget(self.smartctl_label)
+        smartctl_row, self.smartctl_label = self.create_tool_status_row(
+            "SMART Diagnostics Tools",
+            smartctl_available,
+        )
+        status_layout.addWidget(smartctl_row)
 
         lshw_available = shutil.which("lshw") is not None
-        lshw_status = "Available" if lshw_available else "Not Available"
-        lshw_icon = "\u2705" if lshw_available else "\u274C"
-
-        self.lshw_label = QLabel(f"Hardware Info Tools: {lshw_icon} {lshw_status}")
-        self.lshw_label.setFont(QFont("Arial", 10))
-        status_layout.addWidget(self.lshw_label)
+        lshw_row, self.lshw_label = self.create_tool_status_row(
+            "Hardware Info Tools",
+            lshw_available,
+        )
+        status_layout.addWidget(lshw_row)
 
         main_layout.addWidget(status_group)
 
@@ -266,6 +278,30 @@ class PCToolsModule(QWidget):
 
         self.log_message("PC Tools module initialized")
         self.update_status("Ready")
+
+    def create_tool_status_row(self, label_text, available):
+        """Create a tool status row that uses SVG icons instead of emoji glyphs."""
+        row = QWidget()
+        layout = QHBoxLayout(row)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
+
+        icon_name = "status_available.svg" if available else "status_unavailable.svg"
+        icon_path = PCX_DIR / "ui" / "icons" / icon_name
+
+        icon_label = QLabel()
+        icon_label.setFixedSize(18, 18)
+        icon_label.setPixmap(QIcon(str(icon_path)).pixmap(16, 16))
+        icon_label.setToolTip("Available" if available else "Not Available")
+        layout.addWidget(icon_label)
+
+        status = "Available" if available else "Not Available"
+        text_label = QLabel(f"{label_text}: {status}")
+        text_label.setFont(QFont("Arial", 10))
+        layout.addWidget(text_label)
+        layout.addStretch()
+
+        return row, text_label
 
     def start_live_refresh(self):
         """Start the live refresh timer for real-time updates."""
@@ -474,8 +510,12 @@ class PCToolsModule(QWidget):
     def get_ram_speed(self):
         """Get RAM speed."""
         try:
-            result = subprocess.run(['sudo', 'dmidecode', '-t', 'memory'],
-                                  capture_output=True, text=True, timeout=5)
+            result = run_privileged_command(
+                ['dmidecode', '-t', 'memory'],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
             if result.returncode == 0:
                 for line in result.stdout.split('\n'):
                     if 'Speed:' in line and 'Unknown' not in line:
@@ -569,11 +609,20 @@ class PCToolsModule(QWidget):
                 if not dev_type:
                     return "Unknown device type"
 
-                result = subprocess.run(
-                    ['sudo', 'smartctl', '-a', '-d', dev_type, device],
-                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=30
+                result = run_privileged_command(
+                    ['smartctl', '-a', '-d', dev_type, device],
+                    text=True,
+                    timeout=30,
                 )
-                return result.stdout if result.returncode == 0 else result.stderr
+                output = result.stdout if result.returncode == 0 else result.stderr
+                if output.strip():
+                    return output
+                if result.returncode == 0:
+                    return f"SMART command completed but returned no data for {device}."
+                return (
+                    f"SMART command failed for {device} with exit code "
+                    f"{result.returncode}, but returned no error details."
+                )
             except Exception as e:
                 return f"Error: {e}"
 
@@ -584,7 +633,7 @@ class PCToolsModule(QWidget):
 
     def update_smart_display(self, text):
         """Update SMART display with text."""
-        QTimer.singleShot(0, lambda: self.smart_info_text.setText(text))
+        self.post_ui_update(lambda: self.smart_info_text.setText(text))
 
     def get_device_type(self, device):
         """Determine device type for SMART commands."""
@@ -604,8 +653,12 @@ class PCToolsModule(QWidget):
 
             for disk in disks:
                 try:
-                    parted = subprocess.run(['sudo', 'parted', '-s', disk, 'print'],
-                                          capture_output=True, text=True, timeout=5)
+                    parted = run_privileged_command(
+                        ['parted', '-s', disk, 'print'],
+                        capture_output=True,
+                        text=True,
+                        timeout=5,
+                    )
                     for line in parted.stdout.splitlines():
                         if "Partition Table:" in line:
                             scheme = line.split(":")[1].strip()
@@ -628,47 +681,46 @@ class PCToolsModule(QWidget):
 
         def run_test():
             if importlib.util.find_spec("speedtest") is None:
-                QTimer.singleShot(0, lambda: self.phase_label.setText(
+                self.post_ui_update(lambda: self.phase_label.setText(
                     "speedtest-cli not installed. Run: pip install speedtest-cli"
                 ))
-                QTimer.singleShot(0, lambda: self.test_button.setEnabled(True))
-                QTimer.singleShot(0, lambda: self.test_button.setText("Start Speed Test"))
+                self.post_ui_update(lambda: self.test_button.setEnabled(True))
+                self.post_ui_update(lambda: self.test_button.setText("Start Speed Test"))
                 return
 
             speedtest = importlib.import_module("speedtest")
             try:
                 st = speedtest.Speedtest()
 
-                QTimer.singleShot(0, lambda: self.phase_label.setText("Finding best server..."))
+                self.post_ui_update(lambda: self.phase_label.setText("Finding best server..."))
                 server = st.get_best_server()
-                QTimer.singleShot(0, lambda: self.server_label.setText(
-                    f"{server['name']} ({server['country']})"
-                ))
+                server_text = f"{server['name']} ({server['country']})"
+                self.post_ui_update(lambda: self.server_label.setText(server_text))
 
-                QTimer.singleShot(0, lambda: self.phase_label.setText("Testing download..."))
-                QTimer.singleShot(0, lambda: self.speed_progress.setValue(25))
+                self.post_ui_update(lambda: self.phase_label.setText("Testing download..."))
+                self.post_ui_update(lambda: self.speed_progress.setValue(25))
                 download = st.download()
-                QTimer.singleShot(0, lambda: self.download_speed.setText(
-                    f"{download / 1_000_000:.2f} Mbps"
-                ))
+                download_text = f"{download / 1_000_000:.2f} Mbps"
+                self.post_ui_update(lambda: self.download_speed.setText(download_text))
 
-                QTimer.singleShot(0, lambda: self.phase_label.setText("Testing upload..."))
-                QTimer.singleShot(0, lambda: self.speed_progress.setValue(50))
+                self.post_ui_update(lambda: self.phase_label.setText("Testing upload..."))
+                self.post_ui_update(lambda: self.speed_progress.setValue(50))
                 upload = st.upload()
-                QTimer.singleShot(0, lambda: self.upload_speed.setText(
-                    f"{upload / 1_000_000:.2f} Mbps"
-                ))
+                upload_text = f"{upload / 1_000_000:.2f} Mbps"
+                self.post_ui_update(lambda: self.upload_speed.setText(upload_text))
 
                 results = st.results.dict()
-                QTimer.singleShot(0, lambda: self.ping_label.setText(f"{results['ping']:.0f} ms"))
-                QTimer.singleShot(0, lambda: self.speed_progress.setValue(100))
-                QTimer.singleShot(0, lambda: self.phase_label.setText("Test completed!"))
+                ping_text = f"{results['ping']:.0f} ms"
+                self.post_ui_update(lambda: self.ping_label.setText(ping_text))
+                self.post_ui_update(lambda: self.speed_progress.setValue(100))
+                self.post_ui_update(lambda: self.phase_label.setText("Test completed!"))
 
             except Exception as e:
-                QTimer.singleShot(0, lambda: self.phase_label.setText(f"Error: {e}"))
+                error_text = f"Error: {e}"
+                self.post_ui_update(lambda: self.phase_label.setText(error_text))
             finally:
-                QTimer.singleShot(0, lambda: self.test_button.setEnabled(True))
-                QTimer.singleShot(0, lambda: self.test_button.setText("Start Speed Test"))
+                self.post_ui_update(lambda: self.test_button.setEnabled(True))
+                self.post_ui_update(lambda: self.test_button.setText("Start Speed Test"))
 
         thread = threading.Thread(target=run_test, daemon=True)
         thread.start()
@@ -709,9 +761,10 @@ class PCToolsModule(QWidget):
                         f"Write Speed: {write_speed:.2f} MB/s\n"
                         f"Read Speed: {read_speed:.2f} MB/s\n"
                     )
-                    QTimer.singleShot(0, lambda: self.disk_results.setText(result))
+                    self.post_ui_update(lambda: self.disk_results.setText(result))
             except Exception as e:
-                QTimer.singleShot(0, lambda: self.disk_results.setText(f"Error: {e}"))
+                error_text = f"Error: {e}"
+                self.post_ui_update(lambda: self.disk_results.setText(error_text))
 
         thread = threading.Thread(target=run_test, daemon=True)
         thread.start()
@@ -746,9 +799,10 @@ class PCToolsModule(QWidget):
                     f"Time: {elapsed:.2f} seconds\n"
                     f"Score: {int(10000 / elapsed)} points\n"
                 )
-                QTimer.singleShot(0, lambda: self.cpu_results.setText(result))
+                self.post_ui_update(lambda: self.cpu_results.setText(result))
             except Exception as e:
-                QTimer.singleShot(0, lambda: self.cpu_results.setText(f"Error: {e}"))
+                error_text = f"Error: {e}"
+                self.post_ui_update(lambda: self.cpu_results.setText(error_text))
 
         thread = threading.Thread(target=run_test, daemon=True)
         thread.start()
@@ -802,10 +856,19 @@ class PCToolsModule(QWidget):
                 ['journalctl', '-n', '50', '--no-pager'],
                 capture_output=True, text=True, timeout=10
             )
+            if result.returncode != 0:
+                result = run_privileged_command(
+                    ['journalctl', '-n', '50', '--no-pager'],
+                    timeout=10,
+                )
+
             if result.returncode == 0:
                 self.log_text_widget.setText(result.stdout)
             else:
-                self.log_text_widget.setText("Failed to retrieve logs. Try running with sudo.")
+                self.log_text_widget.setText(
+                    "Failed to retrieve logs. Approve the desktop authentication prompt "
+                    "or configure PC-X elevated access."
+                )
         except Exception as e:
             self.log_text_widget.setText(f"Error: {e}")
 

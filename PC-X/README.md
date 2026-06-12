@@ -50,8 +50,8 @@ Required tools:
 
 ### Permissions
 - Elevated privileges required for hardware access (SMART data, low-level diagnostics)
-- The application will prompt for password via `pkexec` when needed
-- Optionally configure passwordless sudo for specific commands
+- PC-X is designed for desktop launches: privileged commands first try existing passwordless `sudo -n`, then fall back to one long-lived `pkexec` helper so the desktop PolicyKit authentication agent should ask once per app launch and reuse that access until PC-X closes
+- Optionally configure passwordless sudo for specific commands to skip even the first PolicyKit prompt
 
 ## Getting Started
 
