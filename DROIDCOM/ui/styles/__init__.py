@@ -836,26 +836,26 @@ ICONS = {
 }
 
 
-# Emoji icons for categories (fallback if font icons not available)
+# SVG icon names for categories
 EMOJI_ICONS = {
-    'Device Control': '\U0001F504',      # 🔄
-    'App Management': '\U0001F4F1',       # 📱
-    'System Tools': '\u2699\ufe0f',       # ⚙️
-    'Debugging': '\U0001F41E',            # 🐞
-    'File Operations': '\U0001F4C1',      # 📁
-    'Security & Permissions': '\U0001F512',  # 🔒
-    'Automation & Scripting': '\U0001F916',  # 🤖
-    'Advanced Tests': '\U0001F9EA',       # 🧪
+    'Device Control': 'reboot',
+    'App Management': 'smartphone',
+    'System Tools': 'settings',
+    'Debugging': 'bug',
+    'File Operations': 'folder',
+    'Security & Permissions': 'lock',
+    'Automation & Scripting': 'terminal',
+    'Advanced Tests': 'sensor',
 
     # Action button icons
-    'connect': '\U0001F517',              # 🔗
-    'wifi': '\U0001F4F6',                 # 📶
-    'refresh': '\U0001F504',              # 🔄
-    'remove': '\U0001F5D1',               # 🗑️
-    'screenshot': '\U0001F4F8',           # 📸
-    'backup': '\U0001F4BE',               # 💾
-    'files': '\U0001F4C2',                # 📂
-    'install': '\U0001F4E5',              # 📥
-    'apps': '\U0001F4F2',                 # 📲
-    'log': '\U0001F4CB',                  # 📋
+    'connect': 'wifi-tethering',
+    'wifi': 'wifi',
+    'refresh': 'refresh',
+    'remove': 'trash',
+    'screenshot': 'camera',
+    'backup': 'database',
+    'files': 'folder',
+    'install': 'download',
+    'apps': 'rocket',
+    'log': 'clipboard',
 }

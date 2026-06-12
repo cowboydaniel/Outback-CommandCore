@@ -3,6 +3,7 @@
 from PySide6 import QtCore, QtWidgets
 
 from ..ui.styles import COLORS, EMOJI_ICONS
+from ..ui.icon_utils import create_icon_label
 
 
 def create_tools_tab(ui):
@@ -11,7 +12,7 @@ def create_tools_tab(ui):
     tools_layout = QtWidgets.QVBoxLayout(ui.tools_frame)
     tools_layout.setContentsMargins(0, 0, 0, 0)  # Remove outer margins
     tools_layout.setSpacing(0)
-    ui.notebook.addTab(ui.tools_frame, "\U0001F6E0 Android Tools")
+    ui.notebook.addTab(ui.tools_frame, "Android Tools")
 
     # Create scroll area
     scroll_area = QtWidgets.QScrollArea()
@@ -51,7 +52,7 @@ def create_tools_tab(ui):
 
     # Instruction label
     instruction_label = QtWidgets.QLabel(
-        "\U0001F4A1 Tip: Scroll down to discover all available tools",
+        "Tip: Scroll down to discover all available tools",
         content_widget
     )
     instruction_label.setStyleSheet(f"""
@@ -133,10 +134,7 @@ def create_tools_tab(ui):
         col = idx % num_columns
 
         # Create category frame with improved styling
-        category_frame = QtWidgets.QGroupBox(
-            f"{category['icon']} {category['name']}",
-            categories_container
-        )
+        category_frame = QtWidgets.QGroupBox(category['name'], categories_container)
 
         # Apply consistent styling to all category frames
         category_frame.setStyleSheet(f"""
