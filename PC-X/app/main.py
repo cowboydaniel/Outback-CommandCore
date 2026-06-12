@@ -88,14 +88,6 @@ class PCToolsModule(QWidget):
         """Initialize the PC Tools module."""
         super().__init__(parent)
 
-        if platform.system() == 'Linux':
-            check_and_install_dependencies()
-
-            if not hasattr(PCToolsModule, '_sudo_checked'):
-                success, message = check_and_setup_sudoers(self)
-                logging.info(f"Sudo setup check: {message}")
-                PCToolsModule._sudo_checked = True
-
         self.parent_widget = parent
         self.refresh_timer = None
 
