@@ -281,8 +281,11 @@ class WidgetsMixin:
         
         if icon:
             icon_widget = create_icon_label(icon, size=20)
+            text_label = QtWidgets.QLabel(text)
+            button.setText("")
             button_layout = QtWidgets.QHBoxLayout(button)
             button_layout.addWidget(icon_widget)
+            button_layout.addWidget(text_label)
             button_layout.addStretch()
             button_layout.setSpacing(8)
             button_layout.setContentsMargins(12, 0, 12, 0)
