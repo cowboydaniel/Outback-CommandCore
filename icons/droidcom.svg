@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3DDC84;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0F9D58;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background rounded rectangle -->
+  <rect x="64" y="64" width="384" height="384" rx="48" ry="48" fill="url(#bg-gradient)"/>
+  
+  <!-- Phone/device outline -->
+  <rect x="176" y="128" width="160" height="256" rx="16" ry="16" 
+        fill="none" stroke="white" stroke-width="8"/>
+  
+  <!-- Phone screen -->
+  <rect x="192" y="160" width="128" height="176" rx="8" ry="8" 
+        fill="white" fill-opacity="0.2"/>
+  
+  <!-- Phone home button/camera indicator -->
+  <circle cx="256" cy="352" r="12" fill="white" fill-opacity="0.5"/>
+  
+  <!-- Connection signal waves -->
+  <path d="M296 200 Q320 180 344 200" stroke="white" stroke-width="4" 
+        fill="none" stroke-linecap="round" opacity="0.8"/>
+  <path d="M304 192 Q336 168 368 192" stroke="white" stroke-width="4" 
+        fill="none" stroke-linecap="round" opacity="0.6"/>
+  <path d="M312 184 Q352 156 392 184" stroke="white" stroke-width="4" 
+        fill="none" stroke-linecap="round" opacity="0.4"/>
+</svg>

@@ -2,7 +2,7 @@
 DROIDCOM - Icon utilities for SVG loading
 """
 
-from PySide6 import QtCore, QtGui, QtWidgets
+from PySide6 import QtCore, QtGui, QtWidgets, QtSvg
 import os
 
 
@@ -17,7 +17,7 @@ def load_svg_icon(icon_name, size=16):
     icon_path = get_icon_path(icon_name)
     if os.path.exists(icon_path):
         # Create a pixmap from the SVG
-        renderer = QtGui.QSvgRenderer(icon_path)
+        renderer = QtSvg.QSvgRenderer(icon_path)
         pixmap = QtGui.QPixmap(size, size)
         pixmap.fill(QtCore.Qt.GlobalColor.transparent)
         painter = QtGui.QPainter(pixmap)
@@ -31,7 +31,7 @@ def load_svg_pixmap(icon_name, size=16):
     """Load an SVG icon as QPixmap"""
     icon_path = get_icon_path(icon_name)
     if os.path.exists(icon_path):
-        renderer = QtGui.QSvgRenderer(icon_path)
+        renderer = QtSvg.QSvgRenderer(icon_path)
         pixmap = QtGui.QPixmap(size, size)
         pixmap.fill(QtCore.Qt.GlobalColor.transparent)
         painter = QtGui.QPainter(pixmap)

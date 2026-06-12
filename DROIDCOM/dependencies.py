@@ -25,7 +25,6 @@ def check_and_install_android_dependencies():
         'debian': {
             'android-tools-adb': 'adb',
             'android-tools-fastboot': 'fastboot',
-            'android-tools-mkbootimg': None,  # No specific binary to check
             'android-sdk-platform-tools-common': None,  # No specific binary to check
             'adb': 'adb'  # Some distros have this as a separate package
         },
