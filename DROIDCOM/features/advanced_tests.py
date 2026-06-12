@@ -3546,11 +3546,35 @@ class AdvancedTestsMixin:
                     try:
                         import os
                         env = os.environ.copy()
-                        # scrcpy built from source looks for adb next to itself;
-                        # ADB env var overrides that to the system adb.
+                        # ADB env var tells scrcpy where to find the adb binary.
                         adb_path = shutil.which("adb")
                         if adb_path:
                             env["ADB"] = adb_path
+                        # scrcpy checks SCRCPY_SERVER_PATH first (see server.c:get_server_path).
+                        # Derive the expected path from wherever the scrcpy binary lives so
+                        # this works regardless of install prefix or distro layout.
+                        if "SCRCPY_SERVER_PATH" not in env:
+                            scrcpy_bin = shutil.which("scrcpy")
+                            server_path = None
+                            if scrcpy_bin:
+                                prefix = os.path.dirname(os.path.dirname(os.path.realpath(scrcpy_bin)))
+                                candidate = os.path.join(prefix, "share", "scrcpy", "scrcpy-server")
+                                if os.path.isfile(candidate):
+                                    server_path = candidate
+                            if not server_path:
+                                # Last resort: search the filesystem for scrcpy-server
+                                try:
+                                    result = subprocess.run(
+                                        ["find", "/usr", "-name", "scrcpy-server", "-type", "f"],
+                                        capture_output=True, text=True, timeout=5
+                                    )
+                                    hits = result.stdout.strip().splitlines()
+                                    if hits:
+                                        server_path = hits[0]
+                                except Exception:
+                                    pass
+                            if server_path:
+                                env["SCRCPY_SERVER_PATH"] = server_path
                         proc = subprocess.Popen(
                             cmd,
                             stdout=subprocess.DEVNULL,
