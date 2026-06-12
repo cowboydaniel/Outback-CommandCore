@@ -203,6 +203,7 @@ class PCToolsModule(QWidget):
 
         # Main notebook/tabs
         self.notebook = QTabWidget()
+        self.notebook.setStyleSheet("QTabBar { border: none; } QTabWidget { border: none; }")
         self.notebook.currentChanged.connect(self.on_tab_changed)
 
         # Create the two main tabs
@@ -217,6 +218,7 @@ class PCToolsModule(QWidget):
         device_layout.setContentsMargins(5, 5, 5, 5)
 
         self.device_notebook = QTabWidget()
+        self.device_notebook.setStyleSheet("QTabBar { border: none; } QTabWidget { border: none; }")
         device_layout.addWidget(self.device_notebook)
 
         self.device_tabs = {}
@@ -232,6 +234,7 @@ class PCToolsModule(QWidget):
         tools_layout.setContentsMargins(5, 5, 5, 5)
 
         self.tools_notebook = QTabWidget()
+        self.tools_notebook.setStyleSheet("QTabBar { border: none; } QTabWidget { border: none; }")
         tools_layout.addWidget(self.tools_notebook)
 
         self.tools_tabs = {}

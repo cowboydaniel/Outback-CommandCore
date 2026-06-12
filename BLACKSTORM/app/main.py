@@ -113,6 +113,12 @@ class BlackStormLauncher(QMainWindow):
                 color: #E0E0E0;
                 font-family: 'Segoe UI', Arial, sans-serif;
             }
+            QTabWidget {
+                border: none;
+            }
+            QTabBar {
+                border: none;
+            }
             QTabWidget::pane {
                 border: 1px solid #3E3E3E;
                 background: #2A2D2E;

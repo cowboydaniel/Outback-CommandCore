@@ -5,6 +5,12 @@ QMainWindow {
     background-color: #1e1e2e;
     color: #cdd6f4;
 }
+QTabWidget {
+    border: none;
+}
+QTabBar {
+    border: none;
+}
 QListWidget {
     background-color: #181825;
     border: none;

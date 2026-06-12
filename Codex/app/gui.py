@@ -208,7 +208,8 @@ class CommandCoreGUI(QMainWindow):
         
         # Create tab widget
         self.tab_widget = QTabWidget()
-        
+        self.tab_widget.setStyleSheet("QTabBar { border: none; } QTabWidget { border: none; }")
+
         # Add tabs
         setup_data_prep_tab(self)
         setup_training_tab(self)

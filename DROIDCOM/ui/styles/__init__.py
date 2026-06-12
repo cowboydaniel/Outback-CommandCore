@@ -179,6 +179,11 @@ def get_main_stylesheet():
 
     QTabBar {{
         background-color: transparent;
+        border: none;
+    }}
+
+    QTabWidget {{
+        border: none;
     }}
 
     QTabBar::tab {{

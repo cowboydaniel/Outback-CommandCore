@@ -24,6 +24,7 @@ class OmniscribeMainWindow(QMainWindow):
 
     def _build_tabs(self) -> None:
         tabs = QTabWidget()
+        tabs.setStyleSheet("QTabBar { border: none; } QTabWidget { border: none; }")
         tabs.addTab(self.script_tab, "Scripts")
         self.setCentralWidget(tabs)
 
