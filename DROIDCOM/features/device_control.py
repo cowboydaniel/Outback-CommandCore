@@ -1319,17 +1319,13 @@ class DeviceControlMixin:
 
     def _blind_setup_dialog(self):
         """
-        Step-by-step assistant for enabling ADB on a device that has no
-        working display or touch input.
-
-        Strategy (in order of reliability):
-          1. Recovery mode → ADB shell open without auth → inject host key
-          2. Fastboot mode → reboot to recovery
-          3. Unauthorized → OTG keyboard Tab/Enter guide
-          4. Once shell available → enable dev mode + USB debugging
+        Fully-automated ADB setup for a device with no display or touch.
+        Auto-Watch mode polls every 2 s and acts the instant any ADB-accessible
+        state is detected — no manual button clicks needed once watching starts.
         """
         import os
         import threading
+        import time
 
         adb_cmd = self.adb_path if IS_WINDOWS and hasattr(self, "adb_path") else "adb"
 
@@ -1618,26 +1614,166 @@ class DeviceControlMixin:
 
             threading.Thread(target=task, daemon=True).start()
 
+        # ── Auto-Watch state ──────────────────────────────────────────────
+        _watching = threading.Event()
+        _done = threading.Event()   # set when dialog closes
+
+        def _usb_connected():
+            """True if any Android USB device is visible at the OS level."""
+            try:
+                if IS_WINDOWS:
+                    r = run(["powershell", "-Command",
+                             "Get-PnpDevice | Where-Object {$_.FriendlyName -match 'Android|ADB|Composite'} | Select-Object Status"])
+                    return "OK" in r.stdout or "Unknown" in r.stdout
+                else:
+                    r = run(["lsusb"])
+                    # common Android vendor IDs
+                    ANDROID_VIDS = ["18d1","04e8","2717","12d1","0bb4","19d2",
+                                    "22b8","0fce","2a96","1004","0421","413c"]
+                    return any(v in r.stdout.lower() for v in ANDROID_VIDS)
+            except Exception:
+                return False
+
+        def _full_auto_setup(serial, state):
+            """Called by the watcher when it finds an actionable state."""
+            say(f"\n★ Auto-acting on state: {state}  serial={serial}")
+
+            if state == "device":
+                # Already authorized — enable TCP so we never need USB auth again
+                say("Device is already authorized. Enabling wireless ADB…")
+                do_enable_tcpip()
+                return
+
+            if state == "fastboot":
+                say("Fastboot detected — rebooting to recovery…")
+                r = run(["fastboot", "-s", serial, "reboot", "recovery"], timeout=20)
+                say(f"  fastboot reboot recovery → rc={r.returncode}")
+                say("  Waiting 35 s for recovery to boot…")
+                time.sleep(35)
+                return   # watcher will pick up next state
+
+            if state in ("recovery", "sideload"):
+                say("Recovery ADB shell available — running full setup…")
+                # 1. Enable dev mode + USB debug
+                for key in ("development_settings_enabled", "adb_enabled"):
+                    r = run([adb_cmd, "-s", serial, "shell",
+                              "settings", "put", "global", key, "1"])
+                    say(f"  {key} → {'OK' if r.returncode==0 else r.stderr.strip()}")
+                # 2. Inject host key
+                key_path = os.path.expanduser("~/.android/adbkey.pub")
+                if not os.path.exists(key_path):
+                    say("  ✗ ~/.android/adbkey.pub not found — skipping key injection")
+                else:
+                    pub_key = open(key_path).read().strip()
+                    r = run([adb_cmd, "-s", serial, "shell",
+                              f"mkdir -p /data/misc/adb && "
+                              f"echo '{pub_key}' >> /data/misc/adb/adb_keys && "
+                              f"chmod 640 /data/misc/adb/adb_keys && "
+                              f"chown system:shell /data/misc/adb/adb_keys"])
+                    say(f"  Key injection → {'OK' if r.returncode==0 else r.stderr.strip()}")
+                # 3. Restart adbd to pick up new settings
+                run([adb_cmd, "-s", serial, "shell", "stop adbd"])
+                run([adb_cmd, "-s", serial, "shell", "start adbd"])
+                say("  adbd restarted.")
+                say("  Rebooting to system…")
+                run([adb_cmd, "-s", serial, "reboot"])
+                say("✓ Done. Device will boot and auto-authorize ADB.\n"
+                    "  Watch will continue — connect will complete automatically.")
+
+            if state == "unauthorized":
+                # Can't run shell on unauthorized device.
+                # Kill+restart ADB server to re-trigger the dialog on device,
+                # then try mDNS pairing if Android 11+.
+                say("Device is unauthorized — attempting to re-trigger auth dialog…")
+                run([adb_cmd, "kill-server"])
+                time.sleep(1)
+                run([adb_cmd, "start-server"])
+                time.sleep(2)
+                # Try to auto-accept via mDNS pair (Android 11+, needs pairing code)
+                r = run([adb_cmd, "mdns", "services"])
+                if "adbexperimental" in r.stdout or "_adb-tls-pairing" in r.stdout:
+                    say("  Android 11+ mDNS pairing service found.")
+                    say("  Cannot auto-accept without the on-screen pairing code.")
+                say("  ⚠ USB debugging authorization requires physical acceptance.\n"
+                    "    Options:\n"
+                    "    • OTG keyboard: plug keyboard → press Enter (accepts dialog)\n"
+                    "    • Boot to recovery: power off, then power on holding Vol-Down\n"
+                    "      (exact combo shown in 'Hardware Guide' button below)")
+
+        def watch_loop():
+            last_state = None
+            say("◉ Auto-Watch started — polling every 2 s…")
+            while not _done.is_set():
+                try:
+                    serial, state = detect_state()
+                    usb_seen = _usb_connected()
+
+                    # Update banner
+                    refresh_state()
+
+                    if state != last_state:
+                        last_state = state
+                        if state and state != "none":
+                            _full_auto_setup(serial, state)
+                        elif usb_seen:
+                            say("USB device visible but ADB not responding.\n"
+                                "  USB debugging is OFF on this device.\n"
+                                "  The phone must enter recovery mode for the tool to proceed.\n"
+                                "  Power off the phone (hold Power ~10 s), then power it on\n"
+                                "  holding Vol-Down — keep holding until something appears here.")
+                        else:
+                            say("No USB device detected. Plug in the phone via USB.")
+                except Exception as e:
+                    say(f"Watch error: {e}")
+                time.sleep(2)
+
         # ── wire buttons ─────────────────────────────────────────────────
-        make_btn("1. Detect Device State", 0, 0, do_detect,
-                 "Scan ADB and Fastboot for connected devices")
-        make_btn("2. Enable Dev Mode + USB Debug", 0, 1, do_enable_dev_mode,
-                 "Run settings put commands via shell (recovery or authorized)")
-        make_btn("3. Inject Host Key → Reboot", 1, 0, do_inject_key,
-                 "Write ~/.android/adbkey.pub into /data/misc/adb/adb_keys via recovery shell")
-        make_btn("4. Fastboot → Recovery", 1, 1, do_fastboot_to_recovery,
-                 "Reboot from fastboot into recovery so ADB shell opens")
-        make_btn("5. Hardware Button Guide", 2, 0, do_hardware_guide,
-                 "How to enter recovery mode for common phone brands")
-        make_btn("6. OTG Keyboard Guide", 2, 1, do_otg_guide,
-                 "How to accept the ADB dialog using a USB keyboard + OTG adapter")
-        make_btn("7. Enable ADB over TCP/IP", 3, 0, do_enable_tcpip,
-                 "Once connected, switch to wireless ADB so USB auth is not needed again")
+        watch_btn = QtWidgets.QPushButton("▶  Start Auto-Watch  (recommended)")
+        watch_btn.setMinimumHeight(44)
+        watch_btn.setStyleSheet("font-weight:bold; font-size:13px;")
+        layout.addWidget(watch_btn)
+
+        def toggle_watch():
+            if _watching.is_set():
+                _watching.clear()
+                watch_btn.setText("▶  Start Auto-Watch  (recommended)")
+                say("◉ Auto-Watch stopped.")
+            else:
+                _watching.set()
+                watch_btn.setText("■  Stop Auto-Watch")
+                threading.Thread(target=watch_loop, daemon=True).start()
+
+        watch_btn.clicked.connect(toggle_watch)
+
+        make_btn("Detect Once", 0, 0, do_detect,
+                 "One-shot scan of ADB and Fastboot")
+        make_btn("Enable Dev Mode + USB Debug", 0, 1, do_enable_dev_mode,
+                 "Run via shell (recovery or authorized only)")
+        make_btn("Inject Host Key → Reboot", 1, 0, do_inject_key,
+                 "Write ~/.android/adbkey.pub to /data/misc/adb/adb_keys")
+        make_btn("Fastboot → Recovery", 1, 1, do_fastboot_to_recovery,
+                 "Reboot from fastboot into recovery")
+        make_btn("Hardware Button Guide", 2, 0, do_hardware_guide,
+                 "Per-manufacturer recovery key combos")
+        make_btn("OTG Keyboard Guide", 2, 1, do_otg_guide,
+                 "Accept ADB dialog using USB keyboard + OTG adapter")
+        make_btn("Enable ADB over TCP/IP", 3, 0, do_enable_tcpip,
+                 "Switch to wireless ADB once authorized")
 
         close_btn = QtWidgets.QPushButton("Close")
-        close_btn.clicked.connect(dlg.close)
+        close_btn.setMinimumHeight(36)
+
+        def on_close():
+            _done.set()
+            _watching.clear()
+            dlg.close()
+
+        close_btn.clicked.connect(on_close)
         layout.addWidget(close_btn)
 
-        # auto-detect on open
-        threading.Thread(target=do_detect, daemon=True).start()
+        # Start watching immediately on open
+        _watching.set()
+        threading.Thread(target=watch_loop, daemon=True).start()
+        watch_btn.setText("■  Stop Auto-Watch")
         dlg.exec()
+        _done.set()
