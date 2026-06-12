@@ -3495,26 +3495,13 @@ class AdvancedTestsMixin:
 
                 def run():
                     try:
-                        import os
-                        proc = subprocess.Popen(
-                            cmd,
-                            stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE,
-                            env=os.environ.copy(),
-                        )
-                        _, stderr = proc.communicate(timeout=5)
-                        if proc.returncode and proc.returncode != 0:
-                            err = stderr.decode(errors="replace").strip()
-                            emit_ui(self, lambda: status_label.setText(f"scrcpy error: {err}"))
-                            emit_ui(self, lambda: self.log_message(f"scrcpy error: {err}"))
-                    except subprocess.TimeoutExpired:
-                        pass  # still running normally
+                        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                     except Exception as e:
                         emit_ui(self, lambda: status_label.setText(f"Error: {e}"))
 
                 threading.Thread(target=run, daemon=True).start()
 
-            launch_btn.clicked.connect(launch, Qt.UniqueConnection)
+            launch_btn.clicked.connect(launch)
             close_btn.clicked.connect(dlg.close)
 
             dlg.exec()
