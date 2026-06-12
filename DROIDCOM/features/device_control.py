@@ -1438,8 +1438,10 @@ class DeviceControlMixin:
                     "No device found.\n"
                     "• Connect phone via USB\n"
                     "• Ensure USB cable supports data (not charge-only)\n"
-                    "• If display is dead, try holding Power+Vol-Down for 10s to reboot,\n"
-                    "  then hold Power+Vol-Down again to enter fastboot/recovery."
+                    "• If display is dead, hold Power for 10-15s to force reboot.\n"
+                    "  Once the phone vibrates or restarts, release Power — do NOT\n"
+                    "  hold Vol-Down during boot (that triggers safe mode).\n"
+                    "  Then use the Hardware Guide button to enter recovery."
                 )
 
         # ── Step 2: Enable dev mode + USB debugging (needs shell) ────────
