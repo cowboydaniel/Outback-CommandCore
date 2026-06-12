@@ -1,14 +1,10 @@
-Source: droidcom
-Section: utils
-Priority: optional
-Maintainer: cowboydaniel <cowboydaniel@users.noreply.github.com>
-Build-Depends: debhelper (>= 9), python3, python3-setuptools
-Standards-Version: 4.5.0
-
 Package: droidcom
 Version: 1.1.0-1
+Section: utils
+Priority: optional
 Architecture: any
-Depends: ${python3:Depends}, ${shlibs:Depends}, python3, python3-pyside6, android-tools-adb, android-tools-fastboot
+Maintainer: Outback Electronics <outbackhutelectronics@gmail.com>
+Depends: python3, android-tools-adb, android-tools-fastboot
 Description: Android Device Management Tool
  DROIDCOM is a comprehensive Android device management tool that provides
  a graphical interface for managing Android devices via ADB. Features include:
@@ -18,3 +14,4 @@ Description: Android Device Management Tool
   - System tools and debugging
   - Security and permission management
   - Advanced testing tools
+Installed-Size: 681468

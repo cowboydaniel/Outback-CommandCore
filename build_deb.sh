@@ -21,15 +21,30 @@ mkdir -p ${BUILD_DIR}/${PACKAGE_NAME}/usr/share/${PACKAGE_NAME}/icons
 mkdir -p ${BUILD_DIR}/${PACKAGE_NAME}/usr/share/${PACKAGE_NAME}/ui/icons
 mkdir -p ${BUILD_DIR}/${PACKAGE_NAME}/usr/share/applications
 
-# Copy debian control files
-cp DROIDCOM/debian/control ${BUILD_DIR}/${PACKAGE_NAME}/DEBIAN/
+# Copy debian control files and create proper binary control
+cat > ${BUILD_DIR}/${PACKAGE_NAME}/DEBIAN/control <<EOF
+Package: droidcom
+Version: ${VERSION}-1
+Section: utils
+Priority: optional
+Architecture: any
+Maintainer: Outback Electronics <outbackhutelectronics@gmail.com>
+Depends: python3, android-tools-adb, android-tools-fastboot
+Description: Android Device Management Tool
+ DROIDCOM is a comprehensive Android device management tool that provides
+ a graphical interface for managing Android devices via ADB. Features include:
+  - Device connection and management
+  - App installation and management
+  - File operations
+  - System tools and debugging
+  - Security and permission management
+  - Advanced testing tools
+EOF
+
 cp DROIDCOM/debian/postinst ${BUILD_DIR}/${PACKAGE_NAME}/DEBIAN/
 cp DROIDCOM/debian/prerm ${BUILD_DIR}/${PACKAGE_NAME}/DEBIAN/
 chmod +x ${BUILD_DIR}/${PACKAGE_NAME}/DEBIAN/postinst
 chmod +x ${BUILD_DIR}/${PACKAGE_NAME}/DEBIAN/prerm
-
-# Update control file with version
-sed -i "s/^Package: droidcom$/Package: droidcom\nVersion: ${VERSION}-1/" ${BUILD_DIR}/${PACKAGE_NAME}/DEBIAN/control
 
 # Create virtual environment and install dependencies
 echo "Installing Python dependencies..."
