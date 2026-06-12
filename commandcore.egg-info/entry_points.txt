@@ -1,0 +1,2 @@
+[console_scripts]
+commandcore = CommandCore.app.main:main

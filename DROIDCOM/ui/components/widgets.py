@@ -149,7 +149,7 @@ class WidgetsMixin:
         title_layout.setSpacing(16)
 
         # Android Robot Icon (using SVG)
-        icon_label = create_icon_label('screen', size=36)
+        icon_label = create_icon_label('android-robot', size=36)
         icon_label.setStyleSheet(f"""
             background: transparent;
         """)

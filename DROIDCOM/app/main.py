@@ -51,14 +51,9 @@ def main():
         window.setMinimumSize(800, 400)
 
         # Set window icon
-        icon_path = Path(__file__).resolve().parents[2] / 'icons' / 'droidcom.svg'
+        icon_path = Path(__file__).resolve().parents[2] / 'icons' / 'droidcom.png'
         if icon_path.exists():
             window.setWindowIcon(QIcon(str(icon_path)))
-        else:
-            # Fallback to PNG if SVG doesn't exist
-            icon_path_png = Path(__file__).resolve().parents[2] / 'icons' / 'droidcom.png'
-            if icon_path_png.exists():
-                window.setWindowIcon(QIcon(str(icon_path_png)))
 
         layout = QtWidgets.QVBoxLayout(window)
         app = AndroidToolsModule(window)
