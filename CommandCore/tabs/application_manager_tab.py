@@ -824,13 +824,13 @@ class ApplicationManagerTab(QWidget):
                         if 'codex.gui' in cmdline_str or 'codex/app/gui.py' in cmdline_str or 'codex/app/main.py' in cmdline_str:
                             return True
                     elif process_name == 'droidcom_process':
-                        if 'android_tools_linux.android_tools_linux' in cmdline_str or 'droidcom/main.py' in cmdline_str:
+                        if 'android_tools_linux.android_tools_linux' in cmdline_str or 'droidcom/app/main.py' in cmdline_str:
                             return True
                     elif process_name == 'hackattack_process':
                         if 'hackattack.launch' in cmdline_str or 'hackattack/launch.py' in cmdline_str:
                             return True
                     elif process_name == 'nightfire_process':
-                        if 'nightfire.nightfire' in cmdline_str or 'nightfire/nightfire.py' in cmdline_str:
+                        if 'nightfire.nightfire' in cmdline_str or 'nightfire/app/main.py' in cmdline_str:
                             return True
                     elif process_name == 'omniscribe_process':
                         if 'omniscribe.omniscribe' in cmdline_str or 'omniscribe/app/main.py' in cmdline_str:
@@ -914,7 +914,7 @@ class ApplicationManagerTab(QWidget):
                 "id": "droidcom",
                 "name": "DROIDCOM",
                 "description": "Android device management and debugging toolkit.",
-                "path": os.path.join(base_dir, "DROIDCOM/main.py"),
+                "path": os.path.join(base_dir, "DROIDCOM/app/main.py"),
                 'version': None,
                 'status': 'stopped',
                 'process_name': 'droidcom_process'
@@ -932,7 +932,7 @@ class ApplicationManagerTab(QWidget):
                 "id": "nightfire",
                 "name": "Nightfire",
                 "description": "Nightfire system monitor and controller.",
-                "path": os.path.join(base_dir, "NIGHTFIRE/nightfire.py"),
+                "path": os.path.join(base_dir, "NIGHTFIRE/app/main.py"),
                 'version': None,
                 'status': 'stopped',
                 'process_name': 'nightfire_process'
