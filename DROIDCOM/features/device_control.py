@@ -1620,21 +1620,135 @@ class DeviceControlMixin:
         _watching = threading.Event()
         _done = threading.Event()   # set when dialog closes
 
-        def _usb_connected():
-            """True if any Android USB device is visible at the OS level."""
+        # Known Android vendor IDs (covers most manufacturers)
+        ANDROID_VIDS = [
+            "18d1",  # Google / Nexus / AOSP
+            "04e8",  # Samsung
+            "2717",  # Xiaomi / POCO
+            "12d1",  # Huawei / Honor
+            "0bb4",  # HTC
+            "19d2",  # ZTE / nubia
+            "22b8",  # Motorola
+            "0fce",  # Sony / Xperia
+            "2a96",  # Oppo / Realme
+            "1004",  # LG
+            "0421",  # Nokia
+            "413c",  # Dell Streak
+            "2d95",  # Vivo
+            "17ef",  # Lenovo
+            "0e8d",  # MediaTek (MTK)
+            "05c6",  # Qualcomm EDL / 9008 mode
+            "04dd",  # Sharp
+            "0b05",  # ASUS / ROG Phone
+            "2c7c",  # Quectel
+            "1bbb",  # T-Mobile / Alcatel
+            "03f0",  # HP
+            "0409",  # NEC
+            "1d4d",  # Pegatron
+        ]
+
+        def _get_usb_devices():
+            """Return list of (vid, pid, description) for all USB devices."""
+            devices = []
             try:
                 if IS_WINDOWS:
                     r = run(["powershell", "-Command",
-                             "Get-PnpDevice | Where-Object {$_.FriendlyName -match 'Android|ADB|Composite'} | Select-Object Status"])
-                    return "OK" in r.stdout or "Unknown" in r.stdout
+                             "Get-PnpDevice | Select-Object FriendlyName,Status | ConvertTo-Json"])
+                    import json
+                    try:
+                        items = json.loads(r.stdout)
+                        if isinstance(items, dict):
+                            items = [items]
+                        for item in items:
+                            name = item.get("FriendlyName", "")
+                            status = item.get("Status", "")
+                            devices.append(("????", "????", f"{name} [{status}]"))
+                    except Exception:
+                        pass
                 else:
                     r = run(["lsusb"])
-                    # common Android vendor IDs
-                    ANDROID_VIDS = ["18d1","04e8","2717","12d1","0bb4","19d2",
-                                    "22b8","0fce","2a96","1004","0421","413c"]
-                    return any(v in r.stdout.lower() for v in ANDROID_VIDS)
+                    for line in r.stdout.splitlines():
+                        # Format: Bus 001 Device 002: ID 18d1:4ee7 Google Inc. Nexus/Pixel Device
+                        parts = line.strip().split()
+                        if len(parts) >= 6 and parts[4].startswith("ID"):
+                            vid_pid = parts[5].split(":")
+                            vid = vid_pid[0] if vid_pid else "????"
+                            pid = vid_pid[1] if len(vid_pid) > 1 else "????"
+                            desc = " ".join(parts[6:]) if len(parts) > 6 else ""
+                            devices.append((vid, pid, desc))
             except Exception:
-                return False
+                pass
+            return devices
+
+        def _usb_connected():
+            """Return (found, is_android, description) for connected USB devices."""
+            devs = _get_usb_devices()
+            android_devs = [(v, p, d) for v, p, d in devs if v.lower() in ANDROID_VIDS]
+            if android_devs:
+                v, p, d = android_devs[0]
+                return True, True, f"VID:{v} PID:{p} {d}".strip()
+            # Check for any phone-like device even if VID unknown
+            phone_keywords = ["android","samsung","google","xiaomi","huawei","oneplus",
+                               "motorola","sony","oppo","realme","vivo","nokia","asus",
+                               "poco","redmi","pixel","qualcomm","mediatek","mtk","phone",
+                               "mobile","composite","adb","fastboot"]
+            for v, p, d in devs:
+                if any(k in d.lower() for k in phone_keywords):
+                    return True, True, f"VID:{v} PID:{p} {d}".strip()
+            if devs:
+                return True, False, f"Non-Android USB: {devs[0][2]}"
+            return False, False, ""
+
+        def _try_usb_rebind(vid, pid):
+            """Linux only: unbind/bind the USB device to force re-enumeration."""
+            try:
+                import glob as _glob
+                pattern = f"/sys/bus/usb/devices/*/idVendor"
+                for vf in _glob.glob(pattern):
+                    v = open(vf).read().strip()
+                    if v.lower() == vid.lower():
+                        dev_path = vf.replace("/idVendor", "")
+                        dev_id = open(f"{dev_path}/dev").read().strip().replace(":", "/")
+                        say(f"  USB rebind: {dev_path}")
+                        subprocess.run(f"echo '{dev_path.split('/')[-1]}' | tee /sys/bus/usb/drivers/usb/unbind",
+                                       shell=True, capture_output=True)
+                        time.sleep(1)
+                        subprocess.run(f"echo '{dev_path.split('/')[-1]}' | tee /sys/bus/usb/drivers/usb/bind",
+                                       shell=True, capture_output=True)
+                        time.sleep(2)
+                        return True
+            except Exception:
+                pass
+            return False
+
+        def _scan_network_adb():
+            """Scan LAN for open ADB TCP port 5555. Returns list of IPs."""
+            import socket
+            found = []
+            try:
+                # Get local subnet
+                hostname = socket.gethostname()
+                local_ip = socket.gethostbyname(hostname)
+                prefix = ".".join(local_ip.split(".")[:3])
+                say(f"  Scanning {prefix}.1-254 for ADB TCP port 5555…")
+                def check(ip):
+                    try:
+                        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                        s.settimeout(0.3)
+                        if s.connect_ex((ip, 5555)) == 0:
+                            found.append(ip)
+                        s.close()
+                    except Exception:
+                        pass
+                threads = [threading.Thread(target=check, args=(f"{prefix}.{i}",), daemon=True)
+                           for i in range(1, 255)]
+                for t in threads:
+                    t.start()
+                for t in threads:
+                    t.join(timeout=2)
+            except Exception as e:
+                say(f"  Network scan error: {e}")
+            return found
 
         def _full_auto_setup(serial, state):
             """Called by the watcher when it finds an actionable state."""
@@ -1704,11 +1818,13 @@ class DeviceControlMixin:
 
         def watch_loop():
             last_state = None
+            last_usb_desc = None
+            network_scanned = False
             say("◉ Auto-Watch started — polling every 2 s…")
             while not _done.is_set():
                 try:
                     serial, state = detect_state()
-                    usb_seen = _usb_connected()
+                    usb_found, is_android, usb_desc = _usb_connected()
 
                     # Update banner
                     refresh_state()
@@ -1717,14 +1833,68 @@ class DeviceControlMixin:
                         last_state = state
                         if state and state != "none":
                             _full_auto_setup(serial, state)
-                        elif usb_seen:
-                            say("USB device visible but ADB not responding.\n"
-                                "  USB debugging is OFF on this device.\n"
-                                "  The phone must enter recovery mode for the tool to proceed.\n"
-                                "  Power off the phone (hold Power ~10 s), then power it on\n"
-                                "  holding Vol-Down — keep holding until something appears here.")
-                        else:
-                            say("No USB device detected. Plug in the phone via USB.")
+                        elif usb_found and is_android and usb_desc != last_usb_desc:
+                            last_usb_desc = usb_desc
+                            say(f"\n⚡ Android phone detected on USB: {usb_desc}")
+                            say("  ADB is not responding — USB debugging is likely OFF.")
+                            say("  Attempting ADB server restart…")
+                            run([adb_cmd, "kill-server"])
+                            time.sleep(1)
+                            run([adb_cmd, "start-server"])
+                            time.sleep(2)
+                            # Re-detect after restart
+                            s2, st2 = detect_state()
+                            if st2 and st2 != "none":
+                                say(f"  ADB responded after restart: {st2}")
+                                _full_auto_setup(s2, st2)
+                            else:
+                                # Try USB rebind to force re-enumeration
+                                vid = usb_desc.split("VID:")[-1].split()[0] if "VID:" in usb_desc else ""
+                                if vid and not IS_WINDOWS:
+                                    say("  Attempting USB rebind to force re-enumeration…")
+                                    _try_usb_rebind(vid, "")
+                                    time.sleep(3)
+                                    run([adb_cmd, "kill-server"])
+                                    time.sleep(1)
+                                    run([adb_cmd, "start-server"])
+                                    time.sleep(2)
+                                say("\n─── What the tool can do automatically ───")
+                                say("  ✓ If phone boots into FASTBOOT: auto-reboots to recovery")
+                                say("  ✓ If phone boots into RECOVERY: auto-enables USB debug + injects key")
+                                say("  ✓ If phone reaches AUTHORIZED state: auto-enables wireless ADB")
+                                say("")
+                                say("─── What you need to do (ONE of these) ───")
+                                say("  Option A — Force into Recovery:")
+                                say("    Hold Power button for 10-15 s until phone powers off.")
+                                say("    Then hold [Vol Down]+[Power] (most phones) until this")
+                                say("    display shows FASTBOOT or RECOVERY detected above.")
+                                say("")
+                                say("  Option B — Network ADB scan:")
+                                say("    If phone has wireless ADB enabled (Android 11+),")
+                                say("    scanning LAN now…")
+                                if not network_scanned:
+                                    network_scanned = True
+                                    def do_net_scan():
+                                        ips = _scan_network_adb()
+                                        if ips:
+                                            for ip in ips:
+                                                say(f"  Found ADB at {ip}:5555 — connecting…")
+                                                r = run([adb_cmd, "connect", f"{ip}:5555"])
+                                                say(f"  {r.stdout.strip() or r.stderr.strip()}")
+                                        else:
+                                            say("  No wireless ADB found on LAN.")
+                                    threading.Thread(target=do_net_scan, daemon=True).start()
+                        elif usb_found and not is_android and usb_desc != last_usb_desc:
+                            last_usb_desc = usb_desc
+                            say(f"\n⚠ USB device detected but not recognized as Android: {usb_desc}")
+                            say("  If this is your phone, its vendor ID may be unknown.")
+                            say("  Try: unplug → change USB mode to 'File Transfer' on phone → replug.")
+                        elif not usb_found and last_usb_desc is not None:
+                            last_usb_desc = None
+                            say("⚡ USB device disconnected.")
+                        elif not usb_found and last_usb_desc is None and last_state is None:
+                            say("No USB device detected. Connect phone via USB data cable.")
+                            last_state = "REPORTED"
                 except Exception as e:
                     say(f"Watch error: {e}")
                 time.sleep(2)
@@ -1761,6 +1931,48 @@ class DeviceControlMixin:
                  "Accept ADB dialog using USB keyboard + OTG adapter")
         make_btn("Enable ADB over TCP/IP", 3, 0, do_enable_tcpip,
                  "Switch to wireless ADB once authorized")
+
+        def do_scan_usb():
+            say("─── USB Device Scan ───")
+            devs = _get_usb_devices()
+            if not devs:
+                say("  No USB devices detected by lsusb.")
+            else:
+                for vid, pid, desc in devs:
+                    android_flag = " ← Android" if vid.lower() in ANDROID_VIDS else ""
+                    say(f"  VID:{vid} PID:{pid}  {desc}{android_flag}")
+
+        def do_scan_network():
+            def task():
+                say("─── Scanning LAN for wireless ADB (port 5555)…")
+                ips = _scan_network_adb()
+                if ips:
+                    for ip in ips:
+                        say(f"  Found: {ip}:5555 — connecting…")
+                        r = run([adb_cmd, "connect", f"{ip}:5555"])
+                        say(f"  {r.stdout.strip() or r.stderr.strip()}")
+                    refresh_state()
+                else:
+                    say("  No wireless ADB found on this network.")
+            threading.Thread(target=task, daemon=True).start()
+
+        def do_force_restart_adb():
+            def task():
+                say("─── Force-restarting ADB server…")
+                run([adb_cmd, "kill-server"])
+                time.sleep(1)
+                r = run([adb_cmd, "start-server"])
+                say(f"  {r.stdout.strip() or r.stderr.strip() or 'ADB server restarted.'}")
+                time.sleep(2)
+                refresh_state()
+            threading.Thread(target=task, daemon=True).start()
+
+        make_btn("Scan All USB Devices", 3, 1, do_scan_usb,
+                 "List all USB devices including non-ADB phones")
+        make_btn("Scan LAN for Wireless ADB", 4, 0, do_scan_network,
+                 "Find phone on WiFi via ADB TCP port 5555")
+        make_btn("Force Restart ADB Server", 4, 1, do_force_restart_adb,
+                 "Kill and restart ADB server to force re-enumeration")
 
         close_btn = QtWidgets.QPushButton("Close")
         close_btn.setMinimumHeight(36)

