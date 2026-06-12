@@ -11,6 +11,7 @@ from PySide6.QtCore import Qt, Signal
 class SettingRow(QWidget):
     def __init__(self, label, control, parent=None):
         super().__init__(parent)
+        self.setAttribute(Qt.WA_StyledBackground, False)
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 6, 0, 6)
 
@@ -90,7 +91,7 @@ class SettingsTab(QWidget):
         sep2 = QFrame(); sep2.setFrameShape(QFrame.HLine)
         sep2.setStyleSheet("color: #4A4A4A;"); card_layout.addWidget(sep2)
 
-        chk_style = "color: #ECF0F1; font-size: 13px;"
+        chk_style = "color: #ECF0F1; font-size: 13px; background: transparent;"
         auto_refresh = QCheckBox()
         auto_refresh.setChecked(True)
         auto_refresh.setStyleSheet(chk_style)
