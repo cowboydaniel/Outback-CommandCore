@@ -855,11 +855,6 @@ logging.info("PC Tools module loaded - PySide6 implementation")
 
 # For standalone execution
 if __name__ == "__main__":
-    if platform.system() == "Linux":
-        check_and_install_dependencies()
-        if not os.path.exists(config.SUDOERS_FILE):
-            setup_passwordless_sudo()
-
     app = QApplication(sys.argv)
 
     # Set application style
@@ -909,19 +904,24 @@ if __name__ == "__main__":
         remaining = max(0, minimum_splash_duration - elapsed)
 
         def finish_startup() -> None:
-            # Close splash FIRST before any potentially blocking operations
-            if splash and splash.isVisible():
-                splash.finish(None)
+            try:
+                if splash and splash.isVisible():
+                    splash.finish(None)
 
-            window = QMainWindow()
-            window.setWindowTitle("PC-X - Linux System Management")
-            window.setGeometry(100, 100, 1024, 768)
+                window = QMainWindow()
+                window.setWindowTitle("PC-X - Linux System Management")
+                window.setGeometry(100, 100, 1024, 768)
 
-            # Create and set central widget (may block for pkexec/sudo auth)
-            pc_tools = PCToolsModule(window, {"name": "Test User"})
-            window.setCentralWidget(pc_tools)
-            main_windows.append(window)
-            window.show()
+                pc_tools = PCToolsModule(window, {"name": "Test User"})
+                window.setCentralWidget(pc_tools)
+                main_windows.append(window)
+                window.show()
+            except Exception as exc:
+                import traceback
+                traceback.print_exc()
+                from PySide6.QtWidgets import QMessageBox
+                QMessageBox.critical(None, "PC-X Startup Error", str(exc))
+                app.quit()
 
         QTimer.singleShot(int(remaining * 1000), finish_startup)
 
