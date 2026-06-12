@@ -116,8 +116,100 @@ def check_and_install_android_dependencies():
         return True
 
 
+def _get_scrcpy_version():
+    """Return (major, minor) or (0, 0) if not installed / not parseable."""
+    import re
+    try:
+        out = subprocess.run(
+            ["scrcpy", "--version"], capture_output=True, text=True
+        ).stdout
+        m = re.search(r"scrcpy\s+(\d+)\.(\d+)", out)
+        if m:
+            return (int(m.group(1)), int(m.group(2)))
+    except Exception:
+        pass
+    return (0, 0)
+
+
+def check_and_install_scrcpy():
+    """Ensure scrcpy >= 2.1 is installed.
+
+    scrcpy 2.1 introduced --keyboard=uhid / --mouse=uhid which inject
+    input via a virtual HID device, bypassing the Android InputManager
+    reflection path that NPEs on some devices.
+
+    Installation strategy (Linux only):
+      1. Run the official install_release.sh from the scrcpy repo — this
+         downloads the latest prebuilt binary into ~/scrcpy and symlinks
+         it into /usr/local/bin via pkexec.
+      2. Fall back to `apt-get install scrcpy` which gives 1.25 on Ubuntu
+         noble — usable but without uhid support.
+    """
+    if platform.system() != 'Linux':
+        return True
+
+    MIN_VERSION = (2, 1)
+    current = _get_scrcpy_version()
+    if current >= MIN_VERSION:
+        logging.info(f"scrcpy {current[0]}.{current[1]} already satisfies >= 2.1")
+        return True
+
+    ver_str = f"{current[0]}.{current[1]}" if current != (0, 0) else "(not installed)"
+    logging.info(f"scrcpy {ver_str} < 2.1 — installing latest release via official script...")
+
+    # The official install_release.sh downloads the latest prebuilt binary.
+    install_url = (
+        "https://raw.githubusercontent.com/Genymobile/scrcpy/master/install_release.sh"
+    )
+    try:
+        # Prefer curl, fall back to wget.
+        fetch = (
+            f"curl -fsSL '{install_url}'"
+            if shutil.which("curl") else
+            f"wget -qO- '{install_url}'"
+        )
+        result = subprocess.run(
+            ["bash", "-c", f"{fetch} | bash"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        if result.returncode == 0:
+            new_ver = _get_scrcpy_version()
+            if new_ver >= MIN_VERSION:
+                logging.info(f"scrcpy upgraded to {new_ver[0]}.{new_ver[1]}")
+                return True
+            logging.warning(
+                f"install_release.sh ran but version is still {new_ver[0]}.{new_ver[1]}"
+            )
+        else:
+            logging.warning(f"install_release.sh failed: {result.stderr.strip()}")
+    except Exception as e:
+        logging.error(f"Error running scrcpy install script: {e}")
+
+    # Fallback: package manager (gives 1.25 on Ubuntu noble — no uhid, but functional).
+    logging.warning("Falling back to apt-get for scrcpy; uhid input will not be available")
+    try:
+        result = subprocess.run(
+            ["pkexec", "apt-get", "-y", "install", "scrcpy"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        if result.returncode == 0:
+            logging.info("scrcpy installed via apt-get (upgrade to v2.1+ for uhid support)")
+            return True
+        logging.error(f"apt-get install scrcpy failed: {result.stderr.strip()}")
+    except Exception as e:
+        logging.error(f"Error installing scrcpy via apt-get: {e}")
+
+    return False
+
+
 def run_dependency_check():
     """Run dependency check on Linux systems"""
     if platform.system() == 'Linux':
-        return check_and_install_android_dependencies()
+        adb_ok = check_and_install_android_dependencies()
+        scrcpy_ok = check_and_install_scrcpy()
+        return adb_ok and scrcpy_ok
     return True
