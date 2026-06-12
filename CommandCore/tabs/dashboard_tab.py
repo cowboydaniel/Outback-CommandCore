@@ -144,14 +144,18 @@ class DashboardTab(QWidget):
             self
         )
         self.card2.button.clicked.connect(lambda: self.request_tab_change.emit("Application Manager"))
-        
+
         # Card 3 - Settings
         self.card3 = DashboardCard(
             "Settings",
             "Configure application preferences, themes, and system settings.",
             self
         )
-        
+        self.card3.button.clicked.connect(lambda: self.request_tab_change.emit("Settings"))
+
+        # Card 1 button
+        self.card1.button.clicked.connect(lambda: self.request_tab_change.emit("System Status"))
+
         cards_layout.addWidget(self.card1)
         cards_layout.addWidget(self.card2)
         cards_layout.addWidget(self.card3)

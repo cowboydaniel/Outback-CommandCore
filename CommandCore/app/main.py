@@ -127,11 +127,15 @@ class CommandCoreLauncher(QMainWindow):
         
         # Set application style
         self.setStyleSheet("""
-            QMainWindow {
+            QMainWindow, QWidget {
                 background-color: #2A2D2E;
                 color: #ECF0F1;
             }
-            
+
+            QTabBar {
+                background: #2A2D2E;
+            }
+
             QTabWidget::pane {
                 border: 1px solid #3E3E3E;
                 border-radius: 4px;
@@ -192,24 +196,24 @@ class CommandCoreLauncher(QMainWindow):
     
     def load_tabs(self):
         """Load and initialize tab modules."""
-        # Import tab modules
         from tabs.dashboard_tab import DashboardTab
         from tabs.application_manager_tab import ApplicationManagerTab
-        
-        # Create and add tabs
+        from tabs.system_status_tab import SystemStatusTab
+        from tabs.settings_tab import SettingsTab
+
         self.dashboard_tab = DashboardTab()
         self.tab_widget.addTab(self.dashboard_tab, "Dashboard")
-        
-        # Store tabs in a dictionary for easy access
+        self.tab_widget.addTab(ApplicationManagerTab(), "Application Manager")
+        self.tab_widget.addTab(SystemStatusTab(), "System Status")
+        self.tab_widget.addTab(SettingsTab(), "Settings")
+
         self.tabs = {
             "Dashboard": 0,
-            "Application Manager": 1
+            "Application Manager": 1,
+            "System Status": 2,
+            "Settings": 3,
         }
-        
-        # Add Application Manager tab
-        self.tab_widget.addTab(ApplicationManagerTab(), "Application Manager")
-        
-        # Connect signals
+
         self.dashboard_tab.request_tab_change.connect(self.switch_to_tab)
     
     def switch_to_tab(self, tab_name):
