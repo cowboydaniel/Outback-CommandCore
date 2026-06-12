@@ -348,44 +348,30 @@ class DeviceControlMixin:
             if isinstance(serial, str) and "\n" in serial:
                 serial = serial.split("\n")[0].strip()
 
+            # Read current state from settings DB
             get_state_cmd = subprocess.run(
                 [adb_cmd, "-s", serial, "shell", "settings", "get", "global", "mobile_data"],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                timeout=10,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10,
             )
-
             current_state = get_state_cmd.stdout.strip()
-            new_state = "0" if current_state == "1" else "1"
+            enable = current_state != "1"
+            svc_arg = "enable" if enable else "disable"
+            state_text = "enabled" if enable else "disabled"
 
+            # svc data actually toggles the radio (settings put only writes the DB)
             cmd = subprocess.run(
-                [
-                    adb_cmd,
-                    "-s",
-                    serial,
-                    "shell",
-                    "settings",
-                    "put",
-                    "global",
-                    "mobile_data",
-                    new_state,
-                ],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                timeout=10,
+                [adb_cmd, "-s", serial, "shell", "svc", "data", svc_arg],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10,
             )
 
             if cmd.returncode == 0:
-                state_text = "enabled" if new_state == "1" else "disabled"
                 self.log_message(f"Mobile data {state_text}")
                 self.update_status(f"Mobile data {state_text}")
                 QtWidgets.QMessageBox.information(
                     self, "Success", f"Mobile data has been {state_text}."
                 )
             else:
-                error_msg = cmd.stderr.strip() or "Unknown error"
+                error_msg = cmd.stderr.strip() or cmd.stdout.strip() or "Unknown error"
                 self.log_message(f"Failed to toggle mobile data: {error_msg}")
                 self.update_status("Mobile data toggle failed")
                 QtWidgets.QMessageBox.critical(
@@ -515,57 +501,31 @@ class DeviceControlMixin:
             )
 
             current_state = get_state_cmd.stdout.strip()
-            if current_state == "null" or not current_state.isdigit():
-                new_state = "1"
-            else:
-                new_state = "0" if current_state == "1" else "1"
+            enable = current_state != "1"
+            svc_arg = "enable" if enable else "disable"
+            state_text = "enabled" if enable else "disabled"
 
+            # cmd bluetooth_manager is the reliable path on Android 8+
             cmd = subprocess.run(
-                [
-                    adb_cmd,
-                    "-s",
-                    serial,
-                    "shell",
-                    "service",
-                    "call",
-                    "bluetooth_manager",
-                    "8",
-                    "i32",
-                    new_state,
-                ],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                timeout=10,
+                [adb_cmd, "-s", serial, "shell", "cmd", "bluetooth_manager", svc_arg],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10,
             )
 
-            subprocess.run(
-                [
-                    adb_cmd,
-                    "-s",
-                    serial,
-                    "shell",
-                    "settings",
-                    "put",
-                    "global",
-                    "bluetooth_on",
-                    new_state,
-                ],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                timeout=10,
-            )
+            # Fallback: svc bluetooth (Android 13+ only, but harmless to try)
+            if cmd.returncode != 0 or "Error" in cmd.stdout:
+                cmd = subprocess.run(
+                    [adb_cmd, "-s", serial, "shell", "svc", "bluetooth", svc_arg],
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10,
+                )
 
             if cmd.returncode == 0:
-                state_text = "enabled" if new_state == "1" else "disabled"
                 self.log_message(f"Bluetooth {state_text}")
                 self.update_status(f"Bluetooth {state_text}")
                 QtWidgets.QMessageBox.information(
                     self, "Success", f"Bluetooth has been {state_text}."
                 )
             else:
-                error_msg = cmd.stderr.strip() or "Unknown error"
+                error_msg = cmd.stderr.strip() or cmd.stdout.strip() or "Unknown error"
                 self.log_message(f"Failed to toggle Bluetooth: {error_msg}")
                 self.update_status("Bluetooth toggle failed")
                 QtWidgets.QMessageBox.critical(
@@ -623,75 +583,47 @@ class DeviceControlMixin:
 
             if get_state_cmd.returncode == 0:
                 current_state = get_state_cmd.stdout.strip()
-                new_state = "0" if current_state == "1" else "1"
-                state_desc = "OFF" if new_state == "0" else "ON"
+                enable = current_state != "1"
+                state_desc = "ON" if enable else "OFF"
 
-                set_state_cmd = subprocess.run(
-                    [
-                        adb_cmd,
-                        "-s",
-                        serial,
-                        "shell",
-                        "settings",
-                        "put",
-                        "global",
-                        "airplane_mode_on",
-                        new_state,
-                    ],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                    timeout=10,
+                # Android 10+: cmd connectivity airplane-mode is the only reliable path
+                cmd = subprocess.run(
+                    [adb_cmd, "-s", serial, "shell", "cmd", "connectivity",
+                     "airplane-mode", "enable" if enable else "disable"],
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10,
                 )
 
-                if set_state_cmd.returncode == 0:
-                    broadcast_cmd = subprocess.run(
-                        [
-                            adb_cmd,
-                            "-s",
-                            serial,
-                            "shell",
-                            "am",
-                            "broadcast",
-                            "-a",
-                            "android.intent.action.AIRPLANE_MODE",
-                            "--ez",
-                            "state",
-                            "true" if new_state == "1" else "false",
-                        ],
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
-                        text=True,
-                        timeout=10,
+                # Fallback for older Android: settings put + broadcast
+                if cmd.returncode != 0:
+                    new_val = "1" if enable else "0"
+                    subprocess.run(
+                        [adb_cmd, "-s", serial, "shell", "settings", "put",
+                         "global", "airplane_mode_on", new_val],
+                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10,
+                    )
+                    cmd = subprocess.run(
+                        [adb_cmd, "-s", serial, "shell", "am", "broadcast",
+                         "-a", "android.intent.action.AIRPLANE_MODE",
+                         "--ez", "state", "true" if enable else "false"],
+                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10,
                     )
 
-                    if broadcast_cmd.returncode == 0:
-                        self.log_message(f"Airplane mode has been toggled {state_desc}.")
-                        self.update_status(f"Airplane mode toggled {state_desc}")
-                        QtWidgets.QMessageBox.information(
-                            self,
-                            "Airplane Mode Toggled",
-                            f"Airplane mode has been turned {state_desc} on the device.",
-                        )
-                    else:
-                        error_msg = broadcast_cmd.stderr.strip() or "Unknown error"
-                        self.log_message(
-                            f"Broadcasting airplane mode change failed: {error_msg}"
-                        )
-                        self.update_status("Airplane mode toggle incomplete")
-                        QtWidgets.QMessageBox.critical(
-                            self,
-                            "Airplane Mode Toggle Failed",
-                            f"Failed to broadcast airplane mode change: {error_msg}",
-                        )
+                if cmd.returncode == 0:
+                    self.log_message(f"Airplane mode has been toggled {state_desc}.")
+                    self.update_status(f"Airplane mode toggled {state_desc}")
+                    QtWidgets.QMessageBox.information(
+                        self,
+                        "Airplane Mode Toggled",
+                        f"Airplane mode has been turned {state_desc} on the device.",
+                    )
                 else:
-                    error_msg = set_state_cmd.stderr.strip() or "Unknown error"
-                    self.log_message(f"Setting airplane mode state failed: {error_msg}")
+                    error_msg = cmd.stderr.strip() or cmd.stdout.strip() or "Unknown error"
+                    self.log_message(f"Airplane mode toggle failed: {error_msg}")
                     self.update_status("Airplane mode toggle failed")
                     QtWidgets.QMessageBox.critical(
                         self,
                         "Airplane Mode Toggle Failed",
-                        f"Failed to set airplane mode state: {error_msg}",
+                        f"Failed to toggle airplane mode: {error_msg}",
                     )
             else:
                 error_msg = get_state_cmd.stderr.strip() or "Unknown error"
@@ -1276,15 +1208,25 @@ class DeviceControlMixin:
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10,
             )
             current = dnd_cmd.stdout.strip()
-            dnd_enabled = current == "1" or current == "2"
-            new_state = "0" if dnd_enabled else "1"
+            dnd_enabled = current in ("1", "2", "3")
             state_text = "disabled" if dnd_enabled else "enabled"
 
+            # cmd notification set_dnd is the real DND toggle (Android 8+)
+            # 0 = off, 1 = priority, 2 = total silence, 3 = alarms only
             cmd = subprocess.run(
-                [adb_cmd, "-s", serial, "shell", "settings", "put", "global",
-                 "zen_mode", new_state],
+                [adb_cmd, "-s", serial, "shell", "cmd", "notification",
+                 "set_dnd", "off" if dnd_enabled else "priority"],
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10,
             )
+
+            # Fallback: settings put for older Android
+            if cmd.returncode != 0:
+                new_val = "0" if dnd_enabled else "1"
+                cmd = subprocess.run(
+                    [adb_cmd, "-s", serial, "shell", "settings", "put", "global",
+                     "zen_mode", new_val],
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10,
+                )
 
             if cmd.returncode == 0:
                 self.log_message(f"Do Not Disturb {state_text}")
@@ -1293,7 +1235,7 @@ class DeviceControlMixin:
                     self, "Success", f"Do Not Disturb has been {state_text}."
                 )
             else:
-                error_msg = cmd.stderr.strip() or "Unknown error"
+                error_msg = cmd.stderr.strip() or cmd.stdout.strip() or "Unknown error"
                 self.log_message(f"Failed to toggle DND: {error_msg}")
                 self.update_status("DND toggle failed")
                 QtWidgets.QMessageBox.critical(self, "Error", f"Failed to toggle DND: {error_msg}")
