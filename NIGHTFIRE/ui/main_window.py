@@ -123,7 +123,7 @@ class NightfireUI(QMainWindow):
         elif level.upper() == "WARNING":
             color = "orange"
         elif level.upper() == "INFO":
-            color = "black"
+            color = "#ECF0F1"
         else:
             color = "gray"
 

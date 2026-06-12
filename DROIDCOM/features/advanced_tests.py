@@ -1470,7 +1470,8 @@ class AdvancedTestsMixin:
                         device_serial=self.device_serial
                     )
                     if success:
-                        self.log_message(f"Raw CPU stats: First line of /proc/stat: {output.split('\n')[0]}")
+                        first_line = output.split('\n')[0]
+                        self.log_message(f"Raw CPU stats: First line of /proc/stat: {first_line}")
 
                 time.sleep(2)
         except Exception as e:

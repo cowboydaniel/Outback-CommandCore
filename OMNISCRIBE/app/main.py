@@ -7,7 +7,8 @@ import time
 from pathlib import Path
 
 from PySide6.QtWidgets import QApplication
-from PySide6.QtCore import QObject, QThread, QTimer, Signal
+from PySide6.QtCore import QObject, QThread, QTimer, Signal, Qt
+from PySide6.QtGui import QPalette, QColor
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
@@ -43,6 +44,23 @@ def main() -> None:
 
     # Set application style
     app.setStyle('Fusion')
+
+    # Apply CommandCore dark palette
+    palette = QPalette()
+    palette.setColor(QPalette.Window, QColor(42, 45, 46))
+    palette.setColor(QPalette.WindowText, QColor(236, 240, 241))
+    palette.setColor(QPalette.Base, QColor(30, 33, 34))
+    palette.setColor(QPalette.AlternateBase, QColor(53, 53, 53))
+    palette.setColor(QPalette.ToolTipBase, QColor(236, 240, 241))
+    palette.setColor(QPalette.ToolTipText, QColor(236, 240, 241))
+    palette.setColor(QPalette.Text, QColor(236, 240, 241))
+    palette.setColor(QPalette.Button, QColor(42, 45, 46))
+    palette.setColor(QPalette.ButtonText, QColor(236, 240, 241))
+    palette.setColor(QPalette.BrightText, Qt.red)
+    palette.setColor(QPalette.Link, QColor(0, 168, 255))
+    palette.setColor(QPalette.Highlight, QColor(0, 168, 255))
+    palette.setColor(QPalette.HighlightedText, Qt.black)
+    app.setPalette(palette)
 
     # Show splash screen
     splash = show_splash_screen()

@@ -28,7 +28,7 @@ def setup_hardware_tab(module) -> None:
     content_layout.setContentsMargins(10, 10, 10, 10)
 
     header = QLabel("Hardware Information")
-    header.setFont(QFont("Arial", 12, QFont.Bold))
+    header.setFont(QFont("Arial", 12, QFont.Weight.Bold))
     header.setStyleSheet(f"color: {module.colors['primary']};")
     content_layout.addWidget(header)
 
@@ -76,7 +76,7 @@ def setup_hardware_tab(module) -> None:
 
     for row, (label, value) in enumerate(cpu_info):
         label_widget = QLabel(f"{label}:")
-        label_widget.setFont(QFont("Arial", 10, QFont.Bold))
+        label_widget.setFont(QFont("Arial", 10, QFont.Weight.Bold))
         cpu_layout.addWidget(label_widget, row, 0)
 
         value_label = QLabel(str(value))
@@ -107,7 +107,7 @@ def setup_hardware_tab(module) -> None:
 
     for row, (label, value) in enumerate(memory_info):
         label_widget = QLabel(f"{label}:")
-        label_widget.setFont(QFont("Arial", 10, QFont.Bold))
+        label_widget.setFont(QFont("Arial", 10, QFont.Weight.Bold))
         memory_layout.addWidget(label_widget, row, 0)
 
         value_label = QLabel(str(value))
@@ -128,7 +128,7 @@ def setup_hardware_tab(module) -> None:
     row = 0
     for i, gpu in enumerate(gpu_info):
         label_widget = QLabel(f"GPU {i + 1}:")
-        label_widget.setFont(QFont("Arial", 10, QFont.Bold))
+        label_widget.setFont(QFont("Arial", 10, QFont.Weight.Bold))
         gpu_layout.addWidget(label_widget, row, 0)
 
         value_label = QLabel(gpu)
@@ -137,7 +137,7 @@ def setup_hardware_tab(module) -> None:
         row += 1
 
     temp_label = QLabel("GPU Temperature:")
-    temp_label.setFont(QFont("Arial", 10, QFont.Bold))
+    temp_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
     gpu_layout.addWidget(temp_label, row, 0)
 
     gpu_temp_value = QLabel(f"{gpu_temp:.1f}°C" if gpu_temp else "N/A")
@@ -146,7 +146,7 @@ def setup_hardware_tab(module) -> None:
     row += 1
 
     freq_label = QLabel("GPU Frequency:")
-    freq_label.setFont(QFont("Arial", 10, QFont.Bold))
+    freq_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
     gpu_layout.addWidget(freq_label, row, 0)
 
     gpu_freq_value = QLabel(f"{gpu_freq:.0f} MHz" if gpu_freq else "N/A")
@@ -173,7 +173,7 @@ def setup_hardware_tab(module) -> None:
 
         for row, (label, value) in enumerate(battery_data):
             label_widget = QLabel(f"{label}:")
-            label_widget.setFont(QFont("Arial", 10, QFont.Bold))
+            label_widget.setFont(QFont("Arial", 10, QFont.Weight.Bold))
             battery_layout.addWidget(label_widget, row, 0)
 
             value_label = QLabel(str(value))
@@ -188,7 +188,7 @@ def setup_hardware_tab(module) -> None:
                 module.battery_health_label = value_label
     else:
         no_battery = QLabel("No battery detected on this system")
-        no_battery.setFont(QFont("Arial", 10, QFont.Italic))
+        no_battery.setFont(QFont("Arial", 10, QFont.Weight.Normal, True))
         battery_layout.addWidget(no_battery, 0, 0, 1, 2)
 
     content_layout.addWidget(battery_group)
