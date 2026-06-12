@@ -61,6 +61,7 @@ from core.utils import (
 from tabs import (
     tab_benchmarks,
     tab_diagnostics,
+    tab_firewall,
     tab_hardware,
     tab_network,
     tab_packages,
@@ -257,7 +258,7 @@ class PCToolsModule(QWidget):
         mgmt_layout.addWidget(self.mgmt_notebook)
 
         self.mgmt_tabs = {}
-        mgmt_subtabs = ["Services"]
+        mgmt_subtabs = ["Services", "Firewall"]
 
         for name in mgmt_subtabs:
             tab = QWidget()
@@ -292,6 +293,7 @@ class PCToolsModule(QWidget):
         self.setup_packages_tab()
         self.setup_benchmarks_tab()
         self.setup_services_tab()
+        self.setup_firewall_tab()
         self.setup_utilities_tab()
         self.setup_diagnostics_tab()
 
@@ -443,6 +445,10 @@ class PCToolsModule(QWidget):
     def setup_services_tab(self):
         """Set up the Service Manager tab."""
         tab_services.setup_services_tab(self)
+
+    def setup_firewall_tab(self):
+        """Set up the Firewall Manager tab."""
+        tab_firewall.setup_firewall_tab(self)
 
     def setup_benchmarks_tab(self):
         """Set up the Benchmarks tab."""
