@@ -812,34 +812,34 @@ class ApplicationManagerTab(QWidget):
                     # Check for specific process names and command line matches
                     cmdline_str = ' '.join(cmdline).lower() if cmdline else ''
                     if process_name == 'ares_i_process':
-                        if 'ares_i.ares_i' in cmdline_str:
+                        if 'ares_i.ares_i' in cmdline_str or 'ares-i/app/main.py' in cmdline_str:
                             return True
                     elif process_name == 'blackstorm_launcher_process':
                         if 'blackstorm.app.main' in cmdline_str or 'blackstorm/app/main.py' in cmdline_str:
                             return True
                     elif process_name == 'commandcore_launcher_process':
-                        if 'commandcore.app.main' in cmdline_str:
+                        if 'commandcore.app.main' in cmdline_str or 'commandcore/app/main.py' in cmdline_str:
                             return True
                     elif process_name == 'commandcorecodex_process':
-                        if 'codex.gui' in cmdline_str:
+                        if 'codex.gui' in cmdline_str or 'codex/app/gui.py' in cmdline_str:
                             return True
                     elif process_name == 'droidcom_process':
-                        if 'android_tools_linux.android_tools_linux' in cmdline_str:
+                        if 'android_tools_linux.android_tools_linux' in cmdline_str or 'droidcom/main.py' in cmdline_str:
                             return True
                     elif process_name == 'hackattack_process':
-                        if 'hackattack.launch' in cmdline_str:
+                        if 'hackattack.launch' in cmdline_str or 'hackattack/launch.py' in cmdline_str:
                             return True
                     elif process_name == 'nightfire_process':
-                        if 'nightfire.nightfire' in cmdline_str:
+                        if 'nightfire.nightfire' in cmdline_str or 'nightfire/nightfire.py' in cmdline_str:
                             return True
                     elif process_name == 'omniscribe_process':
-                        if 'omniscribe.omniscribe' in cmdline_str:
+                        if 'omniscribe.omniscribe' in cmdline_str or 'omniscribe/app/main.py' in cmdline_str:
                             return True
                     elif process_name == 'pc_tools_linux_process':
                         if 'pc-x/app/main.py' in cmdline_str or 'pc_x.app.main' in cmdline_str:
                             return True
                     elif process_name == 'vantage_process':
-                        if 'vantage.launch_vantage' in cmdline_str:
+                        if 'vantage.launch_vantage' in cmdline_str or 'vantage/launch_vantage.py' in cmdline_str:
                             return True
                     # Otherwise, check if process name or command line contains process_name
                     elif (process_name.lower() in pname or
