@@ -165,6 +165,7 @@ def check_and_install_scrcpy():
         "libsdl2-dev", "libavcodec-dev", "libavdevice-dev",
         "libavformat-dev", "libavutil-dev", "libswresample-dev",
         "libusb-1.0-0", "libusb-1.0-0-dev",
+        "libsdl3-dev",
     ]
     logging.info(f"Installing scrcpy build dependencies: {' '.join(build_deps)}")
     result = subprocess.run(
