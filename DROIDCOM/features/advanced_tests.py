@@ -3388,11 +3388,27 @@ class AdvancedTestsMixin:
                 )
                 return
 
+            # Parse installed scrcpy version (major, minor) for feature gating.
+            scrcpy_version = (0, 0)
+            try:
+                ver_out = subprocess.run(
+                    ["scrcpy", "--version"], capture_output=True, text=True
+                ).stdout
+                import re as _re
+                m = _re.search(r"scrcpy\s+(\d+)\.(\d+)", ver_out)
+                if m:
+                    scrcpy_version = (int(m.group(1)), int(m.group(2)))
+            except Exception:
+                pass
+            # uhid virtual-HID input bypasses Android InputManager reflection
+            # and was introduced in scrcpy v2.1.
+            uhid_supported = scrcpy_version >= (2, 1)
+
             serial = self.device_serial
 
             dlg = QDialog(self)
             dlg.setWindowTitle("Screen Mirror & Control (scrcpy)")
-            dlg.resize(520, 480)
+            dlg.resize(520, 520)
             layout = QVBoxLayout(dlg)
 
             # ── options ─────────────────────────────────────────────────────
@@ -3404,53 +3420,70 @@ class AdvancedTestsMixin:
             control_cb.setChecked(True)
             opt_layout.addWidget(control_cb, 0, 0, 1, 2)
 
+            # UHID input mode — bypasses Android InputManager entirely.
+            # Required on devices where InputManager.getInstance() NPEs.
+            uhid_cb = QCheckBox("Use virtual HID input (fixes InputManager crash)")
+            uhid_cb.setChecked(uhid_supported)
+            uhid_cb.setEnabled(uhid_supported)
+            if not uhid_supported:
+                uhid_cb.setToolTip(
+                    f"Requires scrcpy ≥ 2.1  (installed: {scrcpy_version[0]}.{scrcpy_version[1]})\n"
+                    "Download the latest release from github.com/Genymobile/scrcpy/releases"
+                )
+            opt_layout.addWidget(uhid_cb, 1, 0, 1, 2)
+
             # Clipboard autosync
             clipboard_cb = QCheckBox("Sync clipboard between host and device")
             clipboard_cb.setChecked(False)
-            opt_layout.addWidget(clipboard_cb, 1, 0, 1, 2)
+            opt_layout.addWidget(clipboard_cb, 2, 0, 1, 2)
 
             # Stay awake
             awake_cb = QCheckBox("Keep device awake while mirroring")
             awake_cb.setChecked(True)
-            opt_layout.addWidget(awake_cb, 2, 0, 1, 2)
+            opt_layout.addWidget(awake_cb, 3, 0, 1, 2)
 
             # Turn off screen on device while mirroring
             screen_off_cb = QCheckBox("Turn device screen off while mirroring")
             screen_off_cb.setChecked(False)
-            opt_layout.addWidget(screen_off_cb, 3, 0, 1, 2)
+            opt_layout.addWidget(screen_off_cb, 4, 0, 1, 2)
 
             # Show touches
             show_touches_cb = QCheckBox("Show physical touches on device")
             show_touches_cb.setChecked(False)
-            opt_layout.addWidget(show_touches_cb, 4, 0, 1, 2)
+            opt_layout.addWidget(show_touches_cb, 5, 0, 1, 2)
 
             # Bitrate
-            opt_layout.addWidget(QLabel("Video bitrate:"), 5, 0)
+            opt_layout.addWidget(QLabel("Video bitrate:"), 6, 0)
             bitrate_combo = QComboBox()
             bitrate_combo.addItems(["2M", "4M", "8M", "16M", "32M"])
             bitrate_combo.setCurrentIndex(1)  # 4M default
-            opt_layout.addWidget(bitrate_combo, 5, 1)
+            opt_layout.addWidget(bitrate_combo, 6, 1)
 
             # Max resolution
-            opt_layout.addWidget(QLabel("Max resolution:"), 6, 0)
+            opt_layout.addWidget(QLabel("Max resolution:"), 7, 0)
             res_combo = QComboBox()
             res_combo.addItems(["No limit", "1080", "720", "480"])
-            opt_layout.addWidget(res_combo, 6, 1)
+            opt_layout.addWidget(res_combo, 7, 1)
 
             # Window title
-            opt_layout.addWidget(QLabel("Window title:"), 7, 0)
+            opt_layout.addWidget(QLabel("Window title:"), 8, 0)
             title_edit = QLineEdit("DROIDCOM Mirror")
-            opt_layout.addWidget(title_edit, 7, 1)
+            opt_layout.addWidget(title_edit, 8, 1)
 
             layout.addWidget(opt_group)
 
             # ── troubleshooting note ──────────────────────────────────────
+            uhid_note = (
+                "  • Enable 'Use virtual HID input' — bypasses Android InputManager\n"
+                if uhid_supported else
+                "  • Upgrade scrcpy to v2.1+ for virtual HID input (fixes InputManager crash)\n"
+            )
             note = QLabel(
                 "If control doesn't work:\n"
+                + uhid_note +
                 "  • Enable 'USB debugging (Security settings)' in Developer Options\n"
                 "  • Enable 'Disable permission monitoring' in Developer Options\n"
-                "  • Some Samsung/MIUI/older Android devices restrict input injection\n"
-                "  • Uncheck 'Enable keyboard & mouse control' for view-only mode"
+                "  • Some Samsung/MIUI/older Android devices restrict input injection"
             )
             note.setWordWrap(True)
             note.setStyleSheet("color:#aaa; font-size:11px; padding:4px;")
@@ -3474,6 +3507,10 @@ class AdvancedTestsMixin:
 
                 if not control_cb.isChecked():
                     cmd.append("--no-control")
+                elif uhid_cb.isChecked() and uhid_supported:
+                    # Virtual HID bypasses Android InputManager reflection,
+                    # fixing the NullPointerException on devices that block it.
+                    cmd += ["--keyboard=uhid", "--mouse=uhid"]
 
                 # Suppress clipboard listener registration on older Android versions
                 # that don't expose IClipboard.addPrimaryClipChangedListener.
@@ -3527,15 +3564,25 @@ class AdvancedTestsMixin:
                                 or "getInputManager" in msg
                             ):
                                 input_crash_seen = True
-                                hint = (
-                                    "scrcpy: [DROIDCOM] Input injection failed — "
-                                    "this device does not support remote control. "
-                                    "Re-launch with 'Enable keyboard & mouse control' unchecked."
-                                )
+                                if uhid_supported:
+                                    hint = (
+                                        "scrcpy: [DROIDCOM] Input injection failed via reflection. "
+                                        "Re-launch with 'Use virtual HID input' checked — "
+                                        "it bypasses InputManager entirely."
+                                    )
+                                    status_hint = "Input crash — re-launch with virtual HID input enabled"
+                                else:
+                                    hint = (
+                                        f"scrcpy: [DROIDCOM] Input injection failed. "
+                                        f"Installed scrcpy {scrcpy_version[0]}.{scrcpy_version[1]} "
+                                        f"does not support virtual HID input (requires v2.1+). "
+                                        f"Download the latest scrcpy from "
+                                        f"github.com/Genymobile/scrcpy/releases and re-launch "
+                                        f"with 'Use virtual HID input' checked."
+                                    )
+                                    status_hint = "Upgrade scrcpy to v2.1+ for virtual HID input support"
                                 emit_ui(self, lambda h=hint: self.log_message(h))
-                                emit_ui(self, lambda: status_label.setText(
-                                    "Input injection unsupported — try view-only mode"
-                                ))
+                                emit_ui(self, lambda s=status_hint: status_label.setText(s))
                     except Exception as e:
                         emit_ui(self, lambda: status_label.setText(f"Error: {e}"))
 
