@@ -63,6 +63,7 @@ from tabs import (
     tab_diagnostics,
     tab_hardware,
     tab_network,
+    tab_packages,
     tab_storage,
     tab_system,
     tab_utilities,
@@ -237,7 +238,7 @@ class PCToolsModule(QWidget):
         tools_layout.addWidget(self.tools_notebook)
 
         self.tools_tabs = {}
-        tools_subtabs = ["Benchmarks", "Utilities", "Diagnostics"]
+        tools_subtabs = ["Packages", "Benchmarks", "Utilities", "Diagnostics"]
 
         for name in tools_subtabs:
             tab = QWidget()
@@ -269,6 +270,7 @@ class PCToolsModule(QWidget):
         self.setup_hardware_tab()
         self.setup_storage_tab()
         self.setup_network_tab()
+        self.setup_packages_tab()
         self.setup_benchmarks_tab()
         self.setup_utilities_tab()
         self.setup_diagnostics_tab()
@@ -413,6 +415,10 @@ class PCToolsModule(QWidget):
     def setup_network_tab(self):
         """Set up the Network tab with interface and speed information."""
         tab_network.setup_network_tab(self)
+
+    def setup_packages_tab(self):
+        """Set up the Package Manager tab."""
+        tab_packages.setup_packages_tab(self)
 
     def setup_benchmarks_tab(self):
         """Set up the Benchmarks tab."""
