@@ -169,8 +169,16 @@ class ConnectionMixin:
             )
             return
 
-        # Check if the selected device might be offline
+        # Check if the selected device might be offline or unauthorized
         device_entry = selected_items[0].text()
+        if "not authorized" in device_entry or "⚠" in device_entry:
+            QtWidgets.QMessageBox.warning(
+                self.parent,
+                "USB Debugging Not Authorized",
+                "This device has USB debugging enabled but hasn't authorized this computer yet.\n\n"
+                "Go to Device Control → Blind Setup to handle authorization automatically.",
+            )
+            return
         if "DISCONNECTED" in device_entry:
             QtWidgets.QMessageBox.information(
                 self.parent,
@@ -487,42 +495,65 @@ class ConnectionMixin:
                 devices = []
                 display_items = []
 
+                STATUS_LABELS = {
+                    'device':       '',
+                    'unauthorized': ' ⚠ USB debugging not authorized',
+                    'offline':      ' ✗ offline',
+                    'recovery':     ' [recovery]',
+                    'sideload':     ' [sideload]',
+                    'bootloader':   ' [fastboot]',
+                    'no permissions': ' ✗ no USB permissions',
+                }
+
+                has_unauthorized = False
+
                 for line in lines[1:]:
-                    if line.strip():
-                        parts = line.strip().split()
-                        if len(parts) >= 2:
-                            serial = parts[0]
-                            status = parts[1]
+                    if not line.strip():
+                        continue
+                    parts = line.strip().split()
+                    if len(parts) < 2:
+                        continue
+                    serial = parts[0]
+                    status = parts[1]
+                    details = ' '.join(parts[2:]) if len(parts) > 2 else ''
 
-                            if status == 'device':
-                                device_info = {
-                                    'serial': serial,
-                                    'status': status,
-                                    'details': ' '.join(parts[2:]) if len(parts) > 2 else ''
-                                }
-                                devices.append(device_info)
+                    device_info = {
+                        'serial': serial,
+                        'status': status,
+                        'details': details,
+                    }
+                    devices.append(device_info)
 
-                                # Extract model information for display
-                                display_text = f"{device_info['serial']}"
-                                if device_info['details']:
-                                    for detail in device_info['details'].split():
-                                        if detail.startswith('model:'):
-                                            model_info = detail.split(':', 1)[1]
-                                            display_text = f"{model_info} ({device_info['serial']})"
-                                            break
+                    # Build display text
+                    display_text = serial
+                    if details:
+                        for detail in details.split():
+                            if detail.startswith('model:'):
+                                display_text = f"{detail.split(':', 1)[1]} ({serial})"
+                                break
 
-                                display_items.append(display_text)
+                    suffix = STATUS_LABELS.get(status, f' [{status}]')
+                    display_items.append(display_text + suffix)
+
+                    if status == 'unauthorized':
+                        has_unauthorized = True
 
                 if display_items:
+                    hint = ('\nTip: unauthorized devices need USB debugging enabled + accepted.\n'
+                            'Use Device Control → Blind Setup to handle this automatically.'
+                            if has_unauthorized else '')
+
                     def update_ui():
                         for item in display_items:
                             self.device_listbox.addItem(item)
-                        self.log_message(f"Found {len(display_items)} connected device(s)")
+                        self.log_message(f"Found {len(display_items)} device(s)")
+                        if hint:
+                            self.log_message(hint)
                         self.update_status(f"{len(display_items)} device(s) found")
 
                     emit_ui(self, update_ui)
                 else:
-                    emit_ui(self, lambda: self.log_message("No connected devices found"))
+                    emit_ui(self, lambda: self.log_message("No devices found. Check USB cable supports data transfer."))
                     emit_ui(self, lambda: self.update_status("No devices found"))
             else:
                 emit_ui(self, lambda: self.log_message("No connected devices found"))
