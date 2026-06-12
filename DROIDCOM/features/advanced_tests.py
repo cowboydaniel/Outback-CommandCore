@@ -3496,7 +3496,17 @@ class AdvancedTestsMixin:
                 def run():
                     try:
                         import os
-                        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=os.environ.copy())
+                        proc = subprocess.Popen(
+                            cmd,
+                            stdout=subprocess.DEVNULL,
+                            stderr=subprocess.PIPE,
+                            env=os.environ.copy(),
+                        )
+                        # Read stderr line-by-line without blocking the process
+                        for line in proc.stderr:
+                            msg = line.decode(errors="replace").strip()
+                            if msg:
+                                emit_ui(self, lambda m=msg: self.log_message(f"scrcpy: {m}"))
                     except Exception as e:
                         emit_ui(self, lambda: status_label.setText(f"Error: {e}"))
 
