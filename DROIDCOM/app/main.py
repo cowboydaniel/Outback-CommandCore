@@ -47,8 +47,12 @@ def main():
             QtCore.Qt.WindowMaximizeButtonHint |
             QtCore.Qt.WindowCloseButtonHint
         )
-        window.resize(800, 600)
-        window.setMinimumSize(800, 400)
+        
+        # Set window size to screen size
+        screen = QtWidgets.QApplication.primaryScreen()
+        screen_geometry = screen.availableGeometry()
+        window.resize(screen_geometry.width(), screen_geometry.height())
+        window.setMinimumSize(screen_geometry.width() // 2, screen_geometry.height() // 2)
 
         # Set window icon
         icon_path = Path(__file__).resolve().parents[2] / 'icons' / 'droidcom.png'
