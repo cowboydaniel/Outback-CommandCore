@@ -3495,7 +3495,8 @@ class AdvancedTestsMixin:
 
                 def run():
                     try:
-                        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        import os
+                        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=os.environ.copy())
                     except Exception as e:
                         emit_ui(self, lambda: status_label.setText(f"Error: {e}"))
 
