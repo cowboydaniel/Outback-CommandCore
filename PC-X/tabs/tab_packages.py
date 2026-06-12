@@ -291,8 +291,6 @@ def setup_packages_tab(module) -> None:
         table.itemChanged.connect(lambda _: _update_summary())
         _update_summary()
 
-    mark_orphans_btn.clicked.connect(_mark_orphans)
-
     def _mark_orphans():
         table.itemChanged.disconnect()
         for r in range(table.rowCount()):
@@ -301,6 +299,8 @@ def setup_packages_tab(module) -> None:
                 table.item(r, 0).setCheckState(Qt.Checked)
         table.itemChanged.connect(lambda _: _update_summary())
         _update_summary()
+
+    mark_orphans_btn.clicked.connect(_mark_orphans)
 
     remove_btn.clicked.connect(lambda: _remove_selected(module))
 
