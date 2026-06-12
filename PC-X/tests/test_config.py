@@ -7,7 +7,7 @@ if str(PCX_DIR) not in sys.path:
     sys.path.insert(0, str(PCX_DIR))
 
 from app import config
-from core import base
+from core import base, utils
 
 
 class TestConfig(unittest.TestCase):
@@ -22,6 +22,54 @@ class TestConfig(unittest.TestCase):
     def test_required_tools_defined(self):
         self.assertIn("debian", config.REQUIRED_TOOLS)
         self.assertIn("redhat", config.REQUIRED_TOOLS)
+
+    def test_legacy_launcher_exists(self):
+        launcher = PCX_DIR / "pc_tools_linux.py"
+        self.assertTrue(launcher.is_file())
+
+        source = launcher.read_text(encoding="utf-8")
+        self.assertIn('APP_ENTRYPOINT', source)
+        self.assertTrue((PCX_DIR / "app" / "main.py").is_file())
+
+    def test_worker_threads_do_not_start_qtimers_directly(self):
+        main_source = (PCX_DIR / "app" / "main.py").read_text(encoding="utf-8")
+        self.assertNotIn("QTimer.singleShot(0", main_source)
+        self.assertIn("ui_update_requested", main_source)
+        self.assertIn("post_ui_update", main_source)
+
+    def test_privileged_commands_use_gui_elevation_helper(self):
+        main_source = (PCX_DIR / "app" / "main.py").read_text(encoding="utf-8")
+        self.assertNotIn("['sudo'", main_source)
+
+        for command in ["dmidecode", "smartctl", "parted", "journalctl"]:
+            self.assertIn(command, main_source)
+
+        self.assertIn("run_privileged_command", main_source)
+
+    def test_privileged_helper_supports_desktop_authentication(self):
+        utils_source = (PCX_DIR / "core" / "utils.py").read_text(encoding="utf-8")
+        self.assertIn('["sudo", "-n"', utils_source)
+        self.assertIn("_PRIVILEGED_HELPER", utils_source)
+        self.assertIn("_PrivilegedCommandHelper", utils_source)
+        self.assertIn("pkexec", utils_source)
+        self.assertIn("one desktop authentication prompt", utils_source)
+
+    def test_smart_refresh_preserves_stdout_on_nonzero_status(self):
+        output = utils.format_smartctl_output(
+            "/dev/nvme1n1",
+            4,
+            "SMART report contents",
+            "",
+        )
+
+        self.assertIn("SMART report contents", output)
+        self.assertIn("smartctl exit status 4", output)
+        self.assertIn("SMART command failed", output)
+
+    def test_smart_refresh_never_returns_blank_privileged_output(self):
+        output = utils.format_smartctl_output("/dev/nvme1n1", 4, "", "")
+        self.assertIn("smartctl exit status 4", output)
+        self.assertTrue(output.strip())
 
     def test_paths_resolve(self):
         root_dir, pcx_dir = base.get_paths()
