@@ -319,6 +319,10 @@ class SplashScreen(QMainWindow):
             return
         self._finish_called = True
 
+        # Drop always-on-top so the main window can come to the front
+        self.setWindowFlag(Qt.WindowStaysOnTopHint, False)
+        self.show()  # re-show to apply the flag change
+
         def do_close():
             """Close the splash if still visible."""
             if self.isVisible():
