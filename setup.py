@@ -2,7 +2,7 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
-from setuptools import setup
+from setuptools import setup, find_packages
 from setuptools.command.develop import develop
 from setuptools.command.install import install
 
@@ -22,9 +22,11 @@ def install_desktop_entry():
     shutil.copy2(ICON_SRC, ICON_DIR / "commandcore.png")
     try:
         subprocess.run(["update-desktop-database", str(APPS_DIR)], check=False)
-        subprocess.run(["gtk-update-icon-cache", "-f", "-t",
-                        str(Path.home() / ".local" / "share" / "icons" / "hicolor")],
-                       check=False)
+        subprocess.run(
+            ["gtk-update-icon-cache", "-f", "-t",
+             str(Path.home() / ".local" / "share" / "icons" / "hicolor")],
+            check=False,
+        )
     except FileNotFoundError:
         pass
     print(f"Installed desktop entry to {APPS_DIR}")
@@ -43,8 +45,22 @@ class InstallWithDesktop(install):
 
 
 setup(
+    name="commandcore",
+    version="1.0.0",
+    description="CommandCore Launcher - Device Management Application",
+    python_requires=">=3.10",
+    packages=find_packages(include=["CommandCore*"]),
+    install_requires=[
+        "PySide6>=6.5.0",
+        "GitPython>=3.1.0",
+    ],
+    entry_points={
+        "console_scripts": [
+            "commandcore=CommandCore.app.main:main",
+        ],
+    },
     cmdclass={
         "develop": DevelopWithDesktop,
         "install": InstallWithDesktop,
-    }
+    },
 )
