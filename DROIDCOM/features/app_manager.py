@@ -614,15 +614,96 @@ class AppManagerMixin:
             return None, None
         return adb_cmd, serial
 
-    def _ask_package(self, title="Enter Package Name"):
-        pkg, ok = QtWidgets.QInputDialog.getText(self, title, "Package name (e.g. com.example.app):")
-        return pkg.strip() if ok and pkg.strip() else None
+    def _app_picker_dialog(self, title, adb_cmd, serial, multi_select=False, pkg_flags=None):
+        """Show a searchable installed-app list. Returns selected package name(s) or None."""
+        if pkg_flags is None:
+            pkg_flags = ["-3"]
+
+        dlg = QtWidgets.QDialog(self)
+        dlg.setWindowTitle(title)
+        dlg.resize(480, 560)
+        layout = QtWidgets.QVBoxLayout(dlg)
+
+        filter_combo = QtWidgets.QComboBox()
+        filter_combo.addItems(["User apps", "System apps", "All apps"])
+        layout.addWidget(filter_combo)
+
+        search = QtWidgets.QLineEdit()
+        search.setPlaceholderText("Search packages…")
+        layout.addWidget(search)
+
+        listw = QtWidgets.QListWidget()
+        if multi_select:
+            listw.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
+        layout.addWidget(listw)
+
+        status = QtWidgets.QLabel("Loading…")
+        layout.addWidget(status)
+
+        btn_row = QtWidgets.QHBoxLayout()
+        ok_btn = QtWidgets.QPushButton("OK")
+        ok_btn.setEnabled(False)
+        cancel_btn = QtWidgets.QPushButton("Cancel")
+        btn_row.addStretch()
+        btn_row.addWidget(ok_btn)
+        btn_row.addWidget(cancel_btn)
+        layout.addLayout(btn_row)
+
+        cancel_btn.clicked.connect(dlg.reject)
+        ok_btn.clicked.connect(dlg.accept)
+        listw.itemDoubleClicked.connect(lambda _: dlg.accept())
+        listw.itemSelectionChanged.connect(lambda: ok_btn.setEnabled(bool(listw.selectedItems())))
+
+        all_packages = []
+
+        def load(idx=0):
+            flag = ["-3", "-s", ""][idx]
+            cmd = [adb_cmd, "-s", serial, "shell", "pm", "list", "packages"]
+            if flag:
+                cmd.append(flag)
+            emit_ui(self, lambda: status.setText("Loading…"))
+
+            def task():
+                nonlocal all_packages
+                try:
+                    r = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                       text=True, timeout=20)
+                    pkgs = sorted(
+                        line[8:].strip() for line in r.stdout.splitlines()
+                        if line.startswith("package:")
+                    )
+                    all_packages = pkgs
+                    emit_ui(self, lambda: _refresh(pkgs))
+                    emit_ui(self, lambda: status.setText(f"{len(pkgs)} packages"))
+                except Exception as e:
+                    emit_ui(self, lambda: status.setText(f"Error: {e}"))
+
+            threading.Thread(target=task, daemon=True).start()
+
+        def _refresh(pkgs=None):
+            src = pkgs if pkgs is not None else all_packages
+            q = search.text().lower()
+            listw.clear()
+            for p in src:
+                if q in p.lower():
+                    listw.addItem(p)
+
+        search.textChanged.connect(lambda: _refresh())
+        filter_combo.currentIndexChanged.connect(load)
+        load(0)
+
+        if dlg.exec() != QtWidgets.QDialog.Accepted:
+            return None
+        sel = [i.text() for i in listw.selectedItems()]
+        if not sel:
+            return None
+        return sel if multi_select else sel[0]
 
     def _uninstall_app_dialog(self):
         adb_cmd, serial = self._resolve_adb()
         if not adb_cmd:
             return
-        pkg = self._ask_package("Uninstall App")
+        pkg = self._app_picker_dialog("Uninstall App — Select Package", adb_cmd, serial)
         if not pkg:
             return
         confirm = QtWidgets.QMessageBox.question(
@@ -653,7 +734,7 @@ class AppManagerMixin:
         adb_cmd, serial = self._resolve_adb()
         if not adb_cmd:
             return
-        pkg = self._ask_package("Clear App Data")
+        pkg = self._app_picker_dialog("Clear App Data — Select Package", adb_cmd, serial)
         if not pkg:
             return
         confirm = QtWidgets.QMessageBox.question(
@@ -684,7 +765,7 @@ class AppManagerMixin:
         adb_cmd, serial = self._resolve_adb()
         if not adb_cmd:
             return
-        pkg = self._ask_package("Force Stop App")
+        pkg = self._app_picker_dialog("Force Stop App — Select Package", adb_cmd, serial)
         if not pkg:
             return
 
@@ -707,7 +788,7 @@ class AppManagerMixin:
         adb_cmd, serial = self._resolve_adb()
         if not adb_cmd:
             return
-        pkg = self._ask_package("Open App")
+        pkg = self._app_picker_dialog("Open App — Select Package", adb_cmd, serial)
         if not pkg:
             return
 
@@ -734,7 +815,7 @@ class AppManagerMixin:
         adb_cmd, serial = self._resolve_adb()
         if not adb_cmd:
             return
-        pkg = self._ask_package("Extract APK")
+        pkg = self._app_picker_dialog("Extract APK — Select Package", adb_cmd, serial)
         if not pkg:
             return
         save_path, _ = QtWidgets.QFileDialog.getSaveFileName(
@@ -770,7 +851,9 @@ class AppManagerMixin:
         adb_cmd, serial = self._resolve_adb()
         if not adb_cmd:
             return
-        pkg = self._ask_package("Freeze / Unfreeze App")
+        pkg = self._app_picker_dialog("Freeze / Unfreeze — Select Package", adb_cmd, serial,
+                                      pkg_flags=[])  # show all apps incl. system
+
         if not pkg:
             return
 
@@ -801,14 +884,17 @@ class AppManagerMixin:
         adb_cmd, serial = self._resolve_adb()
         if not adb_cmd:
             return
-        pkg = self._ask_package("View App Permissions")
+        pkg = self._app_picker_dialog("View Permissions — Select Package", adb_cmd, serial)
         if not pkg:
             return
 
         dlg = QtWidgets.QDialog(self)
         dlg.setWindowTitle(f"Permissions — {pkg}")
-        dlg.resize(520, 420)
+        dlg.resize(520, 480)
         layout = QtWidgets.QVBoxLayout(dlg)
+        label = QtWidgets.QLabel(f"Package: {pkg}")
+        label.setStyleSheet("font-weight: bold;")
+        layout.addWidget(label)
         text = QtWidgets.QPlainTextEdit()
         text.setReadOnly(True)
         layout.addWidget(text)
@@ -835,8 +921,8 @@ class AppManagerMixin:
                             perms.append(s)
                         elif s and not line.startswith(" "):
                             in_section = False
-                result_text = "\n".join(perms) if perms else "No permissions found."
-                count = len(perms)
+                result_text = "\n".join(sorted(set(perms))) if perms else "No permissions found."
+                count = len(set(perms))
                 emit_ui(self, lambda: (text.setPlainText(result_text), status.setText(f"{count} permissions")))
             except Exception as e:
                 emit_ui(self, lambda: status.setText(f"Error: {e}"))
@@ -851,11 +937,13 @@ class AppManagerMixin:
 
         dlg = QtWidgets.QDialog(self)
         dlg.setWindowTitle("App Usage Stats")
-        dlg.resize(600, 500)
+        dlg.resize(700, 560)
         layout = QtWidgets.QVBoxLayout(dlg)
+        info = QtWidgets.QLabel("Usage statistics from dumpsys usagestats — requires Android 5+")
+        info.setWordWrap(True)
+        layout.addWidget(info)
         text = QtWidgets.QPlainTextEdit()
         text.setReadOnly(True)
-        text.setFont(QtWidgets.QApplication.font())
         layout.addWidget(text)
         status = QtWidgets.QLabel("Loading…")
         layout.addWidget(status)
@@ -884,12 +972,15 @@ class AppManagerMixin:
 
         dlg = QtWidgets.QDialog(self)
         dlg.setWindowTitle("Battery Usage by App")
-        dlg.resize(600, 500)
+        dlg.resize(700, 560)
         layout = QtWidgets.QVBoxLayout(dlg)
+        info = QtWidgets.QLabel("Estimated power use from dumpsys batterystats")
+        info.setWordWrap(True)
+        layout.addWidget(info)
         text = QtWidgets.QPlainTextEdit()
         text.setReadOnly(True)
         layout.addWidget(text)
-        status = QtWidgets.QLabel("Loading…")
+        status = QtWidgets.QLabel("Loading… (may take a moment)")
         layout.addWidget(status)
         btn = QtWidgets.QPushButton("Close")
         btn.clicked.connect(dlg.close)
@@ -923,14 +1014,14 @@ class AppManagerMixin:
         adb_cmd, serial = self._resolve_adb()
         if not adb_cmd:
             return
-
+        # Reuse the picker in display-only mode (no OK/Cancel, just Close)
         dlg = QtWidgets.QDialog(self)
         dlg.setWindowTitle("Installed Apps")
-        dlg.resize(500, 560)
+        dlg.resize(500, 580)
         layout = QtWidgets.QVBoxLayout(dlg)
 
         filter_combo = QtWidgets.QComboBox()
-        filter_combo.addItems(["User apps (-3)", "System apps (-s)", "All apps"])
+        filter_combo.addItems(["User apps", "System apps", "All apps"])
         layout.addWidget(filter_combo)
 
         search = QtWidgets.QLineEdit()
@@ -943,34 +1034,37 @@ class AppManagerMixin:
         status = QtWidgets.QLabel("Loading…")
         layout.addWidget(status)
 
-        btn = QtWidgets.QPushButton("Close")
-        btn.clicked.connect(dlg.close)
-        layout.addWidget(btn)
+        close_btn = QtWidgets.QPushButton("Close")
+        close_btn.clicked.connect(dlg.close)
+        layout.addWidget(close_btn)
 
         all_packages = []
 
-        def load(filter_idx=0):
-            flag = ["-3", "-s", ""][filter_idx]
+        def load(idx=0):
+            flag = ["-3", "-s", ""][idx]
             cmd = [adb_cmd, "-s", serial, "shell", "pm", "list", "packages"]
             if flag:
                 cmd.append(flag)
+            emit_ui(self, lambda: status.setText("Loading…"))
 
             def task():
                 nonlocal all_packages
                 try:
-                    r = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=20)
+                    r = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                       text=True, timeout=20)
                     pkgs = sorted(
-                        line[8:].strip() for line in r.stdout.splitlines() if line.startswith("package:")
+                        line[8:].strip() for line in r.stdout.splitlines()
+                        if line.startswith("package:")
                     )
                     all_packages = pkgs
-                    emit_ui(self, lambda: refresh_list(pkgs))
+                    emit_ui(self, lambda: _refresh(pkgs))
                     emit_ui(self, lambda: status.setText(f"{len(pkgs)} packages"))
                 except Exception as e:
                     emit_ui(self, lambda: status.setText(f"Error: {e}"))
 
             threading.Thread(target=task, daemon=True).start()
 
-        def refresh_list(pkgs=None):
+        def _refresh(pkgs=None):
             src = pkgs if pkgs is not None else all_packages
             q = search.text().lower()
             listw.clear()
@@ -978,8 +1072,7 @@ class AppManagerMixin:
                 if q in p.lower():
                     listw.addItem(p)
 
-        search.textChanged.connect(lambda: refresh_list())
+        search.textChanged.connect(lambda: _refresh())
         filter_combo.currentIndexChanged.connect(load)
-
         load(0)
         dlg.exec()
