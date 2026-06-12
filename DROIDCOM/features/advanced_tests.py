@@ -3506,11 +3506,6 @@ class AdvancedTestsMixin:
             def launch():
                 cmd = ["scrcpy", "-s", serial]
 
-                # scrcpy built from source may not find system adb; pass its path explicitly.
-                adb_path = shutil.which("adb")
-                if adb_path:
-                    cmd += ["--adb-path", adb_path]
-
                 if not control_cb.isChecked():
                     cmd.append("--no-control")
                 elif uhid_cb.isChecked() and uhid_supported:
@@ -3550,11 +3545,17 @@ class AdvancedTestsMixin:
                 def run():
                     try:
                         import os
+                        env = os.environ.copy()
+                        # scrcpy built from source looks for adb next to itself;
+                        # ADB env var overrides that to the system adb.
+                        adb_path = shutil.which("adb")
+                        if adb_path:
+                            env["ADB"] = adb_path
                         proc = subprocess.Popen(
                             cmd,
                             stdout=subprocess.DEVNULL,
                             stderr=subprocess.PIPE,
-                            env=os.environ.copy(),
+                            env=env,
                         )
                         input_crash_seen = False
                         for line in proc.stderr:
