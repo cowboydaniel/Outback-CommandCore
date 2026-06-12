@@ -8,15 +8,14 @@ import importlib.util
 import logging
 import os
 import platform
+import shutil
 import subprocess
 import tempfile
-from typing import Optional, Tuple
+from typing import Optional, Sequence, Tuple
 
 from PySide6.QtWidgets import QMessageBox
 
 from app import config
-from core.base import get_paths
-
 
 _LOGGER_CONFIGURED = False
 
@@ -34,14 +33,62 @@ def configure_logging() -> None:
     _LOGGER_CONFIGURED = True
 
 
-def check_and_setup_sudoers(parent: Optional[object] = None) -> Tuple[bool, str]:
-    """Check if sudoers setup is needed and run it with a GUI prompt if required."""
-    try:
-        test_cmd = ["sudo", "-n", "smartctl", "--version"]
-        result = subprocess.run(test_cmd, capture_output=True, text=True, check=False)
+def run_privileged_command(
+    command: Sequence[str],
+    *,
+    timeout: Optional[float] = None,
+    capture_output: bool = True,
+    text: bool = True,
+) -> subprocess.CompletedProcess:
+    """Run a privileged command from a GUI session.
 
-        if result.returncode == 0:
-            return True, "Already configured with passwordless sudo access"
+    PC-X is commonly launched from a desktop shortcut, so commands must not rely
+    on an interactive terminal for password entry.  Prefer already-configured
+    passwordless sudo, then fall back to PolicyKit so the desktop authentication
+    agent can display a GUI password prompt.
+    """
+    command_list = list(command)
+    if command_list and os.sep not in command_list[0]:
+        resolved_binary = shutil.which(command_list[0])
+        if resolved_binary:
+            command_list[0] = resolved_binary
+
+    run_kwargs = {
+        "timeout": timeout,
+        "capture_output": capture_output,
+        "text": text,
+        "check": False,
+    }
+
+    if os.geteuid() == 0:
+        return subprocess.run(command_list, **run_kwargs)
+
+    if shutil.which("sudo"):
+        sudo_result = subprocess.run(["sudo", "-n", *command_list], **run_kwargs)
+        if sudo_result.returncode == 0:
+            return sudo_result
+
+    if shutil.which("pkexec"):
+        return subprocess.run(["pkexec", *command_list], **run_kwargs)
+
+    raise RuntimeError(
+        "Elevated privileges are required, but neither passwordless sudo nor "
+        "PolicyKit pkexec is available. Install polkit/pkexec or configure "
+        "passwordless sudo for PC-X hardware tools."
+    )
+
+
+def check_and_setup_sudoers(parent: Optional[object] = None) -> Tuple[bool, str]:
+    """Offer GUI-driven setup for passwordless sudo if it is not configured."""
+    try:
+        if os.geteuid() == 0:
+            return True, "Already running with root privileges"
+
+        if shutil.which("sudo"):
+            test_cmd = ["sudo", "-n", "smartctl", "--version"]
+            result = subprocess.run(test_cmd, capture_output=True, text=True, check=False)
+            if result.returncode == 0:
+                return True, "Already configured with passwordless sudo access"
 
         if parent:
             reply = QMessageBox.question(
@@ -49,36 +96,25 @@ def check_and_setup_sudoers(parent: Optional[object] = None) -> Tuple[bool, str]
                 "Elevated Permissions Required",
                 "PC Tools requires elevated permissions to access hardware information.\n\n"
                 "Would you like to set up passwordless sudo access now?\n\n"
-                "You will be prompted for your password once.",
+                "A desktop authentication prompt will ask for your password.",
                 QMessageBox.Yes | QMessageBox.No,
             )
             if reply == QMessageBox.No:
                 return False, "User declined to set up passwordless sudo"
 
-        _, pcx_dir = get_paths()
-        script_path = os.path.join(pcx_dir, "setup_sudoers.sh")
-
-        if not os.path.exists(script_path):
-            return False, f"Setup script not found at {script_path}"
-
-        os.chmod(script_path, 0o755)
-
-        username = getpass.getuser()
-
-        cmd = ["pkexec", "--user", "root", "bash", script_path]
-
-        if parent:
             QMessageBox.information(
                 parent,
                 "Authentication Required",
-                f"You will now be prompted for your password to set up passwordless sudo access for user '{username}'.",
+                "Approve the upcoming desktop authentication prompt to configure PC-X hardware access.",
             )
 
-        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
-
-        if result.returncode == 0:
+        if setup_passwordless_sudo():
             return True, "Successfully set up passwordless sudo access"
-        error_msg = f"Failed to set up passwordless sudo: {result.stderr or 'Unknown error'}"
+
+        error_msg = (
+            "Failed to set up passwordless sudo. Check that PolicyKit pkexec is installed "
+            "and a desktop authentication agent is running."
+        )
         if parent:
             QMessageBox.critical(parent, "Setup Failed", error_msg)
         return False, error_msg
@@ -125,15 +161,15 @@ def check_and_install_dependencies() -> None:
                 missing_tools.append(package)
 
     if missing_tools:
-        cmd = f"sudo {install_cmd} {' '.join(missing_tools)}"
-        print(f"Installing missing tools with: {cmd}")
+        install_args = install_cmd.split() + missing_tools
+        logging.info("Installing missing tools with elevated privileges: %s", " ".join(install_args))
         try:
-            subprocess.run(cmd, shell=True, check=True)
-        except subprocess.CalledProcessError as exc:
-            print(f"Failed to install packages: {exc}")
-            print("Please make sure you have sudo permissions or install the following packages manually:")
-            print(" ".join(missing_tools))
-            return
+            result = run_privileged_command(install_args, capture_output=False, text=True)
+            if result.returncode != 0:
+                print("Failed to install packages.")
+                print("Please make sure you have administrator permissions or install the following packages manually:")
+                print(" ".join(missing_tools))
+                return
         except Exception as exc:
             logging.error("Error installing system packages: %s", exc)
     else:
@@ -148,9 +184,16 @@ def setup_passwordless_sudo() -> bool:
     script_content = """#!/bin/bash
 set -e
 
-CURRENT_USER=$(who am i | awk '{print $1}')
+CURRENT_USER="$1"
 if [ -z "$CURRENT_USER" ]; then
-    CURRENT_USER=$(whoami)
+    CURRENT_USER=$(logname 2>/dev/null || true)
+fi
+if [ -z "$CURRENT_USER" ]; then
+    CURRENT_USER=$(who am i | awk '{print $1}')
+fi
+if [ -z "$CURRENT_USER" ]; then
+    echo "Unable to determine the desktop user for sudoers setup" >&2
+    exit 1
 fi
 
 echo "Setting up passwordless sudo for user: $CURRENT_USER"
@@ -207,12 +250,8 @@ echo "Passwordless sudo setup complete!"
 
         os.chmod(script_path, 0o755)
 
-        print("Setting up passwordless sudo. You may be prompted for your password...")
-        result = subprocess.run(["sudo", "bash", script_path],
-                                stderr=subprocess.PIPE,
-                                stdout=subprocess.PIPE,
-                                text=True,
-                                check=False)
+        print("Setting up passwordless sudo. A desktop authentication prompt may appear...")
+        result = run_privileged_command(["bash", script_path, getpass.getuser()])
 
         try:
             os.unlink(script_path)

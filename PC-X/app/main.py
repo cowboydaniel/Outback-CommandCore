@@ -54,6 +54,7 @@ from core.utils import (
     check_and_install_dependencies,
     check_and_setup_sudoers,
     configure_logging,
+    run_privileged_command,
     setup_passwordless_sudo,
 )
 from tabs import (
@@ -496,8 +497,12 @@ class PCToolsModule(QWidget):
     def get_ram_speed(self):
         """Get RAM speed."""
         try:
-            result = subprocess.run(['sudo', 'dmidecode', '-t', 'memory'],
-                                  capture_output=True, text=True, timeout=5)
+            result = run_privileged_command(
+                ['dmidecode', '-t', 'memory'],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
             if result.returncode == 0:
                 for line in result.stdout.split('\n'):
                     if 'Speed:' in line and 'Unknown' not in line:
@@ -591,9 +596,10 @@ class PCToolsModule(QWidget):
                 if not dev_type:
                     return "Unknown device type"
 
-                result = subprocess.run(
-                    ['sudo', 'smartctl', '-a', '-d', dev_type, device],
-                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=30
+                result = run_privileged_command(
+                    ['smartctl', '-a', '-d', dev_type, device],
+                    text=True,
+                    timeout=30,
                 )
                 return result.stdout if result.returncode == 0 else result.stderr
             except Exception as e:
@@ -626,8 +632,12 @@ class PCToolsModule(QWidget):
 
             for disk in disks:
                 try:
-                    parted = subprocess.run(['sudo', 'parted', '-s', disk, 'print'],
-                                          capture_output=True, text=True, timeout=5)
+                    parted = run_privileged_command(
+                        ['parted', '-s', disk, 'print'],
+                        capture_output=True,
+                        text=True,
+                        timeout=5,
+                    )
                     for line in parted.stdout.splitlines():
                         if "Partition Table:" in line:
                             scheme = line.split(":")[1].strip()
@@ -824,10 +834,19 @@ class PCToolsModule(QWidget):
                 ['journalctl', '-n', '50', '--no-pager'],
                 capture_output=True, text=True, timeout=10
             )
+            if result.returncode != 0:
+                result = run_privileged_command(
+                    ['journalctl', '-n', '50', '--no-pager'],
+                    timeout=10,
+                )
+
             if result.returncode == 0:
                 self.log_text_widget.setText(result.stdout)
             else:
-                self.log_text_widget.setText("Failed to retrieve logs. Try running with sudo.")
+                self.log_text_widget.setText(
+                    "Failed to retrieve logs. Approve the desktop authentication prompt "
+                    "or configure PC-X elevated access."
+                )
         except Exception as e:
             self.log_text_widget.setText(f"Error: {e}")
 
