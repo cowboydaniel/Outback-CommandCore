@@ -27,8 +27,6 @@ If the push is rejected (diverged history), rebase first:
 git fetch origin main && git rebase origin/main && git push origin HEAD:main
 ```
 
-Never force-push unless rebasing rewrote history that is already on main. If a force push is needed, use `--force-with-lease`:
+**NEVER force-push to `main` under any circumstances.** Force-pushing rewrites shared history and breaks pulls for everyone else. This includes `--force-with-lease`. There are no exceptions.
 
-```
-git push origin HEAD:main --force-with-lease
-```
+If the stop hook complains about unverified commits, fix the author with `git commit --amend --no-edit --reset-author` for the tip commit only, then do a normal `git push origin HEAD:main`. Do NOT rebase a chain of commits and force-push — create a new fixup commit instead if needed.
