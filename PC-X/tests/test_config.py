@@ -23,6 +23,14 @@ class TestConfig(unittest.TestCase):
         self.assertIn("debian", config.REQUIRED_TOOLS)
         self.assertIn("redhat", config.REQUIRED_TOOLS)
 
+    def test_legacy_launcher_exists(self):
+        launcher = PCX_DIR / "pc_tools_linux.py"
+        self.assertTrue(launcher.is_file())
+
+        source = launcher.read_text(encoding="utf-8")
+        self.assertIn('APP_ENTRYPOINT', source)
+        self.assertTrue((PCX_DIR / "app" / "main.py").is_file())
+
     def test_paths_resolve(self):
         root_dir, pcx_dir = base.get_paths()
         self.assertTrue(root_dir.exists())

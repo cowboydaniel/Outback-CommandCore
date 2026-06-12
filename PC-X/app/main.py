@@ -170,20 +170,18 @@ class PCToolsModule(QWidget):
         status_layout = QVBoxLayout(status_group)
 
         smartctl_available = shutil.which("smartctl") is not None
-        tools_status = "Available" if smartctl_available else "Not Available"
-        status_icon = "\u2705" if smartctl_available else "\u274C"
-
-        self.smartctl_label = QLabel(f"SMART Diagnostics Tools: {status_icon} {tools_status}")
-        self.smartctl_label.setFont(QFont("Arial", 10))
-        status_layout.addWidget(self.smartctl_label)
+        smartctl_row, self.smartctl_label = self.create_tool_status_row(
+            "SMART Diagnostics Tools",
+            smartctl_available,
+        )
+        status_layout.addWidget(smartctl_row)
 
         lshw_available = shutil.which("lshw") is not None
-        lshw_status = "Available" if lshw_available else "Not Available"
-        lshw_icon = "\u2705" if lshw_available else "\u274C"
-
-        self.lshw_label = QLabel(f"Hardware Info Tools: {lshw_icon} {lshw_status}")
-        self.lshw_label.setFont(QFont("Arial", 10))
-        status_layout.addWidget(self.lshw_label)
+        lshw_row, self.lshw_label = self.create_tool_status_row(
+            "Hardware Info Tools",
+            lshw_available,
+        )
+        status_layout.addWidget(lshw_row)
 
         main_layout.addWidget(status_group)
 
@@ -266,6 +264,30 @@ class PCToolsModule(QWidget):
 
         self.log_message("PC Tools module initialized")
         self.update_status("Ready")
+
+    def create_tool_status_row(self, label_text, available):
+        """Create a tool status row that uses SVG icons instead of emoji glyphs."""
+        row = QWidget()
+        layout = QHBoxLayout(row)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
+
+        icon_name = "status_available.svg" if available else "status_unavailable.svg"
+        icon_path = PCX_DIR / "ui" / "icons" / icon_name
+
+        icon_label = QLabel()
+        icon_label.setFixedSize(18, 18)
+        icon_label.setPixmap(QIcon(str(icon_path)).pixmap(16, 16))
+        icon_label.setToolTip("Available" if available else "Not Available")
+        layout.addWidget(icon_label)
+
+        status = "Available" if available else "Not Available"
+        text_label = QLabel(f"{label_text}: {status}")
+        text_label.setFont(QFont("Arial", 10))
+        layout.addWidget(text_label)
+        layout.addStretch()
+
+        return row, text_label
 
     def start_live_refresh(self):
         """Start the live refresh timer for real-time updates."""
