@@ -684,3 +684,441 @@ class FileManagerMixin:
     def _set_file_manager_status(self, text):
         if hasattr(self, "fm_status_label") and self.fm_status_label:
             self.fm_status_label.setText(text)
+
+    def _get_adb_serial(self):
+        serial = self.device_info.get("serial") or getattr(self, "device_serial", "")
+        if isinstance(serial, str) and "\n" in serial:
+            serial = serial.split("\n")[0].strip()
+        return serial
+
+    def _get_adb_cmd(self):
+        return self.adb_path if IS_WINDOWS and getattr(self, "adb_path", None) else "adb"
+
+    def _show_text_dialog(self, title, content, width=800, height=600):
+        dialog = QtWidgets.QDialog(self)
+        dialog.setWindowTitle(title)
+        dialog.resize(width, height)
+        layout = QtWidgets.QVBoxLayout(dialog)
+        text = QtWidgets.QPlainTextEdit()
+        text.setReadOnly(True)
+        text.setPlainText(content)
+        layout.addWidget(text)
+        close_btn = QtWidgets.QPushButton("Close")
+        close_btn.clicked.connect(dialog.close)
+        layout.addWidget(close_btn)
+        dialog.exec()
+
+    def _clean_app_caches(self):
+        """Clear cached data for all installed apps."""
+        if not self.device_connected:
+            QtWidgets.QMessageBox.information(
+                self, "Not Connected", "Please connect to a device first."
+            )
+            return
+
+        confirm = QtWidgets.QMessageBox.question(
+            self, "Clean App Caches",
+            "This will clear cached data for all third-party apps.\n\nContinue?",
+        )
+        if confirm != QtWidgets.QMessageBox.Yes:
+            return
+
+        dialog = QtWidgets.QDialog(self)
+        dialog.setWindowTitle("Cleaning App Caches")
+        dialog.resize(500, 350)
+        layout = QtWidgets.QVBoxLayout(dialog)
+        log = QtWidgets.QPlainTextEdit()
+        log.setReadOnly(True)
+        layout.addWidget(log)
+        close_btn = QtWidgets.QPushButton("Close")
+        close_btn.clicked.connect(dialog.close)
+        layout.addWidget(close_btn)
+
+        adb_cmd = self._get_adb_cmd()
+        serial = self._get_adb_serial()
+
+        def worker():
+            emit_ui(self, lambda: log.appendPlainText("Getting package list..."))
+            try:
+                result = subprocess.run(
+                    [adb_cmd, "-s", serial, "shell", "pm list packages -3"],
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=15,
+                )
+                packages = [
+                    l[len("package:"):].strip()
+                    for l in result.stdout.splitlines()
+                    if l.startswith("package:")
+                ]
+                emit_ui(self, lambda: log.appendPlainText(f"Found {len(packages)} apps. Clearing caches..."))
+                cleared = 0
+                for pkg in packages:
+                    r = subprocess.run(
+                        [adb_cmd, "-s", serial, "shell", "pm", "clear", "--cache-only", pkg],
+                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10,
+                    )
+                    if r.returncode != 0:
+                        # fallback: clear all (requires root or some Android versions)
+                        subprocess.run(
+                            [adb_cmd, "-s", serial, "shell", "pm", "clear", pkg],
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10,
+                        )
+                    cleared += 1
+                    if cleared % 5 == 0:
+                        emit_ui(self, lambda n=cleared: log.appendPlainText(f"Cleared {n}/{len(packages)}..."))
+                emit_ui(self, lambda: log.appendPlainText(f"\nDone. Cleared caches for {cleared} apps."))
+            except Exception as exc:
+                emit_ui(self, lambda e=exc: log.appendPlainText(f"Error: {e}"))
+
+        import threading
+        threading.Thread(target=worker, daemon=True).start()
+        dialog.exec()
+
+    def _explore_protected_storage(self):
+        """Browse protected /data/data storage (requires root)."""
+        if not self.device_connected:
+            QtWidgets.QMessageBox.information(
+                self, "Not Connected", "Please connect to a device first."
+            )
+            return
+
+        adb_cmd = self._get_adb_cmd()
+        serial = self._get_adb_serial()
+
+        try:
+            result = subprocess.run(
+                [adb_cmd, "-s", serial, "shell", "su -c 'ls /data/data' 2>/dev/null || ls /data/data"],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=15,
+            )
+            content = result.stdout.strip() or result.stderr.strip() or "(empty or no access)"
+            self._show_text_dialog(
+                "Protected Storage (/data/data)",
+                f"Contents of /data/data:\n\n{content}\n\n"
+                "Note: Full access requires root. Non-root ADB may only see some directories.",
+            )
+        except Exception as exc:
+            QtWidgets.QMessageBox.critical(self, "Error", str(exc))
+
+    def _search_files_on_device(self):
+        """Search for files on the device by name pattern."""
+        if not self.device_connected:
+            QtWidgets.QMessageBox.information(
+                self, "Not Connected", "Please connect to a device first."
+            )
+            return
+
+        dialog = QtWidgets.QDialog(self)
+        dialog.setWindowTitle("Search Files on Device")
+        dialog.resize(700, 500)
+        layout = QtWidgets.QVBoxLayout(dialog)
+
+        form = QtWidgets.QHBoxLayout()
+        form.addWidget(QtWidgets.QLabel("Search path:"))
+        path_edit = QtWidgets.QLineEdit("/sdcard")
+        form.addWidget(path_edit)
+        form.addWidget(QtWidgets.QLabel("Pattern:"))
+        pattern_edit = QtWidgets.QLineEdit("*.pdf")
+        form.addWidget(pattern_edit)
+        search_btn = QtWidgets.QPushButton("Search")
+        form.addWidget(search_btn)
+        layout.addLayout(form)
+
+        results = QtWidgets.QPlainTextEdit()
+        results.setReadOnly(True)
+        layout.addWidget(results)
+
+        close_btn = QtWidgets.QPushButton("Close")
+        close_btn.clicked.connect(dialog.close)
+        layout.addWidget(close_btn)
+
+        adb_cmd = self._get_adb_cmd()
+        serial = self._get_adb_serial()
+
+        def do_search():
+            path = path_edit.text().strip() or "/sdcard"
+            pattern = pattern_edit.text().strip() or "*"
+            results.setPlainText(f"Searching {path} for '{pattern}'...")
+
+            def worker():
+                try:
+                    r = subprocess.run(
+                        [adb_cmd, "-s", serial, "shell",
+                         f"find {path} -name '{pattern}' 2>/dev/null | head -200"],
+                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=30,
+                    )
+                    output = r.stdout.strip() or "(no results)"
+                    emit_ui(self, lambda o=output: results.setPlainText(o))
+                except Exception as exc:
+                    emit_ui(self, lambda e=exc: results.setPlainText(f"Error: {e}"))
+
+            import threading
+            threading.Thread(target=worker, daemon=True).start()
+
+        search_btn.clicked.connect(do_search)
+        dialog.exec()
+
+    def _export_sqlite_databases(self):
+        """Find and pull SQLite databases from the device."""
+        if not self.device_connected:
+            QtWidgets.QMessageBox.information(
+                self, "Not Connected", "Please connect to a device first."
+            )
+            return
+
+        save_dir = QtWidgets.QFileDialog.getExistingDirectory(
+            self, "Select destination folder for SQLite databases"
+        )
+        if not save_dir:
+            return
+
+        adb_cmd = self._get_adb_cmd()
+        serial = self._get_adb_serial()
+
+        dialog = QtWidgets.QDialog(self)
+        dialog.setWindowTitle("Export SQLite Databases")
+        dialog.resize(600, 350)
+        layout = QtWidgets.QVBoxLayout(dialog)
+        log = QtWidgets.QPlainTextEdit()
+        log.setReadOnly(True)
+        layout.addWidget(log)
+        close_btn = QtWidgets.QPushButton("Close")
+        close_btn.clicked.connect(dialog.close)
+        layout.addWidget(close_btn)
+
+        def worker():
+            emit_ui(self, lambda: log.appendPlainText("Finding .db files on /sdcard..."))
+            try:
+                r = subprocess.run(
+                    [adb_cmd, "-s", serial, "shell",
+                     "find /sdcard -name '*.db' 2>/dev/null"],
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=30,
+                )
+                db_files = [l.strip() for l in r.stdout.splitlines() if l.strip()]
+                emit_ui(self, lambda n=len(db_files): log.appendPlainText(f"Found {n} database(s). Pulling..."))
+                for db in db_files:
+                    dest = os.path.join(save_dir, os.path.basename(db))
+                    pull = subprocess.run(
+                        [adb_cmd, "-s", serial, "pull", db, dest],
+                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=30,
+                    )
+                    msg = f"{'OK' if pull.returncode == 0 else 'FAIL'}: {db}"
+                    emit_ui(self, lambda m=msg: log.appendPlainText(m))
+                emit_ui(self, lambda: log.appendPlainText("\nExport complete."))
+            except Exception as exc:
+                emit_ui(self, lambda e=exc: log.appendPlainText(f"Error: {e}"))
+
+        import threading
+        threading.Thread(target=worker, daemon=True).start()
+        dialog.exec()
+
+    def _calculate_directory_size(self):
+        """Calculate the size of a directory on the device."""
+        if not self.device_connected:
+            QtWidgets.QMessageBox.information(
+                self, "Not Connected", "Please connect to a device first."
+            )
+            return
+
+        path, ok = QtWidgets.QInputDialog.getText(
+            self, "Directory Size", "Enter path on device:", text="/sdcard"
+        )
+        if not ok or not path.strip():
+            return
+
+        adb_cmd = self._get_adb_cmd()
+        serial = self._get_adb_serial()
+        try:
+            r = subprocess.run(
+                [adb_cmd, "-s", serial, "shell", f"du -sh {path.strip()} 2>/dev/null"],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=30,
+            )
+            result = r.stdout.strip() or r.stderr.strip() or "Could not determine size."
+            QtWidgets.QMessageBox.information(self, "Directory Size", result)
+        except Exception as exc:
+            QtWidgets.QMessageBox.critical(self, "Error", str(exc))
+
+    def _calculate_file_checksum(self):
+        """Calculate SHA-256 checksum of a file on the device."""
+        if not self.device_connected:
+            QtWidgets.QMessageBox.information(
+                self, "Not Connected", "Please connect to a device first."
+            )
+            return
+
+        path, ok = QtWidgets.QInputDialog.getText(
+            self, "File Checksum", "Enter file path on device:"
+        )
+        if not ok or not path.strip():
+            return
+
+        adb_cmd = self._get_adb_cmd()
+        serial = self._get_adb_serial()
+        try:
+            # Try sha256sum first, fall back to md5sum
+            r = subprocess.run(
+                [adb_cmd, "-s", serial, "shell",
+                 f"sha256sum {path.strip()} 2>/dev/null || md5sum {path.strip()} 2>/dev/null"],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=30,
+            )
+            result = r.stdout.strip() or r.stderr.strip() or "Could not compute checksum."
+            QtWidgets.QMessageBox.information(self, "File Checksum", result)
+        except Exception as exc:
+            QtWidgets.QMessageBox.critical(self, "Error", str(exc))
+
+    def _edit_text_file_on_device(self):
+        """Pull a text file from device, edit it locally, and push it back."""
+        if not self.device_connected:
+            QtWidgets.QMessageBox.information(
+                self, "Not Connected", "Please connect to a device first."
+            )
+            return
+
+        remote_path, ok = QtWidgets.QInputDialog.getText(
+            self, "Edit File on Device", "Enter file path on device:"
+        )
+        if not ok or not remote_path.strip():
+            return
+
+        adb_cmd = self._get_adb_cmd()
+        serial = self._get_adb_serial()
+
+        import tempfile
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".txt")
+        tmp_path = tmp.name
+        tmp.close()
+
+        try:
+            pull = subprocess.run(
+                [adb_cmd, "-s", serial, "pull", remote_path.strip(), tmp_path],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=30,
+            )
+            if pull.returncode != 0:
+                QtWidgets.QMessageBox.critical(
+                    self, "Error", f"Failed to pull file:\n{pull.stderr.strip()}"
+                )
+                return
+
+            with open(tmp_path, "r", encoding="utf-8", errors="replace") as f:
+                content = f.read()
+
+            dialog = QtWidgets.QDialog(self)
+            dialog.setWindowTitle(f"Edit: {remote_path.strip()}")
+            dialog.resize(800, 600)
+            layout = QtWidgets.QVBoxLayout(dialog)
+            editor = QtWidgets.QPlainTextEdit()
+            editor.setPlainText(content)
+            layout.addWidget(editor)
+
+            btn_layout = QtWidgets.QHBoxLayout()
+            save_btn = QtWidgets.QPushButton("Save to Device")
+            cancel_btn = QtWidgets.QPushButton("Cancel")
+            btn_layout.addWidget(save_btn)
+            btn_layout.addWidget(cancel_btn)
+            layout.addLayout(btn_layout)
+            cancel_btn.clicked.connect(dialog.reject)
+
+            def save_file():
+                new_content = editor.toPlainText()
+                with open(tmp_path, "w", encoding="utf-8") as f:
+                    f.write(new_content)
+                push = subprocess.run(
+                    [adb_cmd, "-s", serial, "push", tmp_path, remote_path.strip()],
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=30,
+                )
+                if push.returncode == 0:
+                    QtWidgets.QMessageBox.information(dialog, "Saved", "File saved to device.")
+                    dialog.accept()
+                else:
+                    QtWidgets.QMessageBox.critical(
+                        dialog, "Error", f"Push failed:\n{push.stderr.strip()}"
+                    )
+
+            save_btn.clicked.connect(save_file)
+            dialog.exec()
+        except Exception as exc:
+            QtWidgets.QMessageBox.critical(self, "Error", str(exc))
+        finally:
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+
+    def _show_mount_info(self):
+        """Show current mount points on the device."""
+        if not self.device_connected:
+            QtWidgets.QMessageBox.information(
+                self, "Not Connected", "Please connect to a device first."
+            )
+            return
+
+        adb_cmd = self._get_adb_cmd()
+        serial = self._get_adb_serial()
+        try:
+            r = subprocess.run(
+                [adb_cmd, "-s", serial, "shell",
+                 "cat /proc/mounts 2>/dev/null || mount"],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=15,
+            )
+            content = r.stdout.strip() or r.stderr.strip() or "(no output)"
+            self._show_text_dialog("Mount Points", content)
+        except Exception as exc:
+            QtWidgets.QMessageBox.critical(self, "Error", str(exc))
+
+    def _list_recent_files(self):
+        """List recently modified files on the device."""
+        if not self.device_connected:
+            QtWidgets.QMessageBox.information(
+                self, "Not Connected", "Please connect to a device first."
+            )
+            return
+
+        adb_cmd = self._get_adb_cmd()
+        serial = self._get_adb_serial()
+
+        dialog = QtWidgets.QDialog(self)
+        dialog.setWindowTitle("Recent Files")
+        dialog.resize(750, 500)
+        layout = QtWidgets.QVBoxLayout(dialog)
+
+        opts_layout = QtWidgets.QHBoxLayout()
+        opts_layout.addWidget(QtWidgets.QLabel("Path:"))
+        path_edit = QtWidgets.QLineEdit("/sdcard")
+        opts_layout.addWidget(path_edit)
+        opts_layout.addWidget(QtWidgets.QLabel("Days:"))
+        days_spin = QtWidgets.QSpinBox()
+        days_spin.setRange(1, 365)
+        days_spin.setValue(7)
+        opts_layout.addWidget(days_spin)
+        refresh_btn = QtWidgets.QPushButton("List")
+        opts_layout.addWidget(refresh_btn)
+        layout.addLayout(opts_layout)
+
+        output = QtWidgets.QPlainTextEdit()
+        output.setReadOnly(True)
+        layout.addWidget(output)
+        close_btn = QtWidgets.QPushButton("Close")
+        close_btn.clicked.connect(dialog.close)
+        layout.addWidget(close_btn)
+
+        def load():
+            path = path_edit.text().strip() or "/sdcard"
+            days = days_spin.value()
+            output.setPlainText(f"Listing files modified in last {days} day(s) under {path}...")
+
+            def worker():
+                try:
+                    r = subprocess.run(
+                        [adb_cmd, "-s", serial, "shell",
+                         f"find {path} -type f -mtime -{days} 2>/dev/null | sort | head -200"],
+                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=30,
+                    )
+                    content = r.stdout.strip() or "(no files found)"
+                    emit_ui(self, lambda c=content: output.setPlainText(c))
+                except Exception as exc:
+                    emit_ui(self, lambda e=exc: output.setPlainText(f"Error: {e}"))
+
+            import threading
+            threading.Thread(target=worker, daemon=True).start()
+
+        refresh_btn.clicked.connect(load)
+        load()
+        dialog.exec()
