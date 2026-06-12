@@ -85,6 +85,8 @@ class HackAttackGUI(QMainWindow):
         self.setStatusBar(self.status_bar)
         self.status_bar.showMessage("Ready")
 
+        self.sidebar.setCurrentRow(0)
+
     def create_sidebar(self) -> None:
         """Create the sidebar navigation."""
         self.sidebar = QListWidget()

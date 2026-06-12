@@ -55,7 +55,7 @@ class AndroidToolsModule(
 ):
     """Main Android Tools Module that combines all feature mixins."""
 
-    def __init__(self, parent):
+    def __init__(self, parent=None):
         # Check dependencies when module is instantiated
         if platform.system() == 'Linux':
             self.dependencies_installed = check_and_install_android_dependencies()
