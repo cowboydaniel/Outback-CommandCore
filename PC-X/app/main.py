@@ -64,6 +64,7 @@ from tabs import (
     tab_hardware,
     tab_network,
     tab_packages,
+    tab_services,
     tab_storage,
     tab_system,
     tab_utilities,
@@ -206,12 +207,14 @@ class PCToolsModule(QWidget):
         self.notebook.setStyleSheet("QTabBar { border: none; } QTabWidget { border: none; }")
         self.notebook.currentChanged.connect(self.on_tab_changed)
 
-        # Create the two main tabs
+        # Create the three main tabs
         self.device_info_tab = QWidget()
         self.pc_tools_tab = QWidget()
+        self.mgmt_tab = QWidget()
 
         self.notebook.addTab(self.device_info_tab, "Device Info")
         self.notebook.addTab(self.pc_tools_tab, "PC Tools")
+        self.notebook.addTab(self.mgmt_tab, "Management")
 
         # Create Device Info subtabs
         device_layout = QVBoxLayout(self.device_info_tab)
@@ -245,6 +248,22 @@ class PCToolsModule(QWidget):
             self.tools_notebook.addTab(tab, name)
             self.tools_tabs[name.lower()] = tab
 
+        # Create Management subtabs
+        mgmt_layout = QVBoxLayout(self.mgmt_tab)
+        mgmt_layout.setContentsMargins(5, 5, 5, 5)
+
+        self.mgmt_notebook = QTabWidget()
+        self.mgmt_notebook.setStyleSheet("QTabBar { border: none; } QTabWidget { border: none; }")
+        mgmt_layout.addWidget(self.mgmt_notebook)
+
+        self.mgmt_tabs = {}
+        mgmt_subtabs = ["Services"]
+
+        for name in mgmt_subtabs:
+            tab = QWidget()
+            self.mgmt_notebook.addTab(tab, name)
+            self.mgmt_tabs[name.lower()] = tab
+
         main_layout.addWidget(self.notebook)
 
         # Status bar
@@ -272,6 +291,7 @@ class PCToolsModule(QWidget):
         self.setup_network_tab()
         self.setup_packages_tab()
         self.setup_benchmarks_tab()
+        self.setup_services_tab()
         self.setup_utilities_tab()
         self.setup_diagnostics_tab()
 
@@ -419,6 +439,10 @@ class PCToolsModule(QWidget):
     def setup_packages_tab(self):
         """Set up the Package Manager tab."""
         tab_packages.setup_packages_tab(self)
+
+    def setup_services_tab(self):
+        """Set up the Service Manager tab."""
+        tab_services.setup_services_tab(self)
 
     def setup_benchmarks_tab(self):
         """Set up the Benchmarks tab."""
