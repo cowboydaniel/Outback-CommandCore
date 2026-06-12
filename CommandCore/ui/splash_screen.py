@@ -313,33 +313,21 @@ class SplashScreen(QMainWindow):
         self.text_fade_in.start()
     
     def finish(self, main_window):
-        """Finish the splash screen animation and show the main window."""
-        # Guard to prevent double-close
-        if hasattr(self, '_finish_called') and self._finish_called:
+        """Close the splash and hand focus to the main window."""
+        if getattr(self, '_finish_called', False):
             return
         self._finish_called = True
 
-        # Drop always-on-top so the main window can come to the front
-        self.setWindowFlag(Qt.WindowStaysOnTopHint, False)
+        # Stop the particle animation so it stops fighting close()
+        if hasattr(self, 'background') and hasattr(self.background, 'animation_timer'):
+            self.background.animation_timer.stop()
 
-        def do_close():
-            self.hide()
-            self.close()
-            if main_window:
-                main_window.show()
-                main_window.raise_()
-                main_window.activateWindow()
+        self.hide()
+        self.close()
 
-        # Short fade then close unconditionally
-        self.fade_out = QPropertyAnimation(self, b"windowOpacity")
-        self.fade_out.setDuration(300)
-        self.fade_out.setStartValue(1.0)
-        self.fade_out.setEndValue(0.0)
-        self.fade_out.finished.connect(do_close)
-        self.fade_out.start()
-
-        # Unconditional fallback in case opacity animation doesn't fire
-        QTimer.singleShot(400, do_close)
+        if main_window:
+            main_window.raise_()
+            main_window.activateWindow()
     
     def close_splash(self, main_window):
         """Close the splash screen and show the main window."""
