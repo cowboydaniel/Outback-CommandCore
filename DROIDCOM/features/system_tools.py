@@ -1594,3 +1594,147 @@ class SystemToolsMixin:
         if bytes_val < 1024 * 1024 * 1024:
             return f"{bytes_val / (1024 * 1024):.2f} MB"
         return f"{bytes_val / (1024 * 1024 * 1024):.2f} GB"
+
+    def _make_adb_info_dialog(self, title, commands, width=750, height=550):
+        """Helper: open a dialog that runs a list of (label, adb_shell_cmd) and shows results."""
+        if not self.device_connected:
+            QtWidgets.QMessageBox.information(
+                self, "Not Connected", "Please connect to a device first."
+            )
+            return
+
+        serial = self.device_info.get("serial") or getattr(self, "device_serial", "")
+        adb_cmd = self.adb_path if getattr(self, "adb_path", None) else "adb"
+
+        dialog = QtWidgets.QDialog(self)
+        dialog.setWindowTitle(title)
+        dialog.resize(width, height)
+        layout = QtWidgets.QVBoxLayout(dialog)
+
+        output = QtWidgets.QPlainTextEdit()
+        output.setReadOnly(True)
+        layout.addWidget(output)
+
+        btn_layout = QtWidgets.QHBoxLayout()
+        refresh_btn = QtWidgets.QPushButton("Refresh")
+        close_btn = QtWidgets.QPushButton("Close")
+        btn_layout.addWidget(refresh_btn)
+        btn_layout.addStretch()
+        btn_layout.addWidget(close_btn)
+        layout.addLayout(btn_layout)
+        close_btn.clicked.connect(dialog.close)
+
+        from ..utils.qt_dispatcher import emit_ui
+
+        def load():
+            output.setPlainText("Loading...")
+
+            def worker():
+                lines = [f"=== {title} ===\n"]
+                for label, cmd in commands:
+                    try:
+                        proc = subprocess.Popen(
+                            [adb_cmd, "-s", serial, "shell", cmd],
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                        )
+                        out, err = proc.communicate(timeout=15)
+                        lines.append(f"\n--- {label} ---")
+                        lines.append((out.strip() or err.strip()) or "(no output)")
+                    except Exception as exc:
+                        lines.append(f"\n--- {label} ---")
+                        lines.append(f"Error: {exc}")
+                text = "\n".join(lines)
+                emit_ui(self, lambda t=text: output.setPlainText(t))
+
+            threading.Thread(target=worker, daemon=True).start()
+
+        refresh_btn.clicked.connect(load)
+        load()
+        dialog.exec()
+
+    def _show_sensor_status(self):
+        """Show device sensor information."""
+        self._make_adb_info_dialog(
+            "Sensor Status",
+            [
+                ("All sensors", "dumpsys sensorservice"),
+                ("Sensor list (short)", "dumpsys sensorservice | grep -E 'Sensor|handle|vendor'"),
+            ],
+            width=900, height=650,
+        )
+
+    def _show_power_profile(self):
+        """Show power profile and power consumption data."""
+        self._make_adb_info_dialog(
+            "Power Profile",
+            [
+                ("Battery info", "dumpsys battery"),
+                ("Power stats", "dumpsys batterystats --checkin | head -100"),
+                ("Wakelock stats", "cat /proc/wakelocks 2>/dev/null || echo 'not available'"),
+                ("Power supply", "cat /sys/class/power_supply/battery/uevent 2>/dev/null || echo 'not available'"),
+                ("CPU freq info", "cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor 2>/dev/null || echo 'not available'"),
+            ],
+        )
+
+    def _show_location_settings(self):
+        """Show location settings and provider status."""
+        self._make_adb_info_dialog(
+            "Location Settings",
+            [
+                ("Location mode", "settings get secure location_mode"),
+                ("Location providers", "settings get secure location_providers_allowed"),
+                ("GPS status", "dumpsys location | head -80"),
+            ],
+        )
+
+    def _show_doze_mode_status(self):
+        """Show Doze/Idle mode status."""
+        self._make_adb_info_dialog(
+            "Doze Mode Status",
+            [
+                ("Doze state", "dumpsys deviceidle"),
+                ("Battery optimisation list", "dumpsys deviceidle whitelist"),
+                ("Alarm manager wakeups", "dumpsys alarm | head -60"),
+            ],
+            width=850, height=620,
+        )
+
+    def _show_selinux_status(self):
+        """Show SELinux enforcement status and audit log."""
+        self._make_adb_info_dialog(
+            "SELinux Status",
+            [
+                ("SELinux mode", "getenforce"),
+                ("Policy version", "getprop ro.build.selinux"),
+                ("Recent denials", "dmesg | grep -i avc | tail -40 2>/dev/null || logcat -d -s auditd | tail -40"),
+            ],
+        )
+
+    def _show_time_date_info(self):
+        """Show device time, date, and timezone information."""
+        self._make_adb_info_dialog(
+            "Time and Date",
+            [
+                ("Current date/time", "date"),
+                ("Timezone", "getprop persist.sys.timezone"),
+                ("NTP server", "getprop persist.sys.ntp_server"),
+                ("Time zone (setting)", "settings get global time_zone"),
+                ("Auto time", "settings get global auto_time"),
+                ("Auto timezone", "settings get global auto_time_zone"),
+            ],
+        )
+
+    def _show_cpu_governor_info(self):
+        """Show CPU frequency governor and scaling information."""
+        self._make_adb_info_dialog(
+            "CPU Governor Info",
+            [
+                ("Current governor (cpu0)", "cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor"),
+                ("Available governors", "cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_available_governors"),
+                ("Current freq (cpu0)", "cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq"),
+                ("Min freq", "cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_min_freq"),
+                ("Max freq", "cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq"),
+                ("CPU info", "cat /proc/cpuinfo | grep -E 'processor|model name|Hardware' | head -20"),
+                ("Online CPUs", "cat /sys/devices/system/cpu/online"),
+            ],
+        )

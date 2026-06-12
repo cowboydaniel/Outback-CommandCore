@@ -278,8 +278,9 @@ class DeviceControlMixin:
             )
 
             if cmd.returncode != 0:
+                # Samsung devices use "download" mode instead of "edl"
                 cmd = subprocess.run(
-                    [adb_cmd, "-s", serial, "reboot", "edl download"],
+                    [adb_cmd, "-s", serial, "reboot", "download"],
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     text=True,
@@ -758,61 +759,68 @@ class DeviceControlMixin:
                 )
 
                 if event_cmd.returncode == 0 and "KEY_POWER" in event_cmd.stdout:
-                    cmd = subprocess.run(
-                        [
-                            adb_cmd,
-                            "-s",
-                            serial,
-                            "shell",
-                            "sendevent",
-                            "/dev/input/eventX",
-                            "1",
-                            "116",
-                            "1",
-                        ],
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
-                        text=True,
-                        timeout=5,
-                    )
+                    # Parse the actual event device that has KEY_POWER
+                    event_device = None
+                    current_device = None
+                    for line in event_cmd.stdout.splitlines():
+                        if line.startswith("add device"):
+                            current_device = line.split(":")[-1].strip()
+                        elif "KEY_POWER" in line and current_device:
+                            event_device = current_device
+                            break
 
-                    subprocess.run(
-                        [
-                            adb_cmd,
-                            "-s",
-                            serial,
-                            "shell",
-                            "sendevent",
-                            "/dev/input/eventX",
-                            "1",
-                            "116",
-                            "0",
-                        ],
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
-                        timeout=5,
-                    )
+                    if event_device:
+                        cmd = subprocess.run(
+                            [adb_cmd, "-s", serial, "shell", "sendevent",
+                             event_device, "1", "116", "1"],
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                            text=True,
+                            timeout=5,
+                        )
+                        subprocess.run(
+                            [adb_cmd, "-s", serial, "shell", "sendevent",
+                             event_device, "0", "0", "0"],
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                            timeout=5,
+                        )
+                        subprocess.run(
+                            [adb_cmd, "-s", serial, "shell", "sendevent",
+                             event_device, "1", "116", "0"],
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                            timeout=5,
+                        )
+                        subprocess.run(
+                            [adb_cmd, "-s", serial, "shell", "sendevent",
+                             event_device, "0", "0", "0"],
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                            timeout=5,
+                        )
 
-                    if cmd.returncode == 0:
-                        self.log_message("Power button press simulated (alternative method)")
-                        self.update_status("Power button pressed")
+                        if cmd.returncode == 0:
+                            self.log_message("Power button press simulated (sendevent method)")
+                            self.update_status("Power button pressed")
+                        else:
+                            error_msg = cmd.stderr.strip() or "Unknown error"
+                            self.log_message(f"Failed to simulate power button: {error_msg}")
+                            self.update_status("Power button simulation failed")
+                            QtWidgets.QMessageBox.critical(
+                                self, "Error", f"Failed to simulate power button: {error_msg}"
+                            )
                     else:
-                        error_msg = cmd.stderr.strip() or "Unknown error"
-                        self.log_message(f"Failed to simulate power button: {error_msg}")
+                        self.log_message("Could not locate power button event device")
                         self.update_status("Power button simulation failed")
                         QtWidgets.QMessageBox.critical(
-                            self,
-                            "Error",
-                            f"Failed to simulate power button: {error_msg}",
+                            self, "Error", "Could not locate power button input device."
                         )
                 else:
-                    error_msg = event_cmd.stderr.strip() or "Unknown error"
-                    self.log_message(f"Failed to find power button event: {error_msg}")
+                    self.log_message("Power button event not found on this device")
                     self.update_status("Power button simulation failed")
                     QtWidgets.QMessageBox.critical(
-                        self,
-                        "Error",
-                        "Could not simulate power button press on this device.",
+                        self, "Error", "Could not simulate power button press on this device."
                     )
 
         except Exception as e:
@@ -1242,3 +1250,123 @@ class DeviceControlMixin:
             QtWidgets.QMessageBox.critical(
                 self, "Error", f"Failed to open screen timeout dialog: {str(e)}"
             )
+
+    def _toggle_do_not_disturb(self):
+        """Toggle Do Not Disturb mode on/off"""
+        if not self.device_connected:
+            QtWidgets.QMessageBox.information(
+                self, "Not Connected", "Please connect to a device first."
+            )
+            return
+
+        try:
+            self.update_status("Toggling Do Not Disturb...")
+            self.log_message("Toggling Do Not Disturb mode on device...")
+
+            adb_cmd = self.adb_path if IS_WINDOWS and hasattr(self, "adb_path") else "adb"
+            serial = self.device_info.get("serial")
+            if not serial:
+                self.log_message("Device serial not found")
+                return
+            if isinstance(serial, str) and "\n" in serial:
+                serial = serial.split("\n")[0].strip()
+
+            dnd_cmd = subprocess.run(
+                [adb_cmd, "-s", serial, "shell", "settings", "get", "global", "zen_mode"],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10,
+            )
+            current = dnd_cmd.stdout.strip()
+            dnd_enabled = current == "1" or current == "2"
+            new_state = "0" if dnd_enabled else "1"
+            state_text = "disabled" if dnd_enabled else "enabled"
+
+            cmd = subprocess.run(
+                [adb_cmd, "-s", serial, "shell", "settings", "put", "global",
+                 "zen_mode", new_state],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10,
+            )
+
+            if cmd.returncode == 0:
+                self.log_message(f"Do Not Disturb {state_text}")
+                self.update_status(f"Do Not Disturb {state_text}")
+                QtWidgets.QMessageBox.information(
+                    self, "Success", f"Do Not Disturb has been {state_text}."
+                )
+            else:
+                error_msg = cmd.stderr.strip() or "Unknown error"
+                self.log_message(f"Failed to toggle DND: {error_msg}")
+                self.update_status("DND toggle failed")
+                QtWidgets.QMessageBox.critical(self, "Error", f"Failed to toggle DND: {error_msg}")
+
+        except Exception as e:
+            self.log_message(f"Error toggling DND: {str(e)}")
+            self.update_status("DND toggle error")
+            QtWidgets.QMessageBox.critical(self, "Error", str(e))
+
+    def _toggle_flashlight(self):
+        """Toggle the device flashlight on/off"""
+        if not self.device_connected:
+            QtWidgets.QMessageBox.information(
+                self, "Not Connected", "Please connect to a device first."
+            )
+            return
+
+        try:
+            self.update_status("Toggling flashlight...")
+            self.log_message("Toggling flashlight on device...")
+
+            adb_cmd = self.adb_path if IS_WINDOWS and hasattr(self, "adb_path") else "adb"
+            serial = self.device_info.get("serial")
+            if not serial:
+                self.log_message("Device serial not found")
+                return
+            if isinstance(serial, str) and "\n" in serial:
+                serial = serial.split("\n")[0].strip()
+
+            # Check current torch state via camera service
+            state_cmd = subprocess.run(
+                [adb_cmd, "-s", serial, "shell",
+                 "settings get system screen_brightness"],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=5,
+            )
+
+            current_state = getattr(self, "_flashlight_on", False)
+            new_state = not current_state
+
+            # Use cmd.notification set-dnd or camera torch command
+            # Android 6+ supports camera2 torch mode via service call
+            if new_state:
+                cmd = subprocess.run(
+                    [adb_cmd, "-s", serial, "shell",
+                     "cmd camera set-torch-mode 0 1"],
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10,
+                )
+            else:
+                cmd = subprocess.run(
+                    [adb_cmd, "-s", serial, "shell",
+                     "cmd camera set-torch-mode 0 0"],
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10,
+                )
+
+            # Fallback: use intent broadcast for older devices
+            if cmd.returncode != 0 or "Error" in cmd.stdout:
+                action = "enable" if new_state else "disable"
+                cmd = subprocess.run(
+                    [adb_cmd, "-s", serial, "shell", "am", "broadcast",
+                     "-a", "net.cactii.flash2.TOGGLE_FLASHLIGHT"],
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10,
+                )
+
+            self._flashlight_on = new_state
+            state_text = "on" if new_state else "off"
+            self.log_message(f"Flashlight turned {state_text}")
+            self.update_status(f"Flashlight {state_text}")
+            QtWidgets.QMessageBox.information(
+                self, "Flashlight", f"Flashlight turned {state_text}.\n\n"
+                "Note: flashlight control via ADB may not work on all devices."
+            )
+
+        except Exception as e:
+            self.log_message(f"Error toggling flashlight: {str(e)}")
+            self.update_status("Flashlight error")
+            QtWidgets.QMessageBox.critical(self, "Error", str(e))

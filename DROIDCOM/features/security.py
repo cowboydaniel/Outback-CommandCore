@@ -255,8 +255,8 @@ class SecurityMixin:
                         serial,
                         "shell",
                         "settings",
-                        "secure",
                         "get",
+                        "secure",
                         "lock_screen_owner_info_enabled",
                     ],
                     capture_output=True,
@@ -272,8 +272,8 @@ class SecurityMixin:
                         serial,
                         "shell",
                         "settings",
-                        "secure",
                         "get",
+                        "secure",
                         "lock_screen_lock_after_timeout",
                     ],
                     capture_output=True,
@@ -999,11 +999,16 @@ class SecurityMixin:
                 if pw_result.returncode == 0 and pw_result.stdout.strip() and pw_result.stdout.strip() != "null":
                     try:
                         pw_type_val = int(pw_result.stdout.strip())
-                        if pw_type_val in [65536, 131072, 196608]:
+                        # Android PASSWORD_QUALITY constants:
+                        # 65536 (0x10000) = SOMETHING = pattern
+                        # 131072 (0x20000) = NUMERIC = PIN
+                        # 196608 (0x30000) = NUMERIC_COMPLEX = complex PIN
+                        # 262144+ = ALPHABETIC / ALPHANUMERIC = password
+                        if pw_type_val in [131072, 196608]:
                             lock_type = "pin"
                         elif pw_type_val >= 262144:
                             lock_type = "password"
-                        elif pw_type_val in [65536, 1]:
+                        elif pw_type_val == 65536:
                             lock_type = "pattern"
                     except ValueError:
                         pass
@@ -2072,4 +2077,61 @@ class SecurityMixin:
         close_btn.clicked.connect(dialog.close)
 
         pkg_entry.setFocus()
+        dialog.exec()
+
+    def _show_keystore_info(self):
+        """Display Android Keystore and key material information."""
+        if not self.device_connected:
+            QtWidgets.QMessageBox.information(
+                self, "Not Connected", "Please connect to a device first."
+            )
+            return
+
+        dialog = QtWidgets.QDialog(self)
+        dialog.setWindowTitle("Keystore Information")
+        dialog.resize(800, 600)
+        dialog.setModal(True)
+
+        layout = QtWidgets.QVBoxLayout(dialog)
+
+        output = QtWidgets.QPlainTextEdit()
+        output.setReadOnly(True)
+        layout.addWidget(output)
+
+        btn_layout = QtWidgets.QHBoxLayout()
+        refresh_btn = QtWidgets.QPushButton("Refresh")
+        close_btn = QtWidgets.QPushButton("Close")
+        btn_layout.addWidget(refresh_btn)
+        btn_layout.addStretch()
+        btn_layout.addWidget(close_btn)
+        layout.addLayout(btn_layout)
+        close_btn.clicked.connect(dialog.close)
+
+        def load():
+            output.setPlainText("Loading keystore information...")
+
+            def worker():
+                try:
+                    lines = ["=== Android Keystore Information ===\n"]
+                    cmds = [
+                        ("TEE Keystore hardware", "getprop ro.hardware.keystore"),
+                        ("StrongBox hardware", "getprop ro.hardware.strongbox"),
+                        ("Keymaster version", "getprop ro.hardware.keystore_desede"),
+                        ("Keystore service", "dumpsys keystore"),
+                        ("Keystore2 service", "dumpsys keystore2"),
+                    ]
+                    for label, cmd in cmds:
+                        ok, out, err = self._run_adb_shell(cmd, timeout=10)
+                        lines.append(f"\n--- {label} ---")
+                        lines.append(out if out else (err if err else "(no output)"))
+                    text = "\n".join(lines)
+                    emit_ui(self, lambda t=text: output.setPlainText(t))
+                except Exception as exc:
+                    emit_ui(self, lambda e=exc: output.setPlainText(f"Error: {e}"))
+
+            import threading
+            threading.Thread(target=worker, daemon=True).start()
+
+        refresh_btn.clicked.connect(load)
+        load()
         dialog.exec()

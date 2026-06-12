@@ -594,3 +594,392 @@ class AppManagerMixin:
         for package in packages:
             if search_lower in package.lower():
                 listbox.addItem(package)
+
+    # ------------------------------------------------------------------ #
+    # Standalone dialog methods (called directly from toolbar buttons)    #
+    # ------------------------------------------------------------------ #
+
+    def _get_adb_serial(self):
+        """Return (adb_cmd, serial) or (None, None) with error shown."""
+        if not self.device_connected:
+            QtWidgets.QMessageBox.information(self, "Not Connected", "Please connect to a device first.")
+            return None, None
+        adb_cmd = self._find_adb_path() if IS_WINDOWS else "adb"
+        if not adb_cmd:
+            QtWidgets.QMessageBox.critical(self, "ADB Not Found", "Could not locate ADB executable.")
+            return None, None
+        serial = self.device_info.get("serial")
+        if not serial:
+            QtWidgets.QMessageBox.critical(self, "No Serial", "Device serial not available.")
+            return None, None
+        return adb_cmd, serial
+
+    def _ask_package(self, title="Enter Package Name"):
+        pkg, ok = QtWidgets.QInputDialog.getText(self, title, "Package name (e.g. com.example.app):")
+        return pkg.strip() if ok and pkg.strip() else None
+
+    def _uninstall_app_dialog(self):
+        adb_cmd, serial = self._get_adb_serial()
+        if not adb_cmd:
+            return
+        pkg = self._ask_package("Uninstall App")
+        if not pkg:
+            return
+        confirm = QtWidgets.QMessageBox.question(
+            self, "Confirm Uninstall",
+            f"Uninstall {pkg}?\n\nThis cannot be undone."
+        ) == QtWidgets.QMessageBox.Yes
+        if not confirm:
+            return
+
+        def task():
+            try:
+                r = subprocess.run([adb_cmd, "-s", serial, "uninstall", pkg],
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=30)
+                msg = r.stdout.strip() or r.stderr.strip()
+                success = r.returncode == 0 and "Success" in r.stdout
+                self.log_message(f"Uninstall {pkg}: {msg}")
+                self.update_status("App uninstalled" if success else "Uninstall failed")
+                if success:
+                    emit_ui(self, lambda: QtWidgets.QMessageBox.information(self, "Uninstalled", f"{pkg} uninstalled."))
+                else:
+                    emit_ui(self, lambda: QtWidgets.QMessageBox.critical(self, "Failed", f"Uninstall failed:\n{msg}"))
+            except Exception as e:
+                emit_ui(self, lambda: QtWidgets.QMessageBox.critical(self, "Error", str(e)))
+
+        threading.Thread(target=task, daemon=True).start()
+
+    def _clear_app_data_dialog(self):
+        adb_cmd, serial = self._get_adb_serial()
+        if not adb_cmd:
+            return
+        pkg = self._ask_package("Clear App Data")
+        if not pkg:
+            return
+        confirm = QtWidgets.QMessageBox.question(
+            self, "Confirm Clear Data",
+            f"Clear all data for {pkg}?\n\nThis deletes settings, accounts, and cache."
+        ) == QtWidgets.QMessageBox.Yes
+        if not confirm:
+            return
+
+        def task():
+            try:
+                r = subprocess.run([adb_cmd, "-s", serial, "shell", "pm", "clear", pkg],
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=30)
+                success = r.returncode == 0 and "Success" in r.stdout
+                msg = r.stdout.strip() or r.stderr.strip()
+                self.log_message(f"Clear data {pkg}: {msg}")
+                self.update_status("Data cleared" if success else "Clear failed")
+                if success:
+                    emit_ui(self, lambda: QtWidgets.QMessageBox.information(self, "Cleared", f"Data for {pkg} cleared."))
+                else:
+                    emit_ui(self, lambda: QtWidgets.QMessageBox.critical(self, "Failed", f"Clear failed:\n{msg}"))
+            except Exception as e:
+                emit_ui(self, lambda: QtWidgets.QMessageBox.critical(self, "Error", str(e)))
+
+        threading.Thread(target=task, daemon=True).start()
+
+    def _force_stop_app_dialog(self):
+        adb_cmd, serial = self._get_adb_serial()
+        if not adb_cmd:
+            return
+        pkg = self._ask_package("Force Stop App")
+        if not pkg:
+            return
+
+        def task():
+            try:
+                r = subprocess.run([adb_cmd, "-s", serial, "shell", "am", "force-stop", pkg],
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10)
+                self.log_message(f"Force stop {pkg}: rc={r.returncode}")
+                self.update_status("Force stopped" if r.returncode == 0 else "Force stop failed")
+                if r.returncode == 0:
+                    emit_ui(self, lambda: QtWidgets.QMessageBox.information(self, "Done", f"{pkg} force stopped."))
+                else:
+                    emit_ui(self, lambda: QtWidgets.QMessageBox.critical(self, "Failed", r.stderr.strip() or r.stdout.strip()))
+            except Exception as e:
+                emit_ui(self, lambda: QtWidgets.QMessageBox.critical(self, "Error", str(e)))
+
+        threading.Thread(target=task, daemon=True).start()
+
+    def _open_app_dialog(self):
+        adb_cmd, serial = self._get_adb_serial()
+        if not adb_cmd:
+            return
+        pkg = self._ask_package("Open App")
+        if not pkg:
+            return
+
+        def task():
+            try:
+                r = subprocess.run(
+                    [adb_cmd, "-s", serial, "shell", "monkey", "-p", pkg, "-c",
+                     "android.intent.category.LAUNCHER", "1"],
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10
+                )
+                success = r.returncode == 0 and "Events injected: 1" in r.stdout
+                self.log_message(f"Open app {pkg}: rc={r.returncode}")
+                if success:
+                    self.update_status(f"Opened {pkg}")
+                else:
+                    msg = r.stdout.strip() or r.stderr.strip()
+                    emit_ui(self, lambda: QtWidgets.QMessageBox.warning(self, "Open App", f"Could not launch {pkg}:\n{msg}"))
+            except Exception as e:
+                emit_ui(self, lambda: QtWidgets.QMessageBox.critical(self, "Error", str(e)))
+
+        threading.Thread(target=task, daemon=True).start()
+
+    def _extract_apk_dialog(self):
+        adb_cmd, serial = self._get_adb_serial()
+        if not adb_cmd:
+            return
+        pkg = self._ask_package("Extract APK")
+        if not pkg:
+            return
+        save_path, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self, "Save APK As", f"{pkg}.apk", "Android Package (*.apk)"
+        )
+        if not save_path:
+            return
+
+        def task():
+            try:
+                r = subprocess.run([adb_cmd, "-s", serial, "shell", "pm", "path", pkg],
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10)
+                if r.returncode != 0:
+                    msg = r.stderr.strip()
+                    emit_ui(self, lambda: QtWidgets.QMessageBox.critical(self, "Error", f"APK path not found:\n{msg}"))
+                    return
+                apk_path = r.stdout.strip().replace("package:", "")
+                r2 = subprocess.run([adb_cmd, "-s", serial, "pull", apk_path, save_path],
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=60)
+                if r2.returncode == 0:
+                    self.log_message(f"APK extracted to {save_path}")
+                    self.update_status("APK extracted")
+                    emit_ui(self, lambda: QtWidgets.QMessageBox.information(self, "Extracted", f"Saved to:\n{save_path}"))
+                else:
+                    msg = r2.stderr.strip()
+                    emit_ui(self, lambda: QtWidgets.QMessageBox.critical(self, "Error", f"Pull failed:\n{msg}"))
+            except Exception as e:
+                emit_ui(self, lambda: QtWidgets.QMessageBox.critical(self, "Error", str(e)))
+
+        threading.Thread(target=task, daemon=True).start()
+
+    def _toggle_freeze_dialog(self):
+        adb_cmd, serial = self._get_adb_serial()
+        if not adb_cmd:
+            return
+        pkg = self._ask_package("Freeze / Unfreeze App")
+        if not pkg:
+            return
+
+        def task():
+            try:
+                r = subprocess.run([adb_cmd, "-s", serial, "shell", "pm", "list", "packages", "-d"],
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10)
+                is_disabled = f"package:{pkg}" in r.stdout
+                action = "enable" if is_disabled else "disable-user"
+                r2 = subprocess.run(
+                    [adb_cmd, "-s", serial, "shell", "pm", action, "--user", "0", pkg],
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10
+                )
+                verb = "unfrozen" if is_disabled else "frozen"
+                if r2.returncode == 0:
+                    self.log_message(f"{pkg} {verb}")
+                    self.update_status(f"App {verb}")
+                    emit_ui(self, lambda: QtWidgets.QMessageBox.information(self, "Done", f"{pkg} has been {verb}."))
+                else:
+                    msg = r2.stderr.strip() or r2.stdout.strip()
+                    emit_ui(self, lambda: QtWidgets.QMessageBox.critical(self, "Failed", f"Operation failed:\n{msg}"))
+            except Exception as e:
+                emit_ui(self, lambda: QtWidgets.QMessageBox.critical(self, "Error", str(e)))
+
+        threading.Thread(target=task, daemon=True).start()
+
+    def _view_permissions_dialog(self):
+        adb_cmd, serial = self._get_adb_serial()
+        if not adb_cmd:
+            return
+        pkg = self._ask_package("View App Permissions")
+        if not pkg:
+            return
+
+        dlg = QtWidgets.QDialog(self)
+        dlg.setWindowTitle(f"Permissions — {pkg}")
+        dlg.resize(520, 420)
+        layout = QtWidgets.QVBoxLayout(dlg)
+        text = QtWidgets.QPlainTextEdit()
+        text.setReadOnly(True)
+        layout.addWidget(text)
+        status = QtWidgets.QLabel("Loading…")
+        layout.addWidget(status)
+        btn = QtWidgets.QPushButton("Close")
+        btn.clicked.connect(dlg.close)
+        layout.addWidget(btn)
+
+        def task():
+            try:
+                r = subprocess.run([adb_cmd, "-s", serial, "shell", "dumpsys", "package", pkg],
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=15)
+                perms = []
+                in_section = False
+                for line in r.stdout.splitlines():
+                    ll = line.lower()
+                    if "requested permissions:" in ll or "install permissions:" in ll or "runtime permissions:" in ll:
+                        in_section = True
+                        continue
+                    if in_section:
+                        s = line.strip()
+                        if s.startswith("android.permission") or s.startswith("com."):
+                            perms.append(s)
+                        elif s and not line.startswith(" "):
+                            in_section = False
+                result_text = "\n".join(perms) if perms else "No permissions found."
+                count = len(perms)
+                emit_ui(self, lambda: (text.setPlainText(result_text), status.setText(f"{count} permissions")))
+            except Exception as e:
+                emit_ui(self, lambda: status.setText(f"Error: {e}"))
+
+        threading.Thread(target=task, daemon=True).start()
+        dlg.exec()
+
+    def _show_app_usage_stats(self):
+        adb_cmd, serial = self._get_adb_serial()
+        if not adb_cmd:
+            return
+
+        dlg = QtWidgets.QDialog(self)
+        dlg.setWindowTitle("App Usage Stats")
+        dlg.resize(600, 500)
+        layout = QtWidgets.QVBoxLayout(dlg)
+        text = QtWidgets.QPlainTextEdit()
+        text.setReadOnly(True)
+        text.setFont(QtWidgets.QApplication.font())
+        layout.addWidget(text)
+        status = QtWidgets.QLabel("Loading…")
+        layout.addWidget(status)
+        btn = QtWidgets.QPushButton("Close")
+        btn.clicked.connect(dlg.close)
+        layout.addWidget(btn)
+
+        def task():
+            try:
+                r = subprocess.run(
+                    [adb_cmd, "-s", serial, "shell", "dumpsys", "usagestats"],
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=20
+                )
+                out = r.stdout.strip() if r.stdout.strip() else r.stderr.strip() or "No data available."
+                emit_ui(self, lambda: (text.setPlainText(out), status.setText("Done")))
+            except Exception as e:
+                emit_ui(self, lambda: (text.setPlainText(str(e)), status.setText("Error")))
+
+        threading.Thread(target=task, daemon=True).start()
+        dlg.exec()
+
+    def _show_battery_usage(self):
+        adb_cmd, serial = self._get_adb_serial()
+        if not adb_cmd:
+            return
+
+        dlg = QtWidgets.QDialog(self)
+        dlg.setWindowTitle("Battery Usage by App")
+        dlg.resize(600, 500)
+        layout = QtWidgets.QVBoxLayout(dlg)
+        text = QtWidgets.QPlainTextEdit()
+        text.setReadOnly(True)
+        layout.addWidget(text)
+        status = QtWidgets.QLabel("Loading…")
+        layout.addWidget(status)
+        btn = QtWidgets.QPushButton("Close")
+        btn.clicked.connect(dlg.close)
+        layout.addWidget(btn)
+
+        def task():
+            try:
+                r = subprocess.run(
+                    [adb_cmd, "-s", serial, "shell", "dumpsys", "batterystats", "--charged"],
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=30
+                )
+                lines = []
+                in_uid = False
+                for line in r.stdout.splitlines():
+                    if "Estimated power use" in line or "uid=" in line.lower():
+                        in_uid = True
+                    if in_uid:
+                        lines.append(line)
+                    if len(lines) > 300:
+                        lines.append("… (truncated)")
+                        break
+                out = "\n".join(lines) if lines else r.stdout[:4000] or "No battery stats available."
+                emit_ui(self, lambda: (text.setPlainText(out), status.setText("Done")))
+            except Exception as e:
+                emit_ui(self, lambda: (text.setPlainText(str(e)), status.setText("Error")))
+
+        threading.Thread(target=task, daemon=True).start()
+        dlg.exec()
+
+    def _list_installed_apps(self):
+        adb_cmd, serial = self._get_adb_serial()
+        if not adb_cmd:
+            return
+
+        dlg = QtWidgets.QDialog(self)
+        dlg.setWindowTitle("Installed Apps")
+        dlg.resize(500, 560)
+        layout = QtWidgets.QVBoxLayout(dlg)
+
+        filter_combo = QtWidgets.QComboBox()
+        filter_combo.addItems(["User apps (-3)", "System apps (-s)", "All apps"])
+        layout.addWidget(filter_combo)
+
+        search = QtWidgets.QLineEdit()
+        search.setPlaceholderText("Filter…")
+        layout.addWidget(search)
+
+        listw = QtWidgets.QListWidget()
+        layout.addWidget(listw)
+
+        status = QtWidgets.QLabel("Loading…")
+        layout.addWidget(status)
+
+        btn = QtWidgets.QPushButton("Close")
+        btn.clicked.connect(dlg.close)
+        layout.addWidget(btn)
+
+        all_packages = []
+
+        def load(filter_idx=0):
+            flag = ["-3", "-s", ""][filter_idx]
+            cmd = [adb_cmd, "-s", serial, "shell", "pm", "list", "packages"]
+            if flag:
+                cmd.append(flag)
+
+            def task():
+                nonlocal all_packages
+                try:
+                    r = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=20)
+                    pkgs = sorted(
+                        line[8:].strip() for line in r.stdout.splitlines() if line.startswith("package:")
+                    )
+                    all_packages = pkgs
+                    emit_ui(self, lambda: refresh_list(pkgs))
+                    emit_ui(self, lambda: status.setText(f"{len(pkgs)} packages"))
+                except Exception as e:
+                    emit_ui(self, lambda: status.setText(f"Error: {e}"))
+
+            threading.Thread(target=task, daemon=True).start()
+
+        def refresh_list(pkgs=None):
+            src = pkgs if pkgs is not None else all_packages
+            q = search.text().lower()
+            listw.clear()
+            for p in src:
+                if q in p.lower():
+                    listw.addItem(p)
+
+        search.textChanged.connect(lambda: refresh_list())
+        filter_combo.currentIndexChanged.connect(load)
+
+        load(0)
+        dlg.exec()
