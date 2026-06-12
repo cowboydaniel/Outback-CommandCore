@@ -134,6 +134,12 @@ class CommandCoreLauncher(QMainWindow):
 
             QTabBar {
                 background: #2A2D2E;
+                border: none;
+            }
+
+            QTabWidget {
+                background: #2A2D2E;
+                border: none;
             }
 
             QTabWidget::pane {
@@ -185,7 +191,6 @@ class CommandCoreLauncher(QMainWindow):
         
         # Create tab widget
         self.tab_widget = QTabWidget()
-        self.tab_widget.setDocumentMode(True)
         self.tab_widget.setTabsClosable(False)
         
         # Add tabs (to be implemented in tab modules)

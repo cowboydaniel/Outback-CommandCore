@@ -16,8 +16,8 @@ class DashboardCard(QFrame):
         self.setObjectName("dashboardCard")
         
         # Set up the card
-        self.setFrameShape(QFrame.StyledPanel)
-        self.setFrameShadow(QFrame.Raised)
+        self.setFrameShape(QFrame.NoFrame)
+        self.setFrameShadow(QFrame.Plain)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
         self.setMinimumHeight(120)
         
@@ -34,13 +34,17 @@ class DashboardCard(QFrame):
                 border-color: #00a8ff;
             }
             
+            #dashboardCard QLabel {
+                background-color: transparent;
+            }
+
             .card-title {
                 color: #ECF0F1;
                 font-size: 16px;
                 font-weight: bold;
                 margin-bottom: 8px;
             }
-            
+
             .card-description {
                 color: #B0B0B0;
                 font-size: 13px;
