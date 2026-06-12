@@ -599,7 +599,7 @@ class AppManagerMixin:
     # Standalone dialog methods (called directly from toolbar buttons)    #
     # ------------------------------------------------------------------ #
 
-    def _get_adb_serial(self):
+    def _resolve_adb(self):
         """Return (adb_cmd, serial) or (None, None) with error shown."""
         if not self.device_connected:
             QtWidgets.QMessageBox.information(self, "Not Connected", "Please connect to a device first.")
@@ -619,7 +619,7 @@ class AppManagerMixin:
         return pkg.strip() if ok and pkg.strip() else None
 
     def _uninstall_app_dialog(self):
-        adb_cmd, serial = self._get_adb_serial()
+        adb_cmd, serial = self._resolve_adb()
         if not adb_cmd:
             return
         pkg = self._ask_package("Uninstall App")
@@ -650,7 +650,7 @@ class AppManagerMixin:
         threading.Thread(target=task, daemon=True).start()
 
     def _clear_app_data_dialog(self):
-        adb_cmd, serial = self._get_adb_serial()
+        adb_cmd, serial = self._resolve_adb()
         if not adb_cmd:
             return
         pkg = self._ask_package("Clear App Data")
@@ -681,7 +681,7 @@ class AppManagerMixin:
         threading.Thread(target=task, daemon=True).start()
 
     def _force_stop_app_dialog(self):
-        adb_cmd, serial = self._get_adb_serial()
+        adb_cmd, serial = self._resolve_adb()
         if not adb_cmd:
             return
         pkg = self._ask_package("Force Stop App")
@@ -704,7 +704,7 @@ class AppManagerMixin:
         threading.Thread(target=task, daemon=True).start()
 
     def _open_app_dialog(self):
-        adb_cmd, serial = self._get_adb_serial()
+        adb_cmd, serial = self._resolve_adb()
         if not adb_cmd:
             return
         pkg = self._ask_package("Open App")
@@ -731,7 +731,7 @@ class AppManagerMixin:
         threading.Thread(target=task, daemon=True).start()
 
     def _extract_apk_dialog(self):
-        adb_cmd, serial = self._get_adb_serial()
+        adb_cmd, serial = self._resolve_adb()
         if not adb_cmd:
             return
         pkg = self._ask_package("Extract APK")
@@ -767,7 +767,7 @@ class AppManagerMixin:
         threading.Thread(target=task, daemon=True).start()
 
     def _toggle_freeze_dialog(self):
-        adb_cmd, serial = self._get_adb_serial()
+        adb_cmd, serial = self._resolve_adb()
         if not adb_cmd:
             return
         pkg = self._ask_package("Freeze / Unfreeze App")
@@ -798,7 +798,7 @@ class AppManagerMixin:
         threading.Thread(target=task, daemon=True).start()
 
     def _view_permissions_dialog(self):
-        adb_cmd, serial = self._get_adb_serial()
+        adb_cmd, serial = self._resolve_adb()
         if not adb_cmd:
             return
         pkg = self._ask_package("View App Permissions")
@@ -845,7 +845,7 @@ class AppManagerMixin:
         dlg.exec()
 
     def _show_app_usage_stats(self):
-        adb_cmd, serial = self._get_adb_serial()
+        adb_cmd, serial = self._resolve_adb()
         if not adb_cmd:
             return
 
@@ -878,7 +878,7 @@ class AppManagerMixin:
         dlg.exec()
 
     def _show_battery_usage(self):
-        adb_cmd, serial = self._get_adb_serial()
+        adb_cmd, serial = self._resolve_adb()
         if not adb_cmd:
             return
 
@@ -920,7 +920,7 @@ class AppManagerMixin:
         dlg.exec()
 
     def _list_installed_apps(self):
-        adb_cmd, serial = self._get_adb_serial()
+        adb_cmd, serial = self._resolve_adb()
         if not adb_cmd:
             return
 
