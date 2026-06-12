@@ -248,6 +248,10 @@ def setup_packages_tab(module) -> None:
         table.setSortingEnabled(True)
         table.sortByColumn(3, Qt.DescendingOrder)
         _apply_filter()
+        try:
+            table.itemChanged.disconnect()
+        except RuntimeError:
+            pass
         table.itemChanged.connect(lambda _: _update_summary())
 
     def _checked_rows():
@@ -283,8 +287,14 @@ def setup_packages_tab(module) -> None:
     select_all_btn.clicked.connect(lambda: _set_all_checked(Qt.Checked))
     deselect_btn.clicked.connect(lambda: _set_all_checked(Qt.Unchecked))
 
+    def _disconnect_item_changed():
+        try:
+            table.itemChanged.disconnect()
+        except RuntimeError:
+            pass
+
     def _set_all_checked(state):
-        table.itemChanged.disconnect()
+        _disconnect_item_changed()
         for r in range(table.rowCount()):
             if not table.isRowHidden(r) and table.item(r, 0):
                 table.item(r, 0).setCheckState(state)
@@ -292,7 +302,7 @@ def setup_packages_tab(module) -> None:
         _update_summary()
 
     def _mark_orphans():
-        table.itemChanged.disconnect()
+        _disconnect_item_changed()
         for r in range(table.rowCount()):
             item = table.item(r, 1)
             if item and item.data(Qt.UserRole + 1):
@@ -353,8 +363,7 @@ def setup_packages_tab(module) -> None:
     def _on_removal_done(returncode: int, removed: List[str]):
         remove_btn.setEnabled(True)
         if returncode == 0:
-            mod._pkg_output.append("\n✓ Removal complete.")
-            # Remove those rows from the table
+            module._pkg_output.append("\n✓ Removal complete.")
             names_removed = set(removed)
             rows_to_delete = [
                 r for r in range(table.rowCount())
@@ -364,7 +373,7 @@ def setup_packages_tab(module) -> None:
                 table.removeRow(r)
             _update_summary()
         else:
-            mod._pkg_output.append(f"\n✗ Removal failed (exit {returncode}).")
+            module._pkg_output.append(f"\n✗ Removal failed (exit {returncode}).")
 
     # Initial load
     _load_in_background()
