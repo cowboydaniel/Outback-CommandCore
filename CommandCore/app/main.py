@@ -285,14 +285,14 @@ def main():
         remaining = max(0, minimum_splash_duration - elapsed)
 
         def finish_startup() -> None:
+            nonlocal splash
             window = CommandCoreLauncher()
             main_windows.append(window)
-            window.show()
 
             # Close the splash screen if it's still open
             if splash and splash.isVisible():
                 splash.finish(window)
-                splash = None  # Clear the reference to splash screen
+                splash = None
 
         QTimer.singleShot(int(remaining * 1000), finish_startup)
 
