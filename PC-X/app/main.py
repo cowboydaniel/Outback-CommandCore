@@ -74,12 +74,6 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 ensure_logs_dir(ROOT_DIR)
 
-if platform.system() == "Linux":
-    check_and_install_dependencies()
-    if not os.path.exists(config.SUDOERS_FILE):
-        setup_passwordless_sudo()
-
-
 class PCToolsModule(QWidget):
     """PC Tools module for Nest - PySide6 Version"""
 
@@ -869,6 +863,11 @@ logging.info("PC Tools module loaded - PySide6 implementation")
 
 # For standalone execution
 if __name__ == "__main__":
+    if platform.system() == "Linux":
+        check_and_install_dependencies()
+        if not os.path.exists(config.SUDOERS_FILE):
+            setup_passwordless_sudo()
+
     app = QApplication(sys.argv)
 
     # Set application style

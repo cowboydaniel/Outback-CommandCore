@@ -28,7 +28,7 @@ if importlib.util.find_spec("PySide6") is None:
     print(message)
     sys.exit(1)
 
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QFont, QIcon
 from PySide6.QtCore import QObject, QThread, QTimer, Signal
 from PySide6.QtWidgets import (
     QApplication,
@@ -67,6 +67,9 @@ class HackAttackGUI(QMainWindow):
         self.setWindowTitle(application_title())
         self.setMinimumSize(1200, 800)
         self.setStyleSheet(APP_STYLESHEET)
+        _icon = Path(__file__).resolve().parents[2] / "icons" / "hackattack.png"
+        if _icon.exists():
+            self.setWindowIcon(QIcon(str(_icon)))
 
         self.tab_definitions = get_tab_definitions()
         self.tab_pages = {}
