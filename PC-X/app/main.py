@@ -68,6 +68,7 @@ from tabs import (
     tab_scheduler,
     tab_services,
     tab_storage,
+    tab_sysconfig,
     tab_system,
     tab_users,
     tab_utilities,
@@ -260,7 +261,7 @@ class PCToolsModule(QWidget):
         mgmt_layout.addWidget(self.mgmt_notebook)
 
         self.mgmt_tabs = {}
-        mgmt_subtabs = ["Services", "Firewall", "Users", "Scheduler"]
+        mgmt_subtabs = ["Services", "Firewall", "Users", "Scheduler", "Sysconfig"]
 
         for name in mgmt_subtabs:
             tab = QWidget()
@@ -298,6 +299,7 @@ class PCToolsModule(QWidget):
         self.setup_firewall_tab()
         self.setup_users_tab()
         self.setup_scheduler_tab()
+        self.setup_sysconfig_tab()
         self.setup_utilities_tab()
         self.setup_diagnostics_tab()
 
@@ -461,6 +463,10 @@ class PCToolsModule(QWidget):
     def setup_scheduler_tab(self):
         """Set up the Scheduled Tasks tab."""
         tab_scheduler.setup_scheduler_tab(self)
+
+    def setup_sysconfig_tab(self):
+        """Set up the System Configuration tab."""
+        tab_sysconfig.setup_sysconfig_tab(self)
 
     def setup_benchmarks_tab(self):
         """Set up the Benchmarks tab."""
