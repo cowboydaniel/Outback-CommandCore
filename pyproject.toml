@@ -17,3 +17,7 @@ commandcore = "CommandCore.app.main:main"
 
 [tool.setuptools.packages.find]
 include = ["CommandCore*"]
+
+[tool.setuptools.data-files]
+"share/applications" = ["CommandCore/commandcore-launcher.desktop"]
+"share/icons/hicolor/256x256/apps" = ["icons/commandcore.png"]
