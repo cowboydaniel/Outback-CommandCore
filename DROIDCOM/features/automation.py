@@ -598,3 +598,81 @@ class AutomationMixin:
             QtWidgets.QMessageBox.critical(
                 self, "Error", f"Failed to open live monitor: {str(e)}"
             )
+
+    def _scheduled_tasks_dialog(self):
+        """View Android JobScheduler jobs and AlarmManager alarms."""
+        if not self.device_connected:
+            QtWidgets.QMessageBox.information(self, "Not Connected", "Please connect to a device first.")
+            return
+
+        adb_cmd = self._find_adb_path() if IS_WINDOWS else "adb"
+        serial = self.device_info.get("serial", "")
+        if not serial:
+            QtWidgets.QMessageBox.critical(self, "No Serial", "Device serial not available.")
+            return
+
+        dlg = QtWidgets.QDialog(self)
+        dlg.setWindowTitle("Scheduled Tasks")
+        dlg.resize(760, 600)
+        layout = QtWidgets.QVBoxLayout(dlg)
+
+        tabs = QtWidgets.QTabWidget()
+        layout.addWidget(tabs)
+
+        # ── JobScheduler tab ──────────────────────────────────────────────
+        job_tab = QtWidgets.QWidget()
+        job_layout = QtWidgets.QVBoxLayout(job_tab)
+        job_text = QtWidgets.QPlainTextEdit()
+        job_text.setReadOnly(True)
+        job_layout.addWidget(job_text)
+        job_status = QtWidgets.QLabel("Loading…")
+        job_layout.addWidget(job_status)
+        tabs.addTab(job_tab, "JobScheduler")
+
+        # ── AlarmManager tab ─────────────────────────────────────────────
+        alarm_tab = QtWidgets.QWidget()
+        alarm_layout = QtWidgets.QVBoxLayout(alarm_tab)
+        alarm_text = QtWidgets.QPlainTextEdit()
+        alarm_text.setReadOnly(True)
+        alarm_layout.addWidget(alarm_text)
+        alarm_status = QtWidgets.QLabel("Loading…")
+        alarm_layout.addWidget(alarm_status)
+        tabs.addTab(alarm_tab, "AlarmManager")
+
+        btn_row = QtWidgets.QHBoxLayout()
+        refresh_btn = QtWidgets.QPushButton("Refresh")
+        close_btn = QtWidgets.QPushButton("Close")
+        close_btn.clicked.connect(dlg.close)
+        btn_row.addWidget(refresh_btn)
+        btn_row.addStretch()
+        btn_row.addWidget(close_btn)
+        layout.addLayout(btn_row)
+
+        def load():
+            emit_ui(self, lambda: job_status.setText("Loading…"))
+            emit_ui(self, lambda: alarm_status.setText("Loading…"))
+            try:
+                r = subprocess.run(
+                    [adb_cmd, "-s", serial, "shell", "dumpsys", "jobscheduler"],
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=15
+                )
+                jobs_out = r.stdout.strip() or r.stderr.strip() or "No data."
+                emit_ui(self, lambda: (job_text.setPlainText(jobs_out),
+                                       job_status.setText("Done")))
+            except Exception as e:
+                emit_ui(self, lambda: job_status.setText(f"Error: {e}"))
+
+            try:
+                r2 = subprocess.run(
+                    [adb_cmd, "-s", serial, "shell", "dumpsys", "alarm"],
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=15
+                )
+                alarm_out = r2.stdout.strip() or r2.stderr.strip() or "No data."
+                emit_ui(self, lambda: (alarm_text.setPlainText(alarm_out),
+                                       alarm_status.setText("Done")))
+            except Exception as e:
+                emit_ui(self, lambda: alarm_status.setText(f"Error: {e}"))
+
+        refresh_btn.clicked.connect(lambda: threading.Thread(target=load, daemon=True).start())
+        threading.Thread(target=load, daemon=True).start()
+        dlg.exec()
