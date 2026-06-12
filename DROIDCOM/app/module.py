@@ -14,7 +14,7 @@ import zipfile
 import urllib.request
 
 from .config import IS_WINDOWS
-from ..dependencies import check_and_install_android_dependencies
+from ..dependencies import check_and_install_android_dependencies, check_and_install_scrcpy
 from ..utils.qt_dispatcher import emit_ui, get_ui_dispatcher
 from ..ui.icon_utils import get_status_icon
 
@@ -60,6 +60,7 @@ class AndroidToolsModule(
         # Check dependencies when module is instantiated
         if platform.system() == 'Linux':
             self.dependencies_installed = check_and_install_android_dependencies()
+            check_and_install_scrcpy()
 
         super().__init__(parent)
         self.parent = parent
