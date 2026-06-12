@@ -526,7 +526,7 @@ class PCToolsModule(QWidget):
                         return line.split(':')[1].strip()
         except Exception as e:
             logging.debug(f"Error getting RAM speed: {e}")
-        return "Unknown (requires elevated privileges — run with sudo for speed info)"
+        return "Unknown (approve the authentication prompt on next launch to read speed)"
 
     def get_battery_info(self):
         """Get battery information."""
@@ -839,20 +839,12 @@ class PCToolsModule(QWidget):
             self.log_message("apt-get not found — APT cache clean skipped.")
             return
         try:
-            result = subprocess.run(
-                ['sudo', 'apt-get', 'clean'],
-                capture_output=True, text=True, timeout=30,
-            )
+            result = run_privileged_command(['apt-get', 'clean'], timeout=30)
             if result.returncode == 0:
                 self.log_message("APT cache cleaned successfully.")
             else:
                 err = (result.stderr or result.stdout).strip()
-                if not err or "Permission denied" in err or "sudo" in err.lower():
-                    self.log_message(
-                        "APT cache clean requires elevated privileges — run with sudo."
-                    )
-                else:
-                    self.log_message(f"APT cache clean failed: {err}")
+                self.log_message(f"APT cache clean failed: {err}" if err else "APT cache clean failed.")
         except Exception as e:
             self.log_message(f"Error cleaning APT cache: {e}")
 
