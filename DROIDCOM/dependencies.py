@@ -136,12 +136,13 @@ def check_and_install_scrcpy():
 
     scrcpy 2.1 introduced --keyboard=uhid / --mouse=uhid which inject
     input via a virtual HID device, bypassing the Android InputManager
-    reflection path that NPEs on some devices.  No version older than 2.1
-    is ever installed as a fallback — that would break uhid input.
+    reflection path that NPEs on some devices.  No older version is ever
+    installed as a fallback — that would break uhid input.
 
-    Strategy: query the GitHub releases API for the latest version, download
-    the prebuilt Linux x86_64 tarball, extract it, and install the binaries
-    into /usr/local/bin via pkexec.
+    Strategy (mirrors the manual install procedure):
+      1. Install build dependencies via pkexec apt-get
+      2. Clone the scrcpy repo into a temp directory
+      3. Run ./install_release.sh (builds and installs the latest release)
     """
     if platform.system() != 'Linux':
         return True
@@ -153,91 +154,70 @@ def check_and_install_scrcpy():
         return True
 
     ver_str = f"{current[0]}.{current[1]}" if current != (0, 0) else "(not installed)"
-    logging.info(f"scrcpy {ver_str} < 2.1 — fetching latest prebuilt release from GitHub...")
+    logging.info(f"scrcpy {ver_str} < 2.1 — installing latest from source...")
 
-    import json
-    import tarfile
     import tempfile
-    import urllib.request
-    import urllib.error
 
-    api_url = "https://api.github.com/repos/Genymobile/scrcpy/releases/latest"
-    try:
-        with urllib.request.urlopen(api_url, timeout=15) as resp:
-            release = json.loads(resp.read())
-    except Exception as e:
-        logging.error(f"Failed to query GitHub releases API: {e}")
+    # Step 1: install build dependencies.
+    build_deps = [
+        "ffmpeg", "libsdl2-2.0-0", "adb", "wget",
+        "gcc", "git", "pkg-config", "meson", "ninja-build",
+        "libsdl2-dev", "libavcodec-dev", "libavdevice-dev",
+        "libavformat-dev", "libavutil-dev", "libswresample-dev",
+        "libusb-1.0-0", "libusb-1.0-0-dev",
+    ]
+    logging.info(f"Installing scrcpy build dependencies: {' '.join(build_deps)}")
+    result = subprocess.run(
+        ["pkexec", "apt-get", "-y", "install"] + build_deps,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    if result.returncode != 0:
+        logging.error(f"Failed to install build dependencies: {result.stderr.strip()}")
         return False
 
-    tag = release.get("tag_name", "")
-    assets = release.get("assets", [])
-
-    # Find the prebuilt Linux x86_64 tarball.
-    tarball_url = None
-    for asset in assets:
-        name = asset.get("name", "")
-        if "linux" in name and "x86_64" in name and name.endswith(".tar.gz"):
-            tarball_url = asset["browser_download_url"]
-            logging.info(f"Found prebuilt asset: {name}")
-            break
-
-    if not tarball_url:
-        logging.error(
-            f"No linux-x86_64 tarball found in scrcpy release {tag}. "
-            f"Assets: {[a['name'] for a in assets]}"
-        )
-        return False
-
+    # Step 2 & 3: clone repo and run install_release.sh.
     try:
         with tempfile.TemporaryDirectory() as tmpdir:
-            tarball_path = os.path.join(tmpdir, "scrcpy.tar.gz")
-            logging.info(f"Downloading {tarball_url} ...")
-            urllib.request.urlretrieve(tarball_url, tarball_path)
-
-            with tarfile.open(tarball_path, "r:gz") as tar:
-                tar.extractall(tmpdir)
-
-            # Find the extracted directory (e.g. scrcpy-linux-x86_64-v4.0/)
-            extracted_dirs = [
-                d for d in os.listdir(tmpdir)
-                if os.path.isdir(os.path.join(tmpdir, d)) and d.startswith("scrcpy")
-            ]
-            if not extracted_dirs:
-                logging.error("Could not find extracted scrcpy directory in tarball")
-                return False
-
-            src_dir = os.path.join(tmpdir, extracted_dirs[0])
-
-            # Install: copy binaries to /usr/local/bin, data to /usr/local/share/scrcpy
-            install_script = (
-                f"cp -f '{src_dir}/scrcpy' /usr/local/bin/scrcpy && "
-                f"chmod +x /usr/local/bin/scrcpy && "
-                f"mkdir -p /usr/local/share/scrcpy && "
-                f"cp -f '{src_dir}'/scrcpy-server* /usr/local/share/scrcpy/ 2>/dev/null || true"
-            )
+            clone_dir = os.path.join(tmpdir, "scrcpy")
+            logging.info("Cloning scrcpy repository...")
             result = subprocess.run(
-                ["pkexec", "bash", "-c", install_script],
+                ["git", "clone", "--depth=1",
+                 "https://github.com/Genymobile/scrcpy.git", clone_dir],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
             )
             if result.returncode != 0:
-                logging.error(f"pkexec install failed: {result.stderr.strip()}")
+                logging.error(f"git clone failed: {result.stderr.strip()}")
                 return False
 
-        new_ver = _get_scrcpy_version()
-        if new_ver >= MIN_VERSION:
-            logging.info(f"scrcpy successfully installed: {new_ver[0]}.{new_ver[1]}")
-            return True
-
-        logging.error(
-            f"Install appeared to succeed but scrcpy reports {new_ver[0]}.{new_ver[1]}"
-        )
-        return False
+            logging.info("Running install_release.sh...")
+            result = subprocess.run(
+                ["pkexec", "bash", "./install_release.sh"],
+                cwd=clone_dir,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            if result.returncode != 0:
+                logging.error(f"install_release.sh failed: {result.stderr.strip()}")
+                return False
 
     except Exception as e:
-        logging.error(f"Error installing scrcpy prebuilt: {e}")
+        logging.error(f"Error during scrcpy installation: {e}")
         return False
+
+    new_ver = _get_scrcpy_version()
+    if new_ver >= MIN_VERSION:
+        logging.info(f"scrcpy successfully installed: {new_ver[0]}.{new_ver[1]}")
+        return True
+
+    logging.error(
+        f"install_release.sh completed but scrcpy reports {new_ver[0]}.{new_ver[1]}"
+    )
+    return False
 
 
 def run_dependency_check():
