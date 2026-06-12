@@ -2,8 +2,8 @@
 Type=Application
 Name=Outback CommandCore
 Comment=Launch Outback CommandCore applications
-Exec=sh -c 'cd "/home/outbackelectronics/Outback CommandCore/CommandCore" && python3 -m CommandCore.app.main'
-Icon=commandcore
+Exec=commandcore
+Icon=/home/daniel/Outback-CommandCore/icons/commandcore.png
 Terminal=false
 Categories=Utility;Development;
 StartupNotify=true
