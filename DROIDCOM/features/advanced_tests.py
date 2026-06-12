@@ -3365,50 +3365,146 @@ class AdvancedTestsMixin:
             QMessageBox.critical(self, "Error", f"Failed to open I/O spike generator: {str(e)}")
 
     def run_scrcpy_mirror(self):
-        """Run scrcpy screen mirroring"""
+        """Launch scrcpy with full control options dialog."""
         if not self.device_connected:
             QMessageBox.information(self, "Not Connected", "Please connect to a device first.")
             return
 
         try:
-            serial = self.device_serial
-
-            # Check if scrcpy is installed
             result = subprocess.run(
                 ["which", "scrcpy"] if not IS_WINDOWS else ["where", "scrcpy"],
                 capture_output=True, text=True
             )
-
             if result.returncode != 0:
                 QMessageBox.information(
-                    self,
-                    "scrcpy Not Found",
-                    "scrcpy is not installed on your system.\n\n"
-                    "Please install scrcpy to use screen mirroring:\n"
-                    "- Linux: sudo apt install scrcpy\n"
-                    "- Mac: brew install scrcpy\n"
-                    "- Windows: Download from GitHub"
+                    self, "scrcpy Not Found",
+                    "scrcpy is not installed.\n\n"
+                    "Install it:\n"
+                    "  Linux:   sudo apt install scrcpy\n"
+                    "  Fedora:  sudo dnf install scrcpy\n"
+                    "  Arch:    sudo pacman -S scrcpy\n"
+                    "  macOS:   brew install scrcpy\n"
+                    "  Windows: https://github.com/Genymobile/scrcpy/releases"
                 )
                 return
 
-            # Launch scrcpy
-            self.log_message("Launching scrcpy for screen mirroring...")
+            serial = self.device_serial
 
-            def launch_scrcpy():
-                try:
-                    # Use Popen to launch scrcpy as an independent GUI process
-                    # Don't capture output so the window can display properly
-                    subprocess.Popen(
-                        ["scrcpy", "-s", serial],
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL
-                    )
-                except Exception as e:
-                    emit_ui(self, lambda: self.log_message(f"scrcpy error: {str(e)}"))
+            dlg = QtWidgets.QDialog(self)
+            dlg.setWindowTitle("Screen Mirror & Control (scrcpy)")
+            dlg.resize(520, 480)
+            layout = QtWidgets.QVBoxLayout(dlg)
 
-            threading.Thread(target=launch_scrcpy, daemon=True).start()
+            # ── options ─────────────────────────────────────────────────────
+            opt_group = QtWidgets.QGroupBox("Options")
+            opt_layout = QtWidgets.QGridLayout(opt_group)
 
-            QMessageBox.information(self, "scrcpy Launched", "scrcpy screen mirroring has been launched.")
+            # Control
+            control_cb = QtWidgets.QCheckBox("Enable keyboard & mouse control")
+            control_cb.setChecked(True)
+            opt_layout.addWidget(control_cb, 0, 0, 1, 2)
+
+            # Stay awake
+            awake_cb = QtWidgets.QCheckBox("Keep device awake while mirroring")
+            awake_cb.setChecked(True)
+            opt_layout.addWidget(awake_cb, 1, 0, 1, 2)
+
+            # Turn off screen on device while mirroring
+            screen_off_cb = QtWidgets.QCheckBox("Turn device screen off while mirroring")
+            screen_off_cb.setChecked(False)
+            opt_layout.addWidget(screen_off_cb, 2, 0, 1, 2)
+
+            # Show touches
+            show_touches_cb = QtWidgets.QCheckBox("Show physical touches on device")
+            show_touches_cb.setChecked(False)
+            opt_layout.addWidget(show_touches_cb, 3, 0, 1, 2)
+
+            # Bitrate
+            opt_layout.addWidget(QtWidgets.QLabel("Video bitrate:"), 4, 0)
+            bitrate_combo = QtWidgets.QComboBox()
+            bitrate_combo.addItems(["2M", "4M", "8M", "16M", "32M"])
+            bitrate_combo.setCurrentIndex(1)  # 4M default
+            opt_layout.addWidget(bitrate_combo, 4, 1)
+
+            # Max resolution
+            opt_layout.addWidget(QtWidgets.QLabel("Max resolution:"), 5, 0)
+            res_combo = QtWidgets.QComboBox()
+            res_combo.addItems(["No limit", "1080", "720", "480"])
+            opt_layout.addWidget(res_combo, 5, 1)
+
+            # Window title
+            opt_layout.addWidget(QtWidgets.QLabel("Window title:"), 6, 0)
+            title_edit = QtWidgets.QLineEdit("DROIDCOM Mirror")
+            opt_layout.addWidget(title_edit, 6, 1)
+
+            layout.addWidget(opt_group)
+
+            # ── troubleshooting note ──────────────────────────────────────
+            note = QtWidgets.QLabel(
+                "If control doesn't work:\n"
+                "  • Enable 'USB debugging (Security settings)' in Developer Options\n"
+                "  • Enable 'Disable permission monitoring' in Developer Options\n"
+                "  • Some Samsung/MIUI devices restrict input injection by default"
+            )
+            note.setWordWrap(True)
+            note.setStyleSheet("color:#aaa; font-size:11px; padding:4px;")
+            layout.addWidget(note)
+
+            # ── status ───────────────────────────────────────────────────
+            status_label = QtWidgets.QLabel("")
+            layout.addWidget(status_label)
+
+            # ── buttons ──────────────────────────────────────────────────
+            btn_layout = QtWidgets.QHBoxLayout()
+            launch_btn = QtWidgets.QPushButton("Launch")
+            launch_btn.setMinimumHeight(36)
+            close_btn = QtWidgets.QPushButton("Close")
+            btn_layout.addWidget(launch_btn)
+            btn_layout.addWidget(close_btn)
+            layout.addLayout(btn_layout)
+
+            def launch():
+                cmd = ["scrcpy", "-s", serial]
+
+                if not control_cb.isChecked():
+                    cmd.append("--no-control")
+
+                if awake_cb.isChecked():
+                    cmd.append("--stay-awake")
+
+                if screen_off_cb.isChecked():
+                    cmd.append("--turn-screen-off")
+
+                if show_touches_cb.isChecked():
+                    cmd.append("--show-touches")
+
+                bitrate = bitrate_combo.currentText()
+                cmd += ["--video-bit-rate", bitrate]
+
+                res = res_combo.currentText()
+                if res != "No limit":
+                    cmd += ["--max-size", res]
+
+                title = title_edit.text().strip()
+                if title:
+                    cmd += ["--window-title", title]
+
+                cmd_str = " ".join(cmd)
+                self.log_message(f"Launching: {cmd_str}")
+                emit_ui(self, lambda: status_label.setText(f"Running: {cmd_str}"))
+
+                def run():
+                    try:
+                        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    except Exception as e:
+                        emit_ui(self, lambda: status_label.setText(f"Error: {e}"))
+
+                threading.Thread(target=run, daemon=True).start()
+
+            launch_btn.clicked.connect(launch)
+            close_btn.clicked.connect(dlg.close)
+
+            dlg.exec()
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to launch scrcpy: {str(e)}")
