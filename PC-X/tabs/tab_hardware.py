@@ -3,6 +3,7 @@
 import os
 
 import psutil
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
@@ -22,6 +23,7 @@ def setup_hardware_tab(module) -> None:
     scroll = QScrollArea()
     scroll.setWidgetResizable(True)
     scroll.setFrameShape(QFrame.NoFrame)
+    scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
 
     content_widget = QWidget()
     content_layout = QVBoxLayout(content_widget)

@@ -39,6 +39,7 @@ def setup_diagnostics_tab(module) -> None:
     module.diag_results = QTextEdit()
     module.diag_results.setReadOnly(True)
     module.diag_results.setMaximumHeight(250)
+    module.diag_results.setPlaceholderText("Results will appear here after running the test.")
     quick_layout.addWidget(module.diag_results)
 
     quick_btn = QPushButton("Run Quick Diagnostics")

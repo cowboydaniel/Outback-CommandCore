@@ -39,6 +39,7 @@ def setup_benchmarks_tab(module) -> None:
     module.disk_results = QTextEdit()
     module.disk_results.setReadOnly(True)
     module.disk_results.setMaximumHeight(150)
+    module.disk_results.setPlaceholderText("Results will appear here after running the test.")
     disk_layout.addWidget(module.disk_results)
 
     disk_btn = QPushButton("Run Disk Benchmark")
@@ -50,12 +51,13 @@ def setup_benchmarks_tab(module) -> None:
     cpu_group = QGroupBox("CPU Benchmark")
     cpu_layout = QVBoxLayout(cpu_group)
 
-    cpu_info = QLabel("Test CPU performance with multi-threaded workloads.")
+    cpu_info = QLabel("Test CPU performance with a single-threaded prime sieve.")
     cpu_layout.addWidget(cpu_info)
 
     module.cpu_results = QTextEdit()
     module.cpu_results.setReadOnly(True)
     module.cpu_results.setMaximumHeight(150)
+    module.cpu_results.setPlaceholderText("Results will appear here after running the test.")
     cpu_layout.addWidget(module.cpu_results)
 
     cpu_btn = QPushButton("Run CPU Benchmark")

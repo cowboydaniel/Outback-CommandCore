@@ -36,8 +36,9 @@ def setup_storage_tab(module) -> None:
     module.partition_tree.header().setSectionResizeMode(QHeaderView.ResizeToContents)
 
     try:
+        # Use lsblk with probe flags so unmounted NTFS/vfat partitions also show fstype
         result = subprocess.run(
-            ["lsblk", "-o", "NAME,SIZE,TYPE,MOUNTPOINT,FSTYPE", "--json"],
+            ["lsblk", "-o", "NAME,SIZE,TYPE,MOUNTPOINT,FSTYPE", "--json", "--fs"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,

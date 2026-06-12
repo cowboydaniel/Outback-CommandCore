@@ -7,6 +7,7 @@ import socket
 from datetime import datetime
 
 import psutil
+import subprocess
 from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
@@ -107,6 +108,54 @@ def setup_system_info_tab(module) -> None:
         module.system_info_labels[label] = value_label
 
     content_layout.addWidget(boot_group)
+
+    stats_group = QGroupBox("System Stats")
+    stats_layout = QGridLayout(stats_group)
+
+    try:
+        load1, load5, load15 = os.getloadavg()
+        load_str = f"{load1:.2f}  {load5:.2f}  {load15:.2f}  (1m / 5m / 15m)"
+    except Exception:
+        load_str = "N/A"
+
+    try:
+        proc_count = len(psutil.pids())
+    except Exception:
+        proc_count = "N/A"
+
+    try:
+        pending_updates = "N/A"
+        result = subprocess.run(
+            ["apt-get", "-s", "upgrade"],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0:
+            count = sum(
+                1 for line in result.stdout.splitlines()
+                if line.startswith("Inst ")
+            )
+            pending_updates = str(count)
+    except Exception:
+        pass
+
+    stats_data = [
+        ("Load Average", load_str),
+        ("Running Processes", str(proc_count)),
+        ("Pending Updates", pending_updates),
+    ]
+
+    for row, (label, value) in enumerate(stats_data):
+        label_widget = QLabel(f"{label}:")
+        label_widget.setFont(QFont("Arial", 10, QFont.Bold))
+        stats_layout.addWidget(label_widget, row, 0)
+
+        value_label = QLabel(value)
+        value_label.setFont(QFont("Arial", 10))
+        value_label.setWordWrap(True)
+        stats_layout.addWidget(value_label, row, 1)
+        module.system_info_labels[label] = value_label
+
+    content_layout.addWidget(stats_group)
 
     content_layout.addStretch()
     scroll.setWidget(content_widget)

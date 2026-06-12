@@ -172,7 +172,7 @@ class PCToolsModule(QWidget):
         header_layout = QHBoxLayout(header_frame)
         header_layout.setContentsMargins(0, 0, 0, 0)
 
-        header_label = QLabel("PC Tools & Diagnostics")
+        header_label = QLabel("PC-X - Linux System Management")
         header_label.setFont(QFont("Arial", 14, QFont.Bold))
         header_label.setStyleSheet(f"color: {self.colors['primary']};")
         header_layout.addWidget(header_label)
@@ -185,6 +185,7 @@ class PCToolsModule(QWidget):
         status_layout = QVBoxLayout(status_group)
 
         smartctl_available = shutil.which("smartctl") is not None
+<<<<<<< Updated upstream
         smartctl_row, self.smartctl_label = self.create_tool_status_row(
             "SMART Diagnostics Tools",
             smartctl_available,
@@ -197,6 +198,22 @@ class PCToolsModule(QWidget):
             lshw_available,
         )
         status_layout.addWidget(lshw_row)
+=======
+        tools_status = "Available" if smartctl_available else "Not Available"
+        status_icon = "\u2713" if smartctl_available else "\u2717"
+
+        self.smartctl_label = QLabel(f"SMART Diagnostics Tools: {status_icon} {tools_status}")
+        self.smartctl_label.setFont(QFont("Arial", 10))
+        status_layout.addWidget(self.smartctl_label)
+
+        lshw_available = shutil.which("lshw") is not None
+        lshw_status = "Available" if lshw_available else "Not Available"
+        lshw_icon = "\u2713" if lshw_available else "\u2717"
+
+        self.lshw_label = QLabel(f"Hardware Info Tools: {lshw_icon} {lshw_status}")
+        self.lshw_label.setFont(QFont("Arial", 10))
+        status_layout.addWidget(self.lshw_label)
+>>>>>>> Stashed changes
 
         main_layout.addWidget(status_group)
 
@@ -349,6 +366,9 @@ class PCToolsModule(QWidget):
                     status = "Charging" if battery.power_plugged else "Discharging"
                     self.battery_status_label.setText(status)
 
+            # Update last-update timestamp every tick
+            self.update_last_update_time()
+
             # Process update queue
             self.process_update_queue()
 
@@ -491,7 +511,7 @@ class PCToolsModule(QWidget):
             if result.returncode == 0:
                 for line in result.stdout.splitlines():
                     if "VGA" in line or "3D controller" in line:
-                        full_desc = line.split(':', 1)[1].strip()
+                        full_desc = line.split(': ', 1)[1].strip() if ': ' in line else line
                         gpu_list.append(self.get_friendly_gpu_name(full_desc))
         except Exception as e:
             logging.error(f"Error getting GPU info: {e}")
@@ -501,8 +521,8 @@ class PCToolsModule(QWidget):
         """Convert raw GPU identification to friendly name."""
         clean_name = gpu_string
         patterns_to_remove = [
-            r'\[.*?\]', r'\(rev \w+\)', r'Corporation\s+',
-            r'Technologies\s+Inc\.?\s*', r'Semiconductor\s+',
+            r'\[.*?\]', r'\(rev \w+\)', r'\(prog-if[^)]*\)',
+            r'Corporation\s+', r'Technologies\s+Inc\.?\s*', r'Semiconductor\s+',
         ]
         for pattern in patterns_to_remove:
             clean_name = re.sub(pattern, ' ', clean_name, flags=re.IGNORECASE)
@@ -523,7 +543,7 @@ class PCToolsModule(QWidget):
                         return line.split(':')[1].strip()
         except Exception as e:
             logging.debug(f"Error getting RAM speed: {e}")
-        return "Unknown"
+        return "Unknown (requires elevated privileges — run with sudo for speed info)"
 
     def get_battery_info(self):
         """Get battery information."""
@@ -815,6 +835,43 @@ class PCToolsModule(QWidget):
                 self.log_message("Failed to analyze disk space")
         except Exception as e:
             self.log_message(f"Error: {e}")
+
+    def clear_tmp_files(self):
+        """Remove files from /tmp older than 1 day."""
+        try:
+            result = subprocess.run(
+                ['find', '/tmp', '-maxdepth', '1', '-mtime', '+1', '-delete'],
+                capture_output=True, text=True, timeout=15,
+            )
+            if result.returncode == 0:
+                self.log_message("Cleared /tmp files older than 1 day.")
+            else:
+                self.log_message(f"Could not clear /tmp: {result.stderr.strip()}")
+        except Exception as e:
+            self.log_message(f"Error clearing /tmp: {e}")
+
+    def clear_apt_cache(self):
+        """Clean APT package cache."""
+        if not shutil.which('apt-get'):
+            self.log_message("apt-get not found — APT cache clean skipped.")
+            return
+        try:
+            result = subprocess.run(
+                ['sudo', 'apt-get', 'clean'],
+                capture_output=True, text=True, timeout=30,
+            )
+            if result.returncode == 0:
+                self.log_message("APT cache cleaned successfully.")
+            else:
+                err = (result.stderr or result.stdout).strip()
+                if not err or "Permission denied" in err or "sudo" in err.lower():
+                    self.log_message(
+                        "APT cache clean requires elevated privileges — run with sudo."
+                    )
+                else:
+                    self.log_message(f"APT cache clean failed: {err}")
+        except Exception as e:
+            self.log_message(f"Error cleaning APT cache: {e}")
 
     def run_quick_diagnostics(self):
         """Run quick system diagnostics."""

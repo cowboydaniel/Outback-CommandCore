@@ -30,15 +30,23 @@ def setup_utilities_tab(module) -> None:
     header.setStyleSheet(f"color: {module.colors['primary']};")
     content_layout.addWidget(header)
 
-    cleanup_group = QGroupBox("System Cleanup")
+    cleanup_group = QGroupBox("Disk Analysis & Cleanup")
     cleanup_layout = QVBoxLayout(cleanup_group)
 
-    cleanup_info = QLabel("Clean temporary files and caches to free disk space.")
+    cleanup_info = QLabel("Analyze disk usage and remove unnecessary files to free space.")
     cleanup_layout.addWidget(cleanup_info)
 
-    cleanup_btn = QPushButton("Analyze Disk Space")
-    cleanup_btn.clicked.connect(module.analyze_disk_space)
-    cleanup_layout.addWidget(cleanup_btn)
+    analyze_btn = QPushButton("Analyze Disk Space")
+    analyze_btn.clicked.connect(module.analyze_disk_space)
+    cleanup_layout.addWidget(analyze_btn)
+
+    tmp_btn = QPushButton("Clear /tmp Files (older than 1 day)")
+    tmp_btn.clicked.connect(module.clear_tmp_files)
+    cleanup_layout.addWidget(tmp_btn)
+
+    apt_btn = QPushButton("Clean APT Cache")
+    apt_btn.clicked.connect(module.clear_apt_cache)
+    cleanup_layout.addWidget(apt_btn)
 
     content_layout.addWidget(cleanup_group)
 

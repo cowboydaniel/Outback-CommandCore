@@ -57,7 +57,9 @@ def setup_network_tab(module) -> None:
                     label = QLabel("IPv6 Address:")
                     label.setFont(QFont("Arial", 9, QFont.Bold))
                     iface_layout.addWidget(label, row, 0)
-                    iface_layout.addWidget(QLabel(addr.address[:30] + "..."), row, 1)
+                    ipv6_label = QLabel(addr.address)
+                    ipv6_label.setWordWrap(True)
+                    iface_layout.addWidget(ipv6_label, row, 1)
                     row += 1
                 elif addr.family.name == "AF_PACKET":
                     label = QLabel("MAC Address:")
