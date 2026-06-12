@@ -91,7 +91,24 @@ class SettingsTab(QWidget):
         sep2 = QFrame(); sep2.setFrameShape(QFrame.HLine)
         sep2.setStyleSheet("color: #4A4A4A;"); card_layout.addWidget(sep2)
 
-        chk_style = "color: #ECF0F1; font-size: 13px; background: transparent;"
+        chk_style = """
+            QCheckBox {
+                color: #ECF0F1;
+                font-size: 13px;
+                background: transparent;
+            }
+            QCheckBox::indicator {
+                width: 16px;
+                height: 16px;
+                border: 1px solid #4A4A4A;
+                border-radius: 3px;
+                background: #2A2D2E;
+            }
+            QCheckBox::indicator:checked {
+                background: #00a8ff;
+                border-color: #00a8ff;
+            }
+        """
         auto_refresh = QCheckBox()
         auto_refresh.setChecked(True)
         auto_refresh.setStyleSheet(chk_style)
