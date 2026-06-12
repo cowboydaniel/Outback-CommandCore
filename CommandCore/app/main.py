@@ -127,11 +127,15 @@ class CommandCoreLauncher(QMainWindow):
         
         # Set application style
         self.setStyleSheet("""
-            QMainWindow {
+            QMainWindow, QWidget {
                 background-color: #2A2D2E;
                 color: #ECF0F1;
             }
-            
+
+            QTabBar {
+                background: #2A2D2E;
+            }
+
             QTabWidget::pane {
                 border: 1px solid #3E3E3E;
                 border-radius: 4px;
