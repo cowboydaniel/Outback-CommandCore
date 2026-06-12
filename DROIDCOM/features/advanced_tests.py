@@ -3404,38 +3404,43 @@ class AdvancedTestsMixin:
             control_cb.setChecked(True)
             opt_layout.addWidget(control_cb, 0, 0, 1, 2)
 
+            # Clipboard autosync
+            clipboard_cb = QCheckBox("Sync clipboard between host and device")
+            clipboard_cb.setChecked(False)
+            opt_layout.addWidget(clipboard_cb, 1, 0, 1, 2)
+
             # Stay awake
             awake_cb = QCheckBox("Keep device awake while mirroring")
             awake_cb.setChecked(True)
-            opt_layout.addWidget(awake_cb, 1, 0, 1, 2)
+            opt_layout.addWidget(awake_cb, 2, 0, 1, 2)
 
             # Turn off screen on device while mirroring
             screen_off_cb = QCheckBox("Turn device screen off while mirroring")
             screen_off_cb.setChecked(False)
-            opt_layout.addWidget(screen_off_cb, 2, 0, 1, 2)
+            opt_layout.addWidget(screen_off_cb, 3, 0, 1, 2)
 
             # Show touches
             show_touches_cb = QCheckBox("Show physical touches on device")
             show_touches_cb.setChecked(False)
-            opt_layout.addWidget(show_touches_cb, 3, 0, 1, 2)
+            opt_layout.addWidget(show_touches_cb, 4, 0, 1, 2)
 
             # Bitrate
-            opt_layout.addWidget(QLabel("Video bitrate:"), 4, 0)
+            opt_layout.addWidget(QLabel("Video bitrate:"), 5, 0)
             bitrate_combo = QComboBox()
             bitrate_combo.addItems(["2M", "4M", "8M", "16M", "32M"])
             bitrate_combo.setCurrentIndex(1)  # 4M default
-            opt_layout.addWidget(bitrate_combo, 4, 1)
+            opt_layout.addWidget(bitrate_combo, 5, 1)
 
             # Max resolution
-            opt_layout.addWidget(QLabel("Max resolution:"), 5, 0)
+            opt_layout.addWidget(QLabel("Max resolution:"), 6, 0)
             res_combo = QComboBox()
             res_combo.addItems(["No limit", "1080", "720", "480"])
-            opt_layout.addWidget(res_combo, 5, 1)
+            opt_layout.addWidget(res_combo, 6, 1)
 
             # Window title
-            opt_layout.addWidget(QLabel("Window title:"), 6, 0)
+            opt_layout.addWidget(QLabel("Window title:"), 7, 0)
             title_edit = QLineEdit("DROIDCOM Mirror")
-            opt_layout.addWidget(title_edit, 6, 1)
+            opt_layout.addWidget(title_edit, 7, 1)
 
             layout.addWidget(opt_group)
 
@@ -3444,7 +3449,8 @@ class AdvancedTestsMixin:
                 "If control doesn't work:\n"
                 "  • Enable 'USB debugging (Security settings)' in Developer Options\n"
                 "  • Enable 'Disable permission monitoring' in Developer Options\n"
-                "  • Some Samsung/MIUI devices restrict input injection by default"
+                "  • Some Samsung/MIUI/older Android devices restrict input injection\n"
+                "  • Uncheck 'Enable keyboard & mouse control' for view-only mode"
             )
             note.setWordWrap(True)
             note.setStyleSheet("color:#aaa; font-size:11px; padding:4px;")
@@ -3468,6 +3474,11 @@ class AdvancedTestsMixin:
 
                 if not control_cb.isChecked():
                     cmd.append("--no-control")
+
+                # Suppress clipboard listener registration on older Android versions
+                # that don't expose IClipboard.addPrimaryClipChangedListener.
+                if not clipboard_cb.isChecked():
+                    cmd.append("--no-clipboard-autosync")
 
                 if awake_cb.isChecked():
                     cmd.append("--stay-awake")
@@ -3502,11 +3513,27 @@ class AdvancedTestsMixin:
                             stderr=subprocess.PIPE,
                             env=os.environ.copy(),
                         )
-                        # Read stderr line-by-line without blocking the process
+                        input_crash_seen = False
                         for line in proc.stderr:
                             msg = line.decode(errors="replace").strip()
-                            if msg:
-                                emit_ui(self, lambda m=msg: self.log_message(f"scrcpy: {m}"))
+                            if not msg:
+                                continue
+                            emit_ui(self, lambda m=msg: self.log_message(f"scrcpy: {m}"))
+                            # InputManager NPE means this Android build blocks input
+                            # injection via reflection; warn the user to use view-only mode.
+                            if not input_crash_seen and "InputManager" in msg and (
+                                "NullPointerException" in msg or "AssertionError" in msg
+                            ):
+                                input_crash_seen = True
+                                hint = (
+                                    "scrcpy: [DROIDCOM] Input injection failed — "
+                                    "this device does not support remote control. "
+                                    "Re-launch with 'Enable keyboard & mouse control' unchecked."
+                                )
+                                emit_ui(self, lambda h=hint: self.log_message(h))
+                                emit_ui(self, lambda: status_label.setText(
+                                    "Input injection unsupported — try view-only mode"
+                                ))
                     except Exception as e:
                         emit_ui(self, lambda: status_label.setText(f"Error: {e}"))
 
