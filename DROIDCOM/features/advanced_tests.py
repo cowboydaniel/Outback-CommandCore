@@ -3519,10 +3519,12 @@ class AdvancedTestsMixin:
                             if not msg:
                                 continue
                             emit_ui(self, lambda m=msg: self.log_message(f"scrcpy: {m}"))
-                            # InputManager NPE means this Android build blocks input
-                            # injection via reflection; warn the user to use view-only mode.
-                            if not input_crash_seen and "InputManager" in msg and (
-                                "NullPointerException" in msg or "AssertionError" in msg
+                            # AssertionError wrapping InvocationTargetException is the
+                            # first line of the InputManager NPE crash that fires when
+                            # this Android build blocks input injection via reflection.
+                            if not input_crash_seen and (
+                                ("AssertionError" in msg and "InvocationTargetException" in msg)
+                                or "getInputManager" in msg
                             ):
                                 input_crash_seen = True
                                 hint = (
