@@ -185,7 +185,6 @@ class PCToolsModule(QWidget):
         status_layout = QVBoxLayout(status_group)
 
         smartctl_available = shutil.which("smartctl") is not None
-<<<<<<< Updated upstream
         smartctl_row, self.smartctl_label = self.create_tool_status_row(
             "SMART Diagnostics Tools",
             smartctl_available,
@@ -198,22 +197,6 @@ class PCToolsModule(QWidget):
             lshw_available,
         )
         status_layout.addWidget(lshw_row)
-=======
-        tools_status = "Available" if smartctl_available else "Not Available"
-        status_icon = "\u2713" if smartctl_available else "\u2717"
-
-        self.smartctl_label = QLabel(f"SMART Diagnostics Tools: {status_icon} {tools_status}")
-        self.smartctl_label.setFont(QFont("Arial", 10))
-        status_layout.addWidget(self.smartctl_label)
-
-        lshw_available = shutil.which("lshw") is not None
-        lshw_status = "Available" if lshw_available else "Not Available"
-        lshw_icon = "\u2713" if lshw_available else "\u2717"
-
-        self.lshw_label = QLabel(f"Hardware Info Tools: {lshw_icon} {lshw_status}")
-        self.lshw_label.setFont(QFont("Arial", 10))
-        status_layout.addWidget(self.lshw_label)
->>>>>>> Stashed changes
 
         main_layout.addWidget(status_group)
 
