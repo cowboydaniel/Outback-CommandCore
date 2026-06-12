@@ -31,6 +31,12 @@ class TestConfig(unittest.TestCase):
         self.assertIn('APP_ENTRYPOINT', source)
         self.assertTrue((PCX_DIR / "app" / "main.py").is_file())
 
+    def test_worker_threads_do_not_start_qtimers_directly(self):
+        main_source = (PCX_DIR / "app" / "main.py").read_text(encoding="utf-8")
+        self.assertNotIn("QTimer.singleShot(0", main_source)
+        self.assertIn("ui_update_requested", main_source)
+        self.assertIn("post_ui_update", main_source)
+
     def test_privileged_commands_use_gui_elevation_helper(self):
         main_source = (PCX_DIR / "app" / "main.py").read_text(encoding="utf-8")
         self.assertNotIn("['sudo'", main_source)

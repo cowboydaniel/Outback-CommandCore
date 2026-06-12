@@ -84,6 +84,7 @@ class PCToolsModule(QWidget):
     smart_cache_max_age = config.SMART_CACHE_MAX_AGE
     sudo_authenticated = False
     smartctl_capabilities_set = False
+    ui_update_requested = Signal(object)
 
     def __init__(self, parent=None, current_user=None):
         """Initialize the PC Tools module."""
@@ -141,9 +142,21 @@ class PCToolsModule(QWidget):
 
         # Update queue for thread-safe UI updates
         self.update_queue = queue.Queue()
+        self.ui_update_requested.connect(self._run_ui_update)
 
         # Create the UI
         self.create_widgets()
+
+    def post_ui_update(self, callback):
+        """Queue a callable to run on the Qt GUI thread."""
+        self.ui_update_requested.emit(callback)
+
+    def _run_ui_update(self, callback):
+        """Run a queued GUI-thread callback safely."""
+        try:
+            callback()
+        except Exception as exc:
+            logging.debug(f"Error running queued UI update: {exc}")
 
     def create_widgets(self):
         """Create the main UI widgets."""
@@ -612,7 +625,7 @@ class PCToolsModule(QWidget):
 
     def update_smart_display(self, text):
         """Update SMART display with text."""
-        QTimer.singleShot(0, lambda: self.smart_info_text.setText(text))
+        self.post_ui_update(lambda: self.smart_info_text.setText(text))
 
     def get_device_type(self, device):
         """Determine device type for SMART commands."""
@@ -660,47 +673,46 @@ class PCToolsModule(QWidget):
 
         def run_test():
             if importlib.util.find_spec("speedtest") is None:
-                QTimer.singleShot(0, lambda: self.phase_label.setText(
+                self.post_ui_update(lambda: self.phase_label.setText(
                     "speedtest-cli not installed. Run: pip install speedtest-cli"
                 ))
-                QTimer.singleShot(0, lambda: self.test_button.setEnabled(True))
-                QTimer.singleShot(0, lambda: self.test_button.setText("Start Speed Test"))
+                self.post_ui_update(lambda: self.test_button.setEnabled(True))
+                self.post_ui_update(lambda: self.test_button.setText("Start Speed Test"))
                 return
 
             speedtest = importlib.import_module("speedtest")
             try:
                 st = speedtest.Speedtest()
 
-                QTimer.singleShot(0, lambda: self.phase_label.setText("Finding best server..."))
+                self.post_ui_update(lambda: self.phase_label.setText("Finding best server..."))
                 server = st.get_best_server()
-                QTimer.singleShot(0, lambda: self.server_label.setText(
-                    f"{server['name']} ({server['country']})"
-                ))
+                server_text = f"{server['name']} ({server['country']})"
+                self.post_ui_update(lambda: self.server_label.setText(server_text))
 
-                QTimer.singleShot(0, lambda: self.phase_label.setText("Testing download..."))
-                QTimer.singleShot(0, lambda: self.speed_progress.setValue(25))
+                self.post_ui_update(lambda: self.phase_label.setText("Testing download..."))
+                self.post_ui_update(lambda: self.speed_progress.setValue(25))
                 download = st.download()
-                QTimer.singleShot(0, lambda: self.download_speed.setText(
-                    f"{download / 1_000_000:.2f} Mbps"
-                ))
+                download_text = f"{download / 1_000_000:.2f} Mbps"
+                self.post_ui_update(lambda: self.download_speed.setText(download_text))
 
-                QTimer.singleShot(0, lambda: self.phase_label.setText("Testing upload..."))
-                QTimer.singleShot(0, lambda: self.speed_progress.setValue(50))
+                self.post_ui_update(lambda: self.phase_label.setText("Testing upload..."))
+                self.post_ui_update(lambda: self.speed_progress.setValue(50))
                 upload = st.upload()
-                QTimer.singleShot(0, lambda: self.upload_speed.setText(
-                    f"{upload / 1_000_000:.2f} Mbps"
-                ))
+                upload_text = f"{upload / 1_000_000:.2f} Mbps"
+                self.post_ui_update(lambda: self.upload_speed.setText(upload_text))
 
                 results = st.results.dict()
-                QTimer.singleShot(0, lambda: self.ping_label.setText(f"{results['ping']:.0f} ms"))
-                QTimer.singleShot(0, lambda: self.speed_progress.setValue(100))
-                QTimer.singleShot(0, lambda: self.phase_label.setText("Test completed!"))
+                ping_text = f"{results['ping']:.0f} ms"
+                self.post_ui_update(lambda: self.ping_label.setText(ping_text))
+                self.post_ui_update(lambda: self.speed_progress.setValue(100))
+                self.post_ui_update(lambda: self.phase_label.setText("Test completed!"))
 
             except Exception as e:
-                QTimer.singleShot(0, lambda: self.phase_label.setText(f"Error: {e}"))
+                error_text = f"Error: {e}"
+                self.post_ui_update(lambda: self.phase_label.setText(error_text))
             finally:
-                QTimer.singleShot(0, lambda: self.test_button.setEnabled(True))
-                QTimer.singleShot(0, lambda: self.test_button.setText("Start Speed Test"))
+                self.post_ui_update(lambda: self.test_button.setEnabled(True))
+                self.post_ui_update(lambda: self.test_button.setText("Start Speed Test"))
 
         thread = threading.Thread(target=run_test, daemon=True)
         thread.start()
@@ -741,9 +753,10 @@ class PCToolsModule(QWidget):
                         f"Write Speed: {write_speed:.2f} MB/s\n"
                         f"Read Speed: {read_speed:.2f} MB/s\n"
                     )
-                    QTimer.singleShot(0, lambda: self.disk_results.setText(result))
+                    self.post_ui_update(lambda: self.disk_results.setText(result))
             except Exception as e:
-                QTimer.singleShot(0, lambda: self.disk_results.setText(f"Error: {e}"))
+                error_text = f"Error: {e}"
+                self.post_ui_update(lambda: self.disk_results.setText(error_text))
 
         thread = threading.Thread(target=run_test, daemon=True)
         thread.start()
@@ -778,9 +791,10 @@ class PCToolsModule(QWidget):
                     f"Time: {elapsed:.2f} seconds\n"
                     f"Score: {int(10000 / elapsed)} points\n"
                 )
-                QTimer.singleShot(0, lambda: self.cpu_results.setText(result))
+                self.post_ui_update(lambda: self.cpu_results.setText(result))
             except Exception as e:
-                QTimer.singleShot(0, lambda: self.cpu_results.setText(f"Error: {e}"))
+                error_text = f"Error: {e}"
+                self.post_ui_update(lambda: self.cpu_results.setText(error_text))
 
         thread = threading.Thread(target=run_test, daemon=True)
         thread.start()
