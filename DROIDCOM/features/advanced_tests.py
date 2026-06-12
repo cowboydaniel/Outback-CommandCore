@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+import shutil
 import subprocess
 import threading
 import time
@@ -3504,6 +3505,11 @@ class AdvancedTestsMixin:
 
             def launch():
                 cmd = ["scrcpy", "-s", serial]
+
+                # scrcpy built from source may not find system adb; pass its path explicitly.
+                adb_path = shutil.which("adb")
+                if adb_path:
+                    cmd += ["--adb-path", adb_path]
 
                 if not control_cb.isChecked():
                     cmd.append("--no-control")
