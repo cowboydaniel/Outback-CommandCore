@@ -188,7 +188,7 @@ class ConnectionMixin:
         try:
 
             # Check if the device is marked as offline/disconnected
-            if "DISCONNECTED" in device_entry or "Offline" in device_entry or "❌" in device_entry:
+            if "DISCONNECTED" in device_entry or "Offline" in device_entry or "(DISCONNECTED)" in device_entry:
                 emit_ui(self, lambda: self.log_message(f"Rejected connection attempt to offline device: {device_entry}"))
                 emit_ui(self, lambda: QtWidgets.QMessageBox.information(
                     self.parent,
@@ -300,11 +300,11 @@ class ConnectionMixin:
                     if len(parts) == 2:
                         serial, state = parts
                         if state == "device":
-                            devices.append((serial, "✅ Ready"))
+                            devices.append((serial, "Ready"))
                         elif state == "unauthorized":
-                            devices.append((serial, "⚠ Unauthorized"))
+                            devices.append((serial, "Unauthorized"))
                         else:
-                            devices.append((serial, f"❌ {state.capitalize()} (DISCONNECTED)"))
+                            devices.append((serial, f"{state.capitalize()} (DISCONNECTED)"))
 
             def update_ui():
                 self.device_listbox.clear()
@@ -334,7 +334,7 @@ class ConnectionMixin:
                     connected_device_index = None
                     for i in range(self.device_listbox.count()):
                         entry = self.device_listbox.item(i).text()
-                        if "DISCONNECTED" not in entry and "Offline" not in entry and "❌" not in entry:
+                        if "DISCONNECTED" not in entry and "Offline" not in entry:
                             connected_device_index = i
                             break
 

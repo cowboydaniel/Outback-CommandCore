@@ -1321,7 +1321,7 @@ class SecurityMixin:
         def scan_complete():
             emit_ui(self, lambda: scan_btn.setEnabled(True))
             update_status("Scan complete!", 100)
-            emit_ui(self, lambda: append_text_safe(details_text, "\n✅ Scan complete!"))
+            emit_ui(self, lambda: append_text_safe(details_text, "\nScan complete!"))
 
         def scan_worker():
             try:
@@ -1468,7 +1468,7 @@ class SecurityMixin:
             except Exception as exc:
                 emit_ui(
                     self,
-                    lambda: append_text_safe(details_text, f"\n❌ Error during scan: {exc}"),
+                    lambda: append_text_safe(details_text, f"\nError during scan: {exc}"),
                 )
                 update_status(f"Error: {str(exc)[:50]}...", 0)
                 emit_ui(self, lambda: scan_btn.setEnabled(True))
@@ -1489,10 +1489,10 @@ class SecurityMixin:
         append_text_safe(details_text, "=" * 50)
 
         if len(permissions) == 1 and "No dangerous permissions" in permissions[0]:
-            append_text_safe(details_text, "✅ This app doesn't request any dangerous permissions.")
+            append_text_safe(details_text, "This app doesn't request any dangerous permissions.")
         elif permissions:
             append_text_safe(
-                details_text, f"⚠️ This app requests {len(permissions)} dangerous permissions:\n"
+                details_text, f"This app requests {len(permissions)} dangerous permissions:\n"
             )
             for perm in permissions:
                 append_text_safe(details_text, f"• {perm}")
@@ -1925,7 +1925,7 @@ class SecurityMixin:
                 for issue in security_issues:
                     append_text_safe(details_text, issue)
             else:
-                append_text_safe(details_text, "✅ No major security issues detected.\n")
+                append_text_safe(details_text, "No major security issues detected.\n")
 
             append_text_safe(details_text, "=== Recommendations ===\n")
             if bootloader_unlocked:

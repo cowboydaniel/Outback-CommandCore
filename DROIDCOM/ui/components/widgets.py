@@ -11,6 +11,7 @@ import logging
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from ...utils.qt_dispatcher import emit_ui
+from ..icon_utils import get_status_icon, create_icon_label
 from ..styles import (
     get_main_stylesheet,
     get_card_button_style,
@@ -213,9 +214,8 @@ class WidgetsMixin:
         setup_layout.setSpacing(16)
 
         # Status icon
-        status_icon = "\u2705" if self.platform_tools_installed else "\u274C"
-        icon_label = QtWidgets.QLabel(status_icon, self.setup_status_frame)
-        icon_label.setStyleSheet("font-size: 18px; background: transparent;")
+        icon_label = create_icon_label('success' if self.platform_tools_installed else 'error', size=18)
+        icon_label.setStyleSheet("background: transparent;")
         setup_layout.addWidget(icon_label)
 
         # Status text

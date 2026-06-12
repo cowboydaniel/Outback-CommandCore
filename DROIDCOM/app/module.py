@@ -16,6 +16,7 @@ import urllib.request
 from .config import IS_WINDOWS
 from ..dependencies import check_and_install_android_dependencies
 from ..utils.qt_dispatcher import emit_ui, get_ui_dispatcher
+from ..ui.icon_utils import get_status_icon
 
 # Import UI mixin
 from ..ui.components.widgets import WidgetsMixin
@@ -96,7 +97,7 @@ class AndroidToolsModule(
             self.platform_tools_installed = self._check_platform_tools()
 
         # Update UI to reflect the actual tools status
-        tools_status = "✅ Installed" if self.platform_tools_installed else "❌ Not Installed"
+        tools_status = "Installed" if self.platform_tools_installed else "Not Installed"
         self.tools_label.setText(f"Android Platform Tools: {tools_status}")
 
         # Automatically try to connect to device when module is opened, if tools are installed
@@ -155,6 +156,21 @@ class AndroidToolsModule(
             return True
 
         try:
+            # Check common Linux/Mac installation locations first
+            common_locations = [
+                '/usr/bin/adb',
+                '/usr/local/bin/adb',
+                '/opt/android-sdk/platform-tools/adb',
+                os.path.expanduser('~/Android/Sdk/platform-tools/adb'),
+                os.path.expanduser('~/Android/platform-tools/adb'),
+                '/usr/lib/android-sdk/platform-tools/adb'
+            ]
+
+            for location in common_locations:
+                if os.path.exists(location):
+                    self.log_message(f"Found ADB at: {location}")
+                    return True
+
             # Check if ADB is in PATH
             result = subprocess.run(
                 ['adb', 'version'],
@@ -167,20 +183,6 @@ class AndroidToolsModule(
             if result.returncode == 0:
                 self.log_message(f"ADB found: {result.stdout.strip()}")
                 return True
-
-            # Check common Linux/Mac installation locations
-            common_locations = [
-                '/usr/bin/adb',
-                '/usr/local/bin/adb',
-                '/opt/android-sdk/platform-tools/adb',
-                os.path.expanduser('~/Android/Sdk/platform-tools/adb'),
-                '/usr/lib/android-sdk/platform-tools/adb'
-            ]
-
-            for location in common_locations:
-                if os.path.exists(location):
-                    self.log_message(f"Found ADB at: {location}")
-                    return True
 
             self.log_message("Could not find ADB executable")
 
@@ -244,9 +246,9 @@ class AndroidToolsModule(
             except Exception as e:
                 self.log_message(f"Download failed: {str(e)}")
                 self.update_status("Installation failed")
-                QtWidgets.QMessageBox.critical(
+                emit_ui(self, lambda: QtWidgets.QMessageBox.critical(
                     self, "Download Error", f"Failed to download Android platform tools: {str(e)}"
-                )
+                ))
                 return
 
             # Determine the installation directory
@@ -270,9 +272,9 @@ class AndroidToolsModule(
             except Exception as e:
                 self.log_message(f"Extraction failed: {str(e)}")
                 self.update_status("Installation failed")
-                QtWidgets.QMessageBox.critical(
+                emit_ui(self, lambda: QtWidgets.QMessageBox.critical(
                     self, "Extraction Error", f"Failed to extract Android platform tools: {str(e)}"
-                )
+                ))
                 return
 
             # Set up PATH environment variable
@@ -307,25 +309,25 @@ class AndroidToolsModule(
                 self.log_message(f"Failed to clean up temporary files: {str(e)}")
 
             # Update UI to reflect successful installation
-            emit_ui(self, lambda: self.tools_label.setText("Android Platform Tools: ✅ Installed"))
+            emit_ui(self, lambda: self.tools_label.setText("Android Platform Tools: Installed"))
             self.platform_tools_installed = True
 
             # Show success message with PATH instructions
             self.update_status("Installation completed")
             self.log_message("Android platform tools installed successfully")
 
-            QtWidgets.QMessageBox.information(
+            emit_ui(self, lambda: QtWidgets.QMessageBox.information(
                 self,
                 "Installation Complete",
                 f"Android platform tools have been installed successfully.\n\n{path_instructions}"
-            )
+            ))
 
         except Exception as e:
             self.log_message(f"Installation error: {str(e)}")
             self.update_status("Installation failed")
-            QtWidgets.QMessageBox.critical(
+            emit_ui(self, lambda: QtWidgets.QMessageBox.critical(
                 self, "Installation Error", f"Failed to install Android platform tools: {str(e)}"
-            )
+            ))
 
     def run_adb_command(self, command, device_serial=None, timeout=60):
         """Run an ADB command and return the result
