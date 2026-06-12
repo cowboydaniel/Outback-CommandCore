@@ -321,14 +321,16 @@ class SplashScreen(QMainWindow):
 
         # Drop always-on-top so the main window can come to the front
         self.setWindowFlag(Qt.WindowStaysOnTopHint, False)
-        self.show()  # re-show to apply the flag change
 
         def do_close():
-            """Close the splash if still visible."""
-            if self.isVisible():
-                self.close_splash(main_window)
+            self.hide()
+            self.close()
+            if main_window:
+                main_window.show()
+                main_window.raise_()
+                main_window.activateWindow()
 
-        # Create fade out animation
+        # Short fade then close unconditionally
         self.fade_out = QPropertyAnimation(self, b"windowOpacity")
         self.fade_out.setDuration(300)
         self.fade_out.setStartValue(1.0)
@@ -336,15 +338,17 @@ class SplashScreen(QMainWindow):
         self.fade_out.finished.connect(do_close)
         self.fade_out.start()
 
-        # Safety fallback: windowOpacity animation may not work on translucent
-        # windows on some platforms. Ensure splash closes even if animation fails.
-        QTimer.singleShot(350, do_close)
+        # Unconditional fallback in case opacity animation doesn't fire
+        QTimer.singleShot(400, do_close)
     
     def close_splash(self, main_window):
         """Close the splash screen and show the main window."""
+        self.hide()
         self.close()
         if main_window:
             main_window.show()
+            main_window.raise_()
+            main_window.activateWindow()
     
     def mousePressEvent(self, event):
         """Handle mouse press events for window dragging."""
