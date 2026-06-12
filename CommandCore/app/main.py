@@ -14,21 +14,82 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # Check and install dependencies before importing anything else
 def ensure_dependencies():
     """Ensure all module dependencies are installed before starting."""
+    has_terminal = sys.stdin is not None and sys.stdin.isatty()
     try:
-        from app.dependency_installer import check_and_install_dependencies
-        print("\nChecking module dependencies...\n")
-        success = check_and_install_dependencies(verbose=True)
-        if not success:
-            print("\nWarning: Some dependencies could not be installed.")
-            print("The application may not function correctly.")
-            response = input("\nContinue anyway? [y/N]: ").strip().lower()
-            if response != 'y':
-                print("Exiting.")
-                sys.exit(1)
-        print()  # Add blank line before Qt output
+        from app.dependency_installer import (
+            gather_all_dependencies,
+            find_missing_dependencies,
+            install_dependencies,
+        )
+
+        deps = gather_all_dependencies()
+        missing = find_missing_dependencies(deps)
+
+        if not missing:
+            if has_terminal:
+                print("\nAll dependencies already installed.\n")
+            return
+
+        if has_terminal:
+            print(f"\nInstalling {len(missing)} missing dependencies...\n")
+            success, failed = install_dependencies(missing, verbose=True)
+            if not success:
+                print("\nWarning: Some dependencies could not be installed.")
+                response = input("\nContinue anyway? [y/N]: ").strip().lower()
+                if response != 'y':
+                    sys.exit(1)
+            print()
+        else:
+            _gui_install_dependencies(missing)
+
     except Exception as e:
-        print(f"Warning: Dependency check failed: {e}")
-        print("Continuing with application startup...")
+        if has_terminal:
+            print(f"Warning: Dependency check failed: {e}")
+
+
+def _gui_install_dependencies(missing: list):
+    """Show a Qt progress dialog and install missing dependencies."""
+    import subprocess
+    from PySide6.QtWidgets import QApplication, QDialog, QVBoxLayout, QLabel, QProgressBar
+    from PySide6.QtCore import Qt, QThread, Signal
+
+    app = QApplication.instance() or QApplication(sys.argv)
+
+    dialog = QDialog()
+    dialog.setWindowTitle("CommandCore – Installing Dependencies")
+    dialog.setMinimumWidth(420)
+    dialog.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.WindowTitleHint)
+    layout = QVBoxLayout(dialog)
+
+    status_label = QLabel(f"Installing {len(missing)} required package(s)…")
+    status_label.setWordWrap(True)
+    layout.addWidget(status_label)
+
+    bar = QProgressBar()
+    bar.setRange(0, len(missing))
+    bar.setValue(0)
+    layout.addWidget(bar)
+
+    class InstallerThread(QThread):
+        progress = Signal(int, str)
+        done = Signal(bool)
+
+        def run(self):
+            for i, pkg in enumerate(missing, 1):
+                self.progress.emit(i, pkg)
+                subprocess.run(
+                    [sys.executable, "-m", "pip", "install", "--upgrade", pkg],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+            self.done.emit(True)
+
+    thread = InstallerThread()
+    thread.progress.connect(lambda i, pkg: (bar.setValue(i), status_label.setText(f"Installing {pkg}…")))
+    thread.done.connect(dialog.accept)
+    thread.start()
+
+    dialog.exec()
 
 # Run dependency check if not already done
 if '--skip-deps' not in sys.argv:
