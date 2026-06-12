@@ -79,7 +79,7 @@ class VantageUI(QMainWindow):
         
         # Create tab widget
         self.tab_widget = QTabWidget()
-        self.tab_widget.setDocumentMode(True)
+        self.tab_widget.setDocumentMode(False)
         self.tab_widget.setMovable(False)  # Disable tab movement
         self.tab_widget.setTabsClosable(False)  # Remove close buttons
         self.tab_widget.currentChanged.connect(self.on_tab_changed)
@@ -119,6 +119,12 @@ class VantageUI(QMainWindow):
             background-color: #2A2D2E;
             color: #E0E0E0;
             font-family: 'Segoe UI', Arial, sans-serif;
+        }
+        QTabWidget {
+            border: none;
+        }
+        QTabBar {
+            border: none;
         }
         QTabWidget::pane {
             border: 1px solid #3E3E3E;

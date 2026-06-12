@@ -69,11 +69,18 @@ class IOSToolsModule(BaseWindow):
             }
 
             /* Tab Widget */
+            QTabWidget {
+                border: none;
+            }
             QTabWidget::pane {
                 border: none;
                 background: #181825;
             }
-            
+
+            QTabBar {
+                border: none;
+            }
+
             QTabBar::tab {
                 background: #181825;
                 color: #a6adc8;
@@ -635,8 +642,10 @@ class IOSToolsModule(BaseWindow):
         
         # Main content area with tabs
         self.notebook = QTabWidget()
-        self.notebook.setDocumentMode(True)
+        self.notebook.setDocumentMode(False)
         self.notebook.setStyleSheet("""
+            QTabWidget { border: none; }
+            QTabBar { border: none; }
             QTabBar::tab {
                 background: #1e1e2e;
                 color: #a6adc8;

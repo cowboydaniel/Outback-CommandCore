@@ -44,6 +44,7 @@ class NightfireUI(QMainWindow):
 
         # Create tabs
         self.tabs = QTabWidget()
+        self.tabs.setStyleSheet("QTabBar { border: none; } QTabWidget { border: none; }")
         main_layout.addWidget(self.tabs)
 
         # Dashboard tab
