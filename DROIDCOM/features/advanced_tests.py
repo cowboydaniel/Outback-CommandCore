@@ -3390,57 +3390,57 @@ class AdvancedTestsMixin:
 
             serial = self.device_serial
 
-            dlg = QtWidgets.QDialog(self)
+            dlg = QDialog(self)
             dlg.setWindowTitle("Screen Mirror & Control (scrcpy)")
             dlg.resize(520, 480)
-            layout = QtWidgets.QVBoxLayout(dlg)
+            layout = QVBoxLayout(dlg)
 
             # ── options ─────────────────────────────────────────────────────
-            opt_group = QtWidgets.QGroupBox("Options")
-            opt_layout = QtWidgets.QGridLayout(opt_group)
+            opt_group = QGroupBox("Options")
+            opt_layout = QGridLayout(opt_group)
 
             # Control
-            control_cb = QtWidgets.QCheckBox("Enable keyboard & mouse control")
+            control_cb = QCheckBox("Enable keyboard & mouse control")
             control_cb.setChecked(True)
             opt_layout.addWidget(control_cb, 0, 0, 1, 2)
 
             # Stay awake
-            awake_cb = QtWidgets.QCheckBox("Keep device awake while mirroring")
+            awake_cb = QCheckBox("Keep device awake while mirroring")
             awake_cb.setChecked(True)
             opt_layout.addWidget(awake_cb, 1, 0, 1, 2)
 
             # Turn off screen on device while mirroring
-            screen_off_cb = QtWidgets.QCheckBox("Turn device screen off while mirroring")
+            screen_off_cb = QCheckBox("Turn device screen off while mirroring")
             screen_off_cb.setChecked(False)
             opt_layout.addWidget(screen_off_cb, 2, 0, 1, 2)
 
             # Show touches
-            show_touches_cb = QtWidgets.QCheckBox("Show physical touches on device")
+            show_touches_cb = QCheckBox("Show physical touches on device")
             show_touches_cb.setChecked(False)
             opt_layout.addWidget(show_touches_cb, 3, 0, 1, 2)
 
             # Bitrate
-            opt_layout.addWidget(QtWidgets.QLabel("Video bitrate:"), 4, 0)
-            bitrate_combo = QtWidgets.QComboBox()
+            opt_layout.addWidget(QLabel("Video bitrate:"), 4, 0)
+            bitrate_combo = QComboBox()
             bitrate_combo.addItems(["2M", "4M", "8M", "16M", "32M"])
             bitrate_combo.setCurrentIndex(1)  # 4M default
             opt_layout.addWidget(bitrate_combo, 4, 1)
 
             # Max resolution
-            opt_layout.addWidget(QtWidgets.QLabel("Max resolution:"), 5, 0)
-            res_combo = QtWidgets.QComboBox()
+            opt_layout.addWidget(QLabel("Max resolution:"), 5, 0)
+            res_combo = QComboBox()
             res_combo.addItems(["No limit", "1080", "720", "480"])
             opt_layout.addWidget(res_combo, 5, 1)
 
             # Window title
-            opt_layout.addWidget(QtWidgets.QLabel("Window title:"), 6, 0)
-            title_edit = QtWidgets.QLineEdit("DROIDCOM Mirror")
+            opt_layout.addWidget(QLabel("Window title:"), 6, 0)
+            title_edit = QLineEdit("DROIDCOM Mirror")
             opt_layout.addWidget(title_edit, 6, 1)
 
             layout.addWidget(opt_group)
 
             # ── troubleshooting note ──────────────────────────────────────
-            note = QtWidgets.QLabel(
+            note = QLabel(
                 "If control doesn't work:\n"
                 "  • Enable 'USB debugging (Security settings)' in Developer Options\n"
                 "  • Enable 'Disable permission monitoring' in Developer Options\n"
@@ -3451,14 +3451,14 @@ class AdvancedTestsMixin:
             layout.addWidget(note)
 
             # ── status ───────────────────────────────────────────────────
-            status_label = QtWidgets.QLabel("")
+            status_label = QLabel("")
             layout.addWidget(status_label)
 
             # ── buttons ──────────────────────────────────────────────────
-            btn_layout = QtWidgets.QHBoxLayout()
-            launch_btn = QtWidgets.QPushButton("Launch")
+            btn_layout = QHBoxLayout()
+            launch_btn = QPushButton("Launch")
             launch_btn.setMinimumHeight(36)
-            close_btn = QtWidgets.QPushButton("Close")
+            close_btn = QPushButton("Close")
             btn_layout.addWidget(launch_btn)
             btn_layout.addWidget(close_btn)
             layout.addLayout(btn_layout)
