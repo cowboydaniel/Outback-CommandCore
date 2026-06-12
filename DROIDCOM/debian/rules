@@ -1,0 +1,16 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@ --with python3 --buildsystem=pybuild
+
+override_dh_auto_install:
+	dh_auto_install
+	# Install icons
+	mkdir -p debian/droidcom/usr/share/droidcom/icons
+	cp icons/droidcom.png debian/droidcom/usr/share/droidcom/icons/
+	# Install UI icons
+	mkdir -p debian/droidcom/usr/share/droidcom/ui/icons
+	cp -r DROIDCOM/ui/icons/*.svg debian/droidcom/usr/share/droidcom/ui/icons/
+
+override_dh_python3:
+	dh_python3 --requires=requirements.txt

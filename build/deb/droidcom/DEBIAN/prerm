@@ -1,0 +1,12 @@
+#!/bin/bash
+set -e
+
+# Remove desktop entry
+if [ -f /usr/share/applications/droidcom.desktop ]; then
+    rm -f /usr/share/applications/droidcom.desktop
+fi
+
+# Update desktop database
+update-desktop-database /usr/share/applications 2>/dev/null || true
+
+exit 0

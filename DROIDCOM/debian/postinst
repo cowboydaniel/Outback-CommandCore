@@ -1,0 +1,22 @@
+#!/bin/bash
+set -e
+
+# Create desktop entry
+cat > /usr/share/applications/droidcom.desktop <<EOF
+[Desktop Entry]
+Name=DROIDCOM
+Comment=Android Device Management Tool
+Exec=/usr/bin/droidcom
+Icon=/usr/share/droidcom/icons/droidcom.png
+Terminal=false
+Type=Application
+Categories=Utility;System;
+EOF
+
+# Make the desktop entry executable
+chmod 644 /usr/share/applications/droidcom.desktop
+
+# Update desktop database
+update-desktop-database /usr/share/applications 2>/dev/null || true
+
+exit 0

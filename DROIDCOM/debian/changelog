@@ -1,0 +1,9 @@
+droidcom (1.1.0-1) unstable; urgency=medium
+
+  * Initial release
+  * SVG icons for all UI elements
+  * Fixed window sizing to use screen size
+  * Removed emoji from UI
+  * Improved Android device management
+
+ -- cowboydaniel <cowboydaniel@users.noreply.github.com>  $(date -R)
