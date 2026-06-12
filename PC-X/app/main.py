@@ -306,6 +306,7 @@ class PCToolsModule(QWidget):
 
     def start_live_refresh(self):
         """Start the live refresh timer for real-time updates."""
+        self._tick_count = 0
         self.refresh_timer = QTimer(self)
         self.refresh_timer.timeout.connect(self.live_refresh_callback)
         self.refresh_timer.start(config.LIVE_REFRESH_INTERVAL_MS)  # 1 second interval
@@ -348,6 +349,19 @@ class PCToolsModule(QWidget):
                 if battery:
                     status = "Charging" if battery.power_plugged else "Discharging"
                     self.battery_status_label.setText(status)
+
+            # Update system uptime every tick
+            self.refresh_system_info()
+
+            # Update system stats (load average, process count) every tick
+            self._refresh_system_stats()
+
+            # Refresh pending updates count in background every 60 seconds
+            self._tick_count += 1
+            if self._tick_count % 60 == 0:
+                threading.Thread(
+                    target=self._refresh_pending_updates, daemon=True
+                ).start()
 
             # Update last-update timestamp every tick
             self.update_last_update_time()
@@ -914,6 +928,44 @@ class PCToolsModule(QWidget):
                 self.system_info_labels["Boot Time"].setText(str(boot_time))
         except Exception as e:
             logging.error(f"Error refreshing system info: {e}")
+
+    def _refresh_system_stats(self):
+        """Update load average and process count labels on every tick."""
+        try:
+            if "Load Average" in self.system_info_labels:
+                load1, load5, load15 = os.getloadavg()
+                self.system_info_labels["Load Average"].setText(
+                    f"{load1:.2f}  {load5:.2f}  {load15:.2f}  (1m / 5m / 15m)"
+                )
+        except Exception:
+            pass
+
+        try:
+            if "Running Processes" in self.system_info_labels:
+                self.system_info_labels["Running Processes"].setText(
+                    str(len(psutil.pids()))
+                )
+        except Exception:
+            pass
+
+    def _refresh_pending_updates(self):
+        """Check pending APT updates in a background thread and push result to UI."""
+        try:
+            result = subprocess.run(
+                ["apt-get", "-s", "upgrade"],
+                capture_output=True, text=True, timeout=10,
+            )
+            if result.returncode == 0:
+                count = sum(
+                    1 for line in result.stdout.splitlines()
+                    if line.startswith("Inst ")
+                )
+                self.post_ui_update(
+                    lambda c=count: self.system_info_labels.get("Pending Updates") and
+                    self.system_info_labels["Pending Updates"].setText(str(c))
+                )
+        except Exception:
+            pass
 
     def process_update_queue(self):
         """Process update queue for thread-safe UI updates."""
