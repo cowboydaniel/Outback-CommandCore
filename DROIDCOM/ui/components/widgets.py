@@ -310,6 +310,7 @@ class WidgetsMixin:
             self._add_tool_button(layout, 0, 2, "DND Toggle", self._toggle_do_not_disturb, "bell-slash")
             self._add_tool_button(layout, 1, 2, "Power Button", self._simulate_power_button, "power")
             self._add_tool_button(layout, 2, 2, "Flashlight", self._toggle_flashlight, "flashlight")
+            self._add_tool_button(layout, 3, 2, "Blind Setup", self._blind_setup_dialog, "screen")
 
         elif category_name == "App Management":
             self._add_tool_button(layout, 0, 0, "Install APK", self.install_apk, "download")

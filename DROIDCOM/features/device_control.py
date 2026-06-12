@@ -1312,3 +1312,332 @@ class DeviceControlMixin:
             self.log_message(f"Error toggling flashlight: {str(e)}")
             self.update_status("Flashlight error")
             QtWidgets.QMessageBox.critical(self, "Error", str(e))
+
+    # ------------------------------------------------------------------ #
+    # Blind Device Setup — no display / no touch input                    #
+    # ------------------------------------------------------------------ #
+
+    def _blind_setup_dialog(self):
+        """
+        Step-by-step assistant for enabling ADB on a device that has no
+        working display or touch input.
+
+        Strategy (in order of reliability):
+          1. Recovery mode → ADB shell open without auth → inject host key
+          2. Fastboot mode → reboot to recovery
+          3. Unauthorized → OTG keyboard Tab/Enter guide
+          4. Once shell available → enable dev mode + USB debugging
+        """
+        import os
+        import threading
+
+        adb_cmd = self.adb_path if IS_WINDOWS and hasattr(self, "adb_path") else "adb"
+
+        dlg = QtWidgets.QDialog(self)
+        dlg.setWindowTitle("Blind Device Setup — No Display / No Touch")
+        dlg.resize(700, 640)
+        layout = QtWidgets.QVBoxLayout(dlg)
+
+        # ── status banner ────────────────────────────────────────────────
+        state_label = QtWidgets.QLabel("Detecting device…")
+        state_label.setStyleSheet(
+            "font-weight:bold; font-size:13px; padding:6px; "
+            "background:#1e1e2e; border-radius:4px;"
+        )
+        state_label.setWordWrap(True)
+        layout.addWidget(state_label)
+
+        # ── log output ───────────────────────────────────────────────────
+        log = QtWidgets.QPlainTextEdit()
+        log.setReadOnly(True)
+        log.setMinimumHeight(200)
+        layout.addWidget(log)
+
+        def say(msg):
+            from ..utils.qt_dispatcher import emit_ui
+            emit_ui(self, lambda: log.appendPlainText(msg))
+
+        # ── action buttons ───────────────────────────────────────────────
+        btn_grid = QtWidgets.QGridLayout()
+        layout.addLayout(btn_grid)
+
+        def make_btn(label, row, col, handler, tip=""):
+            b = QtWidgets.QPushButton(label)
+            b.setMinimumHeight(36)
+            b.setToolTip(tip)
+            b.clicked.connect(handler)
+            btn_grid.addWidget(b, row, col)
+            return b
+
+        # ── helpers ───────────────────────────────────────────────────────
+        def run(args, timeout=15):
+            return subprocess.run(
+                args, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                text=True, timeout=timeout
+            )
+
+        def detect_state():
+            """Return (serial, state) or (None, None). state: authorized/unauthorized/recovery/fastboot/none"""
+            try:
+                r = run([adb_cmd, "devices"])
+                lines = [l.strip() for l in r.stdout.splitlines() if "\t" in l]
+                if lines:
+                    serial, state = lines[0].split("\t", 1)
+                    return serial.strip(), state.strip()
+                # check fastboot
+                r2 = run(["fastboot", "devices"])
+                if r2.stdout.strip():
+                    serial = r2.stdout.split()[0]
+                    return serial, "fastboot"
+            except Exception:
+                pass
+            return None, None
+
+        def refresh_state():
+            serial, state = detect_state()
+            colours = {
+                "device": "#a6e3a1",       # green = authorized
+                "recovery": "#89b4fa",     # blue
+                "unauthorized": "#f38ba8", # red
+                "fastboot": "#fab387",     # orange
+                "none": "#6c7086",         # grey
+            }
+            labels = {
+                "device": f"✓ Connected & authorized  ({serial})",
+                "recovery": f"⚙  Recovery mode  ({serial}) — ADB shell available",
+                "unauthorized": f"⚠  Unauthorized  ({serial}) — device needs to accept the dialog",
+                "fastboot": f"⚡ Fastboot mode  ({serial})",
+                "none": "✗  No device detected via ADB or Fastboot",
+            }
+            key = state if state in colours else "none"
+            from ..utils.qt_dispatcher import emit_ui
+            emit_ui(self, lambda: (
+                state_label.setText(labels.get(key, f"Unknown state: {state}")),
+                state_label.setStyleSheet(
+                    f"font-weight:bold;font-size:13px;padding:6px;"
+                    f"background:#1e1e2e;border-radius:4px;color:{colours[key]};"
+                )
+            ))
+            return serial, state
+
+        # ── Step 1: Detect ───────────────────────────────────────────────
+        def do_detect():
+            say("─── Detecting device state…")
+            serial, state = refresh_state()
+            say(f"Result: {state or 'none'}  serial={serial or 'N/A'}")
+            if state == "device":
+                say("Device is already authorized. Use the main Connect button.")
+            elif state == "recovery":
+                say("Recovery ADB shell is open — you can inject the host key or enable dev mode directly.")
+            elif state == "unauthorized":
+                say(
+                    "Device is connected but ADB is not yet authorized.\n"
+                    "The 'Allow USB debugging?' dialog is probably on screen.\n"
+                    "→ Use 'Inject Key via OTG' or the OTG keyboard steps below."
+                )
+            elif state == "fastboot":
+                say("Device is in fastboot. Use 'Reboot → Recovery' to get ADB shell access.")
+            else:
+                say(
+                    "No device found.\n"
+                    "• Connect phone via USB\n"
+                    "• Ensure USB cable supports data (not charge-only)\n"
+                    "• If display is dead, try holding Power+Vol-Down for 10s to reboot,\n"
+                    "  then hold Power+Vol-Down again to enter fastboot/recovery."
+                )
+
+        # ── Step 2: Enable dev mode + USB debugging (needs shell) ────────
+        def do_enable_dev_mode():
+            serial, state = detect_state()
+            if state not in ("device", "recovery"):
+                say("✗ Need authorized or recovery shell. Detect first.")
+                return
+
+            def task():
+                say("─── Enabling developer options…")
+                r1 = run([adb_cmd, "-s", serial, "shell",
+                           "settings", "put", "global",
+                           "development_settings_enabled", "1"])
+                say(f"  development_settings_enabled → {'OK' if r1.returncode==0 else r1.stderr.strip()}")
+
+                say("─── Enabling USB debugging…")
+                r2 = run([adb_cmd, "-s", serial, "shell",
+                           "settings", "put", "global", "adb_enabled", "1"])
+                say(f"  adb_enabled → {'OK' if r2.returncode==0 else r2.stderr.strip()}")
+
+                # restart adbd so it picks up new setting
+                run([adb_cmd, "-s", serial, "shell", "stop adbd"])
+                run([adb_cmd, "-s", serial, "shell", "start adbd"])
+                say("  adbd restarted.")
+                say("Done. Developer mode and USB debugging are now enabled.")
+                refresh_state()
+
+            threading.Thread(target=task, daemon=True).start()
+
+        # ── Step 3: Inject host ADB key directly (recovery path) ─────────
+        def do_inject_key():
+            serial, state = detect_state()
+            if state not in ("device", "recovery"):
+                say("✗ Need authorized or recovery shell to inject key.")
+                return
+
+            key_paths = [
+                os.path.expanduser("~/.android/adbkey.pub"),
+                os.path.join(os.environ.get("USERPROFILE", ""), ".android", "adbkey.pub"),
+            ]
+            key_path = next((p for p in key_paths if os.path.exists(p)), None)
+
+            if not key_path:
+                say(
+                    "✗ Host ADB public key not found at ~/.android/adbkey.pub\n"
+                    "  Run 'adb keygen ~/.android/adbkey' on your PC first, then retry."
+                )
+                return
+
+            def task():
+                try:
+                    pub_key = open(key_path).read().strip()
+                    say(f"─── Host key found: {key_path}")
+                    say("    Pushing to /data/misc/adb/adb_keys…")
+
+                    # Mount /data in recovery if needed (stock recovery)
+                    if state == "recovery":
+                        run([adb_cmd, "-s", serial, "shell", "mount /data"])
+
+                    # Write key
+                    r = run([adb_cmd, "-s", serial, "shell",
+                              f"mkdir -p /data/misc/adb && "
+                              f"echo '{pub_key}' >> /data/misc/adb/adb_keys && "
+                              f"chmod 640 /data/misc/adb/adb_keys && "
+                              f"chown system:shell /data/misc/adb/adb_keys"])
+                    if r.returncode == 0:
+                        say("✓ Key injected successfully.")
+                        say("  Rebooting device to system…")
+                        run([adb_cmd, "-s", serial, "reboot"])
+                        say("  When device boots, ADB will be auto-authorized.")
+                    else:
+                        say(f"✗ Key injection failed: {r.stderr.strip() or r.stdout.strip()}")
+                        say("  Try enabling root access first or use the OTG keyboard method.")
+                except Exception as e:
+                    say(f"✗ Error: {e}")
+
+            threading.Thread(target=task, daemon=True).start()
+
+        # ── Step 4: Reboot fastboot → recovery ───────────────────────────
+        def do_fastboot_to_recovery():
+            serial, state = detect_state()
+            if state != "fastboot":
+                say("✗ Device is not in fastboot mode.")
+                return
+
+            def task():
+                say("─── Rebooting fastboot → recovery…")
+                r = run(["fastboot", "-s", serial, "reboot", "recovery"], timeout=20)
+                say(f"  {'OK — wait for recovery to boot (~30s)' if r.returncode==0 else r.stderr.strip()}")
+                import time; time.sleep(30)
+                refresh_state()
+
+            threading.Thread(target=task, daemon=True).start()
+
+        # ── Step 5: Force recovery via hardware buttons (guide) ──────────
+        def do_hardware_guide():
+            say(
+                "─── Hardware button guide for common manufacturers ───\n"
+                "\n"
+                "PIXEL / NEXUS\n"
+                "  Power off → hold [Vol Down] + [Power] → Fastboot screen\n"
+                "  Press Vol Down to highlight 'Recovery' → press Power\n"
+                "\n"
+                "SAMSUNG\n"
+                "  Power off → hold [Vol Up] + [Bixby/Home] + [Power]\n"
+                "  Release when Samsung logo appears → Recovery menu\n"
+                "  (Use Vol Up/Down to navigate, Power to select)\n"
+                "\n"
+                "XIAOMI / POCO\n"
+                "  Power off → hold [Vol Up] + [Power] → Recovery\n"
+                "\n"
+                "ONEPLUS\n"
+                "  Power off → hold [Vol Down] + [Power] → Fastboot\n"
+                "  Or: hold [Vol Up] + [Power] → Recovery\n"
+                "\n"
+                "MOTOROLA\n"
+                "  Power off → hold [Vol Down] + [Power] → Fastboot\n"
+                "  Use Vol Down to scroll to 'Recovery' → Power to select\n"
+                "\n"
+                "LG\n"
+                "  Power off → hold [Vol Down] + [Power] → Recovery\n"
+                "\n"
+                "SONY XPERIA\n"
+                "  Power off → hold [Vol Up] + plug USB cable → Fastboot LED\n"
+                "  Then: fastboot reboot recovery\n"
+                "\n"
+                "Once in recovery, hit 'Detect' then 'Inject Key + Reboot'."
+            )
+
+        # ── Step 6: OTG keyboard guide ───────────────────────────────────
+        def do_otg_guide():
+            say(
+                "─── OTG Keyboard method for accepting ADB dialog ───\n"
+                "\n"
+                "1. Get a USB OTG adapter (USB-C or Micro-USB to USB-A)\n"
+                "2. Connect a USB keyboard to the OTG adapter, plug into phone\n"
+                "3. Wake the phone: press keyboard Power/any key or phone power button\n"
+                "4. The 'Allow USB debugging?' dialog should be on screen\n"
+                "5. Press [Tab] once to move focus to the checkbox 'Always allow'\n"
+                "   (optional), then press [Enter] to accept\n"
+                "   — OR just press [Enter] directly if 'Allow' is default-focused\n"
+                "6. Disconnect OTG, reconnect direct USB → hit 'Detect' above\n"
+                "\n"
+                "If you also have a USB-C to HDMI/DisplayPort adapter:\n"
+                "  Connect phone → HDMI adapter → TV/monitor to see the screen\n"
+                "  (Only works if phone supports DisplayPort Alt Mode over USB-C)\n"
+                "\n"
+                "Tip: if phone shows charging icon but no dialog, ADB may not be\n"
+                "     enabled yet. Use recovery injection path first."
+            )
+
+        # ── Step 7: Enable ADB over TCP so future connections need no dialog
+        def do_enable_tcpip():
+            serial, state = detect_state()
+            if state != "device":
+                say("✗ Need an authorized connection first.")
+                return
+
+            def task():
+                say("─── Enabling ADB over TCP/IP (port 5555)…")
+                r = run([adb_cmd, "-s", serial, "tcpip", "5555"])
+                say(f"  {'OK — connect via: adb connect <device-ip>:5555' if r.returncode==0 else r.stderr.strip()}")
+                # get IP
+                r2 = run([adb_cmd, "-s", serial, "shell",
+                           "ip route | grep wlan | awk '{print $9}'"])
+                ip = r2.stdout.strip()
+                if ip:
+                    say(f"  Device WiFi IP: {ip}")
+                    say(f"  → adb connect {ip}:5555")
+                    say("  Once connected over WiFi, USB authorization won't be needed again.")
+
+            threading.Thread(target=task, daemon=True).start()
+
+        # ── wire buttons ─────────────────────────────────────────────────
+        make_btn("1. Detect Device State", 0, 0, do_detect,
+                 "Scan ADB and Fastboot for connected devices")
+        make_btn("2. Enable Dev Mode + USB Debug", 0, 1, do_enable_dev_mode,
+                 "Run settings put commands via shell (recovery or authorized)")
+        make_btn("3. Inject Host Key → Reboot", 1, 0, do_inject_key,
+                 "Write ~/.android/adbkey.pub into /data/misc/adb/adb_keys via recovery shell")
+        make_btn("4. Fastboot → Recovery", 1, 1, do_fastboot_to_recovery,
+                 "Reboot from fastboot into recovery so ADB shell opens")
+        make_btn("5. Hardware Button Guide", 2, 0, do_hardware_guide,
+                 "How to enter recovery mode for common phone brands")
+        make_btn("6. OTG Keyboard Guide", 2, 1, do_otg_guide,
+                 "How to accept the ADB dialog using a USB keyboard + OTG adapter")
+        make_btn("7. Enable ADB over TCP/IP", 3, 0, do_enable_tcpip,
+                 "Once connected, switch to wireless ADB so USB auth is not needed again")
+
+        close_btn = QtWidgets.QPushButton("Close")
+        close_btn.clicked.connect(dlg.close)
+        layout.addWidget(close_btn)
+
+        # auto-detect on open
+        threading.Thread(target=do_detect, daemon=True).start()
+        dlg.exec()

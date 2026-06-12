@@ -121,7 +121,7 @@ class AppManagerMixin:
                 return
 
             result = subprocess.run(
-                [adb_cmd, '-s', serial, 'shell', 'pm', 'list', 'packages', '-3'],
+                [adb_cmd, '-s', serial, 'shell', 'pm', 'list', 'packages'],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
@@ -625,7 +625,10 @@ class AppManagerMixin:
         layout = QtWidgets.QVBoxLayout(dlg)
 
         filter_combo = QtWidgets.QComboBox()
-        filter_combo.addItems(["User apps", "System apps", "All apps"])
+        filter_combo = QtWidgets.QComboBox()
+        # Default "All apps" so nothing is hidden — user apps only (-3) misses
+        # pre-installed, updated system apps, and OEM packages on many ROMs
+        filter_combo.addItems(["All apps", "User apps only", "System apps only", "Disabled apps"])
         layout.addWidget(filter_combo)
 
         search = QtWidgets.QLineEdit()
@@ -657,7 +660,8 @@ class AppManagerMixin:
         all_packages = []
 
         def load(idx=0):
-            flag = ["-3", "-s", ""][idx]
+            # All / user (-3) / system (-s) / disabled (-d)
+            flag = ["", "-3", "-s", "-d"][idx]
             cmd = [adb_cmd, "-s", serial, "shell", "pm", "list", "packages"]
             if flag:
                 cmd.append(flag)
@@ -1021,7 +1025,7 @@ class AppManagerMixin:
         layout = QtWidgets.QVBoxLayout(dlg)
 
         filter_combo = QtWidgets.QComboBox()
-        filter_combo.addItems(["User apps", "System apps", "All apps"])
+        filter_combo.addItems(["All apps", "User apps only", "System apps only", "Disabled apps"])
         layout.addWidget(filter_combo)
 
         search = QtWidgets.QLineEdit()
@@ -1041,7 +1045,7 @@ class AppManagerMixin:
         all_packages = []
 
         def load(idx=0):
-            flag = ["-3", "-s", ""][idx]
+            flag = ["", "-3", "-s", "-d"][idx]
             cmd = [adb_cmd, "-s", serial, "shell", "pm", "list", "packages"]
             if flag:
                 cmd.append(flag)
