@@ -229,12 +229,22 @@ class _PrivilegedCommandHelper:
 
     def stop(self) -> None:
         if self._process and self._process.poll() is None:
-            self._process.terminate()
+            # Close stdin so the helper's read loop exits cleanly.
+            # The helper runs as root via pkexec, so we cannot send it signals
+            # from the non-root parent — closing stdin is the safe alternative.
             try:
-                self._process.wait(timeout=1)
+                if self._process.stdin:
+                    self._process.stdin.close()
+            except OSError:
+                pass
+            try:
+                self._process.wait(timeout=2)
             except subprocess.TimeoutExpired:
-                self._process.kill()
-                self._process.wait(timeout=1)
+                try:
+                    self._process.terminate()
+                    self._process.wait(timeout=1)
+                except (PermissionError, subprocess.TimeoutExpired):
+                    pass
         self._process = None
 
         if self._script_path:
