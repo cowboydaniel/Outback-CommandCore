@@ -54,6 +54,7 @@ from core.utils import (
     check_and_install_dependencies,
     check_and_setup_sudoers,
     configure_logging,
+    format_smartctl_output,
     run_privileged_command,
     setup_passwordless_sudo,
 )
@@ -614,14 +615,11 @@ class PCToolsModule(QWidget):
                     text=True,
                     timeout=30,
                 )
-                output = result.stdout if result.returncode == 0 else result.stderr
-                if output.strip():
-                    return output
-                if result.returncode == 0:
-                    return f"SMART command completed but returned no data for {device}."
-                return (
-                    f"SMART command failed for {device} with exit code "
-                    f"{result.returncode}, but returned no error details."
+                return format_smartctl_output(
+                    device,
+                    result.returncode,
+                    result.stdout,
+                    result.stderr,
                 )
             except Exception as e:
                 return f"Error: {e}"

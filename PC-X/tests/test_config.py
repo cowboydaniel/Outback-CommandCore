@@ -7,7 +7,7 @@ if str(PCX_DIR) not in sys.path:
     sys.path.insert(0, str(PCX_DIR))
 
 from app import config
-from core import base
+from core import base, utils
 
 
 class TestConfig(unittest.TestCase):
@@ -54,10 +54,22 @@ class TestConfig(unittest.TestCase):
         self.assertIn("pkexec", utils_source)
         self.assertIn("one desktop authentication prompt", utils_source)
 
+    def test_smart_refresh_preserves_stdout_on_nonzero_status(self):
+        output = utils.format_smartctl_output(
+            "/dev/nvme1n1",
+            4,
+            "SMART report contents",
+            "",
+        )
+
+        self.assertIn("SMART report contents", output)
+        self.assertIn("smartctl exit status 4", output)
+        self.assertIn("SMART command failed", output)
+
     def test_smart_refresh_never_returns_blank_privileged_output(self):
-        main_source = (PCX_DIR / "app" / "main.py").read_text(encoding="utf-8")
-        self.assertIn("SMART command completed but returned no data", main_source)
-        self.assertIn("returned no error details", main_source)
+        output = utils.format_smartctl_output("/dev/nvme1n1", 4, "", "")
+        self.assertIn("smartctl exit status 4", output)
+        self.assertTrue(output.strip())
 
     def test_paths_resolve(self):
         root_dir, pcx_dir = base.get_paths()

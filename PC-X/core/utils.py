@@ -23,6 +23,69 @@ _LOGGER_CONFIGURED = False
 _PRIVILEGED_HELPER = None
 _PRIVILEGED_HELPER_LOCK = threading.RLock()
 
+SMARTCTL_EXIT_STATUS_MESSAGES = {
+    0: "command line did not parse",
+    1: "device open failed or the device did not return an identify response",
+    2: "a SMART command failed or SMART data failed a checksum check",
+    3: "SMART status reports the disk is failing",
+    4: "a prefail SMART attribute is at or below its threshold",
+    5: "a usage or age SMART attribute is at or below its threshold",
+    6: "the device error log contains errors",
+    7: "the device self-test log contains errors",
+}
+
+
+def describe_smartctl_exit_status(returncode: int) -> str:
+    """Return a human-readable explanation of smartctl's bitmask exit code."""
+    if returncode == 0:
+        return "smartctl completed successfully"
+
+    messages = [
+        message
+        for bit, message in SMARTCTL_EXIT_STATUS_MESSAGES.items()
+        if returncode & (1 << bit)
+    ]
+    known_mask = sum(1 << bit for bit in SMARTCTL_EXIT_STATUS_MESSAGES)
+    unknown_bits = returncode & ~known_mask
+    if unknown_bits:
+        messages.append(f"unknown status bits: {unknown_bits}")
+
+    if not messages:
+        messages.append("no detailed status bits were set")
+
+    return f"smartctl exit status {returncode}: " + "; ".join(messages)
+
+
+def format_smartctl_output(
+    device: str,
+    returncode: int,
+    stdout: Optional[str],
+    stderr: Optional[str],
+) -> str:
+    """Format smartctl output without hiding useful reports on non-zero statuses.
+
+    smartctl uses a bitmask exit status, so non-zero does not necessarily mean
+    there is no useful report. SMART reports are commonly written to stdout even
+    when a status bit is set, so PC-X should display stdout first and add the
+    decoded status as context instead of showing a blank error pane.
+    """
+    sections = []
+    stdout = stdout or ""
+    stderr = stderr or ""
+
+    if stdout.strip():
+        sections.append(stdout.rstrip())
+    if stderr.strip():
+        sections.append(f"smartctl messages:\n{stderr.rstrip()}")
+
+    if returncode != 0:
+        sections.append(f"PC-X note: {describe_smartctl_exit_status(returncode)}")
+
+    if sections:
+        return "\n\n".join(sections)
+
+    return f"SMART command completed but returned no data for {device}."
+
 
 def configure_logging() -> None:
     """Configure module logging once."""
