@@ -49,8 +49,15 @@ class TestConfig(unittest.TestCase):
     def test_privileged_helper_supports_desktop_authentication(self):
         utils_source = (PCX_DIR / "core" / "utils.py").read_text(encoding="utf-8")
         self.assertIn('["sudo", "-n"', utils_source)
-        self.assertIn('["pkexec"', utils_source)
-        self.assertIn("desktop authentication", utils_source)
+        self.assertIn("_PRIVILEGED_HELPER", utils_source)
+        self.assertIn("_PrivilegedCommandHelper", utils_source)
+        self.assertIn("pkexec", utils_source)
+        self.assertIn("one desktop authentication prompt", utils_source)
+
+    def test_smart_refresh_never_returns_blank_privileged_output(self):
+        main_source = (PCX_DIR / "app" / "main.py").read_text(encoding="utf-8")
+        self.assertIn("SMART command completed but returned no data", main_source)
+        self.assertIn("returned no error details", main_source)
 
     def test_paths_resolve(self):
         root_dir, pcx_dir = base.get_paths()

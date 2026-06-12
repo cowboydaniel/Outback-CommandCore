@@ -614,7 +614,15 @@ class PCToolsModule(QWidget):
                     text=True,
                     timeout=30,
                 )
-                return result.stdout if result.returncode == 0 else result.stderr
+                output = result.stdout if result.returncode == 0 else result.stderr
+                if output.strip():
+                    return output
+                if result.returncode == 0:
+                    return f"SMART command completed but returned no data for {device}."
+                return (
+                    f"SMART command failed for {device} with exit code "
+                    f"{result.returncode}, but returned no error details."
+                )
             except Exception as e:
                 return f"Error: {e}"
 

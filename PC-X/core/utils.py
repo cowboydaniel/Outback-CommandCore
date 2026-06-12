@@ -2,22 +2,26 @@
 
 from __future__ import annotations
 
+import atexit
 import getpass
 import importlib
 import importlib.util
+import json
 import logging
 import os
 import platform
 import shutil
 import subprocess
+import sys
 import tempfile
+import threading
 from typing import Optional, Sequence, Tuple
-
-from PySide6.QtWidgets import QMessageBox
 
 from app import config
 
 _LOGGER_CONFIGURED = False
+_PRIVILEGED_HELPER = None
+_PRIVILEGED_HELPER_LOCK = threading.RLock()
 
 
 def configure_logging() -> None:
@@ -33,6 +37,176 @@ def configure_logging() -> None:
     _LOGGER_CONFIGURED = True
 
 
+def _privileged_helper_script() -> str:
+    """Return the source for the long-lived root command helper."""
+    return r'''
+import json
+import subprocess
+import sys
+
+print(json.dumps({"ready": True}), flush=True)
+
+for line in sys.stdin:
+    try:
+        request = json.loads(line)
+        command = request["command"]
+        timeout = request.get("timeout")
+        completed = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
+        )
+        response = {
+            "returncode": completed.returncode,
+            "stdout": completed.stdout,
+            "stderr": completed.stderr,
+        }
+    except subprocess.TimeoutExpired as exc:
+        response = {
+            "returncode": 124,
+            "stdout": exc.stdout or "",
+            "stderr": f"Command timed out after {exc.timeout} seconds",
+        }
+    except Exception as exc:
+        response = {
+            "returncode": 1,
+            "stdout": "",
+            "stderr": f"Privileged helper error: {exc}",
+        }
+    print(json.dumps(response), flush=True)
+'''
+
+
+class _PrivilegedCommandHelper:
+    """Keep one authenticated PolicyKit session alive for the app lifetime."""
+
+    def __init__(self) -> None:
+        self._process: Optional[subprocess.Popen] = None
+        self._script_path: Optional[str] = None
+
+    def run(
+        self,
+        command: Sequence[str],
+        *,
+        timeout: Optional[float] = None,
+    ) -> subprocess.CompletedProcess:
+        """Run a command through the persistent root helper."""
+        self._ensure_started()
+        if not self._process or not self._process.stdin or not self._process.stdout:
+            raise RuntimeError("Privileged helper is not available")
+
+        payload = json.dumps({"command": list(command), "timeout": timeout})
+        try:
+            self._process.stdin.write(f"{payload}\n")
+            self._process.stdin.flush()
+            response_line = self._process.stdout.readline()
+        except BrokenPipeError:
+            self.stop()
+            raise RuntimeError("Privileged helper stopped unexpectedly") from None
+
+        if not response_line:
+            stderr = ""
+            if self._process.stderr:
+                stderr = self._process.stderr.read()
+            self.stop()
+            raise RuntimeError(f"Privileged helper exited without a response. {stderr}".strip())
+
+        response = json.loads(response_line)
+        return subprocess.CompletedProcess(
+            list(command),
+            response.get("returncode", 1),
+            response.get("stdout", ""),
+            response.get("stderr", ""),
+        )
+
+    def _ensure_started(self) -> None:
+        if self._process and self._process.poll() is None:
+            return
+
+        self.stop()
+        pkexec_path = shutil.which("pkexec")
+        if not pkexec_path:
+            raise RuntimeError(
+                "Elevated privileges are required, but PolicyKit pkexec is not available. "
+                "Install polkit/pkexec or configure passwordless sudo for PC-X hardware tools."
+            )
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as helper_file:
+            helper_file.write(_privileged_helper_script())
+            self._script_path = helper_file.name
+        os.chmod(self._script_path, 0o700)
+
+        self._process = subprocess.Popen(
+            [pkexec_path, sys.executable, "-u", self._script_path],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1,
+        )
+
+        if not self._process.stdout:
+            self.stop()
+            raise RuntimeError("Privileged helper did not provide stdout")
+
+        ready_line = self._process.stdout.readline()
+        if not ready_line:
+            stderr = ""
+            if self._process.stderr:
+                stderr = self._process.stderr.read()
+            self.stop()
+            raise RuntimeError(f"PolicyKit authentication failed. {stderr}".strip())
+
+        ready = json.loads(ready_line)
+        if not ready.get("ready"):
+            self.stop()
+            raise RuntimeError("Privileged helper did not start correctly")
+
+    def stop(self) -> None:
+        if self._process and self._process.poll() is None:
+            self._process.terminate()
+            try:
+                self._process.wait(timeout=1)
+            except subprocess.TimeoutExpired:
+                self._process.kill()
+                self._process.wait(timeout=1)
+        self._process = None
+
+        if self._script_path:
+            try:
+                os.unlink(self._script_path)
+            except OSError:
+                pass
+            self._script_path = None
+
+
+def _stop_privileged_helper() -> None:
+    """Stop the authenticated helper when PC-X exits."""
+    global _PRIVILEGED_HELPER
+    with _PRIVILEGED_HELPER_LOCK:
+        if _PRIVILEGED_HELPER:
+            _PRIVILEGED_HELPER.stop()
+            _PRIVILEGED_HELPER = None
+
+
+def _run_with_privileged_helper(
+    command: Sequence[str],
+    *,
+    timeout: Optional[float] = None,
+) -> subprocess.CompletedProcess:
+    """Run a command through one cached PolicyKit authentication session."""
+    global _PRIVILEGED_HELPER
+    with _PRIVILEGED_HELPER_LOCK:
+        if _PRIVILEGED_HELPER is None:
+            _PRIVILEGED_HELPER = _PrivilegedCommandHelper()
+        return _PRIVILEGED_HELPER.run(command, timeout=timeout)
+
+
+atexit.register(_stop_privileged_helper)
+
+
 def run_privileged_command(
     command: Sequence[str],
     *,
@@ -43,9 +217,10 @@ def run_privileged_command(
     """Run a privileged command from a GUI session.
 
     PC-X is commonly launched from a desktop shortcut, so commands must not rely
-    on an interactive terminal for password entry.  Prefer already-configured
-    passwordless sudo, then fall back to PolicyKit so the desktop authentication
-    agent can display a GUI password prompt.
+    on an interactive terminal for password entry. Prefer already-configured
+    passwordless sudo. If sudo is not ready, start one PolicyKit-authenticated
+    root helper and reuse it until the application exits, so the user only has
+    to approve one desktop authentication prompt per PC-X session.
     """
     command_list = list(command)
     if command_list and os.sep not in command_list[0]:
@@ -68,18 +243,17 @@ def run_privileged_command(
         if sudo_result.returncode == 0:
             return sudo_result
 
-    if shutil.which("pkexec"):
-        return subprocess.run(["pkexec", *command_list], **run_kwargs)
+    if not text:
+        raise RuntimeError("Binary privileged command output is not supported by the desktop helper")
 
-    raise RuntimeError(
-        "Elevated privileges are required, but neither passwordless sudo nor "
-        "PolicyKit pkexec is available. Install polkit/pkexec or configure "
-        "passwordless sudo for PC-X hardware tools."
-    )
+    return _run_with_privileged_helper(command_list, timeout=timeout)
 
 
 def check_and_setup_sudoers(parent: Optional[object] = None) -> Tuple[bool, str]:
     """Offer GUI-driven setup for passwordless sudo if it is not configured."""
+    if parent:
+        from PySide6.QtWidgets import QMessageBox
+
     try:
         if os.geteuid() == 0:
             return True, "Already running with root privileges"
