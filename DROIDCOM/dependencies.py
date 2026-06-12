@@ -136,14 +136,12 @@ def check_and_install_scrcpy():
 
     scrcpy 2.1 introduced --keyboard=uhid / --mouse=uhid which inject
     input via a virtual HID device, bypassing the Android InputManager
-    reflection path that NPEs on some devices.
+    reflection path that NPEs on some devices.  No version older than 2.1
+    is ever installed as a fallback — that would break uhid input.
 
-    Installation strategy (Linux only):
-      1. Run the official install_release.sh from the scrcpy repo — this
-         downloads the latest prebuilt binary into ~/scrcpy and symlinks
-         it into /usr/local/bin via pkexec.
-      2. Fall back to `apt-get install scrcpy` which gives 1.25 on Ubuntu
-         noble — usable but without uhid support.
+    Strategy: query the GitHub releases API for the latest version, download
+    the prebuilt Linux x86_64 tarball, extract it, and install the binaries
+    into /usr/local/bin via pkexec.
     """
     if platform.system() != 'Linux':
         return True
@@ -155,55 +153,91 @@ def check_and_install_scrcpy():
         return True
 
     ver_str = f"{current[0]}.{current[1]}" if current != (0, 0) else "(not installed)"
-    logging.info(f"scrcpy {ver_str} < 2.1 — installing latest release via official script...")
+    logging.info(f"scrcpy {ver_str} < 2.1 — fetching latest prebuilt release from GitHub...")
 
-    # The official install_release.sh downloads the latest prebuilt binary.
-    install_url = (
-        "https://raw.githubusercontent.com/Genymobile/scrcpy/master/install_release.sh"
-    )
+    import json
+    import tarfile
+    import tempfile
+    import urllib.request
+    import urllib.error
+
+    api_url = "https://api.github.com/repos/Genymobile/scrcpy/releases/latest"
     try:
-        # Prefer curl, fall back to wget.
-        fetch = (
-            f"curl -fsSL '{install_url}'"
-            if shutil.which("curl") else
-            f"wget -qO- '{install_url}'"
+        with urllib.request.urlopen(api_url, timeout=15) as resp:
+            release = json.loads(resp.read())
+    except Exception as e:
+        logging.error(f"Failed to query GitHub releases API: {e}")
+        return False
+
+    tag = release.get("tag_name", "")
+    assets = release.get("assets", [])
+
+    # Find the prebuilt Linux x86_64 tarball.
+    tarball_url = None
+    for asset in assets:
+        name = asset.get("name", "")
+        if "linux" in name and "x86_64" in name and name.endswith(".tar.gz"):
+            tarball_url = asset["browser_download_url"]
+            logging.info(f"Found prebuilt asset: {name}")
+            break
+
+    if not tarball_url:
+        logging.error(
+            f"No linux-x86_64 tarball found in scrcpy release {tag}. "
+            f"Assets: {[a['name'] for a in assets]}"
         )
-        result = subprocess.run(
-            ["bash", "-c", f"{fetch} | bash"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-        if result.returncode == 0:
-            new_ver = _get_scrcpy_version()
-            if new_ver >= MIN_VERSION:
-                logging.info(f"scrcpy upgraded to {new_ver[0]}.{new_ver[1]}")
-                return True
-            logging.warning(
-                f"install_release.sh ran but version is still {new_ver[0]}.{new_ver[1]}"
+        return False
+
+    try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tarball_path = os.path.join(tmpdir, "scrcpy.tar.gz")
+            logging.info(f"Downloading {tarball_url} ...")
+            urllib.request.urlretrieve(tarball_url, tarball_path)
+
+            with tarfile.open(tarball_path, "r:gz") as tar:
+                tar.extractall(tmpdir)
+
+            # Find the extracted directory (e.g. scrcpy-linux-x86_64-v4.0/)
+            extracted_dirs = [
+                d for d in os.listdir(tmpdir)
+                if os.path.isdir(os.path.join(tmpdir, d)) and d.startswith("scrcpy")
+            ]
+            if not extracted_dirs:
+                logging.error("Could not find extracted scrcpy directory in tarball")
+                return False
+
+            src_dir = os.path.join(tmpdir, extracted_dirs[0])
+
+            # Install: copy binaries to /usr/local/bin, data to /usr/local/share/scrcpy
+            install_script = (
+                f"cp -f '{src_dir}/scrcpy' /usr/local/bin/scrcpy && "
+                f"chmod +x /usr/local/bin/scrcpy && "
+                f"mkdir -p /usr/local/share/scrcpy && "
+                f"cp -f '{src_dir}'/scrcpy-server* /usr/local/share/scrcpy/ 2>/dev/null || true"
             )
-        else:
-            logging.warning(f"install_release.sh failed: {result.stderr.strip()}")
-    except Exception as e:
-        logging.error(f"Error running scrcpy install script: {e}")
+            result = subprocess.run(
+                ["pkexec", "bash", "-c", install_script],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            if result.returncode != 0:
+                logging.error(f"pkexec install failed: {result.stderr.strip()}")
+                return False
 
-    # Fallback: package manager (gives 1.25 on Ubuntu noble — no uhid, but functional).
-    logging.warning("Falling back to apt-get for scrcpy; uhid input will not be available")
-    try:
-        result = subprocess.run(
-            ["pkexec", "apt-get", "-y", "install", "scrcpy"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-        if result.returncode == 0:
-            logging.info("scrcpy installed via apt-get (upgrade to v2.1+ for uhid support)")
+        new_ver = _get_scrcpy_version()
+        if new_ver >= MIN_VERSION:
+            logging.info(f"scrcpy successfully installed: {new_ver[0]}.{new_ver[1]}")
             return True
-        logging.error(f"apt-get install scrcpy failed: {result.stderr.strip()}")
-    except Exception as e:
-        logging.error(f"Error installing scrcpy via apt-get: {e}")
 
-    return False
+        logging.error(
+            f"Install appeared to succeed but scrcpy reports {new_ver[0]}.{new_ver[1]}"
+        )
+        return False
+
+    except Exception as e:
+        logging.error(f"Error installing scrcpy prebuilt: {e}")
+        return False
 
 
 def run_dependency_check():
