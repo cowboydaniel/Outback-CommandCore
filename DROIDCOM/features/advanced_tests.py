@@ -3479,7 +3479,7 @@ class AdvancedTestsMixin:
                     cmd.append("--show-touches")
 
                 bitrate = bitrate_combo.currentText()
-                cmd += ["--video-bit-rate", bitrate]
+                cmd += ["--video-bitrate", bitrate]
 
                 res = res_combo.currentText()
                 if res != "No limit":
