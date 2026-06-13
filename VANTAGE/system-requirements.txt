@@ -1,5 +1,0 @@
-# System packages required by VANTAGE (Linux only)
-# Install with: sudo apt install <package>
-
-wmctrl       # used to set _NET_WM_STATE_SKIP_TASKBAR on the main window
-xprop        # used by the desktop widget to set X11 window type/state hints
