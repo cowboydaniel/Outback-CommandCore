@@ -476,7 +476,7 @@ class PCToolsModule(QWidget):
             font = header_item.font()
             font.setPointSize(8)
             font.setBold(True)
-            font.setLetterSpacing(font.AbsoluteSpacing, 1.5)
+            font.setLetterSpacing(QFont.AbsoluteSpacing, 1.5)
             header_item.setFont(font)
             self.sidebar.addItem(header_item)
 
