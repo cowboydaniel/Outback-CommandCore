@@ -186,11 +186,13 @@ def setup_sysconfig_tab(module) -> None:
 
     def _load_timezones():
         sig = _Signals()
-        sig.timezones_loaded.connect(lambda tzs: (
-            tz_combo.clear(),
-            tz_combo.addItems(tzs),
-            tz_combo.setCurrentText(_current_timezone()),
-        ))
+
+        def _on_timezones(tzs):
+            tz_combo.clear()
+            tz_combo.addItems(tzs)
+            tz_combo.setCurrentText(_current_timezone())
+
+        sig.timezones_loaded.connect(_on_timezones)
         threading.Thread(
             target=lambda: sig.timezones_loaded.emit(_list_timezones()),
             daemon=True,
@@ -231,11 +233,13 @@ def setup_sysconfig_tab(module) -> None:
 
     def _load_locales():
         sig = _Signals()
-        sig.locales_loaded.connect(lambda lcs: (
-            lc_combo.clear(),
-            lc_combo.addItems(lcs),
-            lc_combo.setCurrentText(_current_locale()),
-        ))
+
+        def _on_locales(lcs):
+            lc_combo.clear()
+            lc_combo.addItems(lcs)
+            lc_combo.setCurrentText(_current_locale())
+
+        sig.locales_loaded.connect(_on_locales)
         threading.Thread(
             target=lambda: sig.locales_loaded.emit(_list_locales()),
             daemon=True,
