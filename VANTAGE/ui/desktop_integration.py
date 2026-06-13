@@ -10,7 +10,7 @@ import subprocess
 import threading
 from typing import Optional
 
-from PySide6.QtCore import Qt, QTimer, QRect, Signal, Slot, QObject
+from PySide6.QtCore import Qt, QTimer, Signal, Slot, QObject
 from PySide6.QtGui import (QIcon, QFont, QColor, QPainter, QPen,
                             QPixmap, QPainterPath, QGuiApplication, QAction)
 from PySide6.QtWidgets import (QApplication, QSystemTrayIcon, QMenu, QWidget,
@@ -131,55 +131,6 @@ class SourceMenu(QObject):
 
 
 # ---------------------------------------------------------------------------
-# Floating popup (tray left-click)
-# ---------------------------------------------------------------------------
-
-class _TrayPopup(QWidget):
-    def __init__(self):
-        super().__init__(None, Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
-        self.setAttribute(Qt.WA_TranslucentBackground)
-        self.setAttribute(Qt.WA_ShowWithoutActivating)
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(12, 10, 12, 10)
-        layout.setSpacing(4)
-        self._title = QLabel("VANTAGE")
-        self._title.setStyleSheet("color:#90CAF9;font-weight:600;font-size:12px;")
-        layout.addWidget(self._title)
-        self._lines: list[QLabel] = []
-        for _ in range(6):
-            lbl = QLabel("—")
-            lbl.setStyleSheet("color:#E0E0E0;font-size:11px;font-family:monospace;")
-            layout.addWidget(lbl)
-            self._lines.append(lbl)
-        self.setMinimumWidth(230)
-
-    def paintEvent(self, _):
-        p = QPainter(self)
-        p.setRenderHint(QPainter.Antialiasing)
-        path = QPainterPath()
-        path.addRoundedRect(self.rect().adjusted(1, 1, -1, -1), 8, 8)
-        p.fillPath(path, QColor(30, 30, 40, 220))
-        p.setPen(QPen(QColor(80, 80, 100), 1))
-        p.drawPath(path)
-
-    def update(self, data: dict, label: str):  # type: ignore[override]
-        self._title.setText(f"VANTAGE — {label}")
-        for lbl, val in zip(self._lines, _metric_lines(data)):
-            lbl.setText(val)
-        self.adjustSize()
-
-    def show_near(self, geo: QRect):
-        screen = QGuiApplication.primaryScreen().availableGeometry()
-        self.adjustSize()
-        x = min(geo.x(), screen.right() - self.width() - 4)
-        y = geo.top() - self.height() - 4
-        if y < screen.top():
-            y = geo.bottom() + 4
-        self.move(x, y)
-        self.show()
-
-
-# ---------------------------------------------------------------------------
 # System Tray Applet
 # ---------------------------------------------------------------------------
 
@@ -192,7 +143,6 @@ class TrayApplet(QObject):
     def __init__(self, registry, initial_source: str = "local", parent=None):
         super().__init__(parent)
         self._registry = registry
-        self._popup = _TrayPopup()
 
         self._tray = QSystemTrayIcon(self)
         self._tray.setIcon(_dot_icon("#43A047"))
@@ -244,19 +194,15 @@ class TrayApplet(QObject):
         mem = self._data.get('memory_percent', 0)
         temp = self._data.get('cpu_temp')
         temp_str = f" {temp:.0f}°C" if temp is not None else ""
-        self._tray.setIcon(_dot_icon(_status_color(cpu, mem)))
-        self._tray.setToolTip(f"CPU: {cpu:.0f}%{temp_str}  Mem: {mem:.0f}%")
+        disk = self._data.get('disk_percent', 0)
+        mem_pct = self._data.get('memory_percent', 0)
+        self._tray.setIcon(_dot_icon(_status_color(cpu, mem_pct)))
+        lines = "\n".join(_metric_lines(self._data))
+        self._tray.setToolTip(f"VANTAGE — {self._label}\n{lines}")
 
     def _on_activated(self, reason):
         if reason == QSystemTrayIcon.DoubleClick:
-            self._popup.hide()
             self.show_window_requested.emit()
-        elif reason == QSystemTrayIcon.Trigger:
-            if self._popup.isVisible():
-                self._popup.hide()
-            else:
-                self._popup.update(self._data, self._label)
-                self._popup.show_near(self._tray.geometry())
 
     @property
     def current_source(self) -> str:
