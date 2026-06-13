@@ -436,39 +436,18 @@ def main():
             # Desktop integration (tray + optional desktop widget)
             desktop_ctrl = DesktopIntegrationController(registry=registry,
                                                         parent=main_window)
+            # Wire "Open VANTAGE" before start() so the callback is set
+            desktop_ctrl._show_window_cb = lambda: (
+                main_window.showMaximized(), main_window.raise_())
             desktop_ctrl.start(enable_tray=True, enable_desktop_widget=False)
 
-            # Bridge dashboard metrics → tray / desktop widget
+            # Bridge local MetricsCollector → tray / desktop widget
             if hasattr(dashboard_tab, '_collector') and dashboard_tab._collector:
-                dashboard_tab._collector.metrics_ready.connect(desktop_ctrl.on_metrics)
+                dashboard_tab._collector.metrics_ready.connect(
+                    desktop_ctrl.on_local_metrics)
 
             # Keep a reference so it isn't garbage-collected
             main_window._desktop_ctrl = desktop_ctrl
-
-            # Wire tray's source selection into the dashboard dropdown
-            if desktop_ctrl.tray:
-                def _on_tray_source(source_id: str):
-                    desktop_ctrl.set_source_label(
-                        "Local" if source_id == "local"
-                        else next((s.display_name for s in registry.all_servers()
-                                   if s.server_id == source_id), source_id)
-                    )
-                    if hasattr(dashboard_tab, 'on_device_changed'):
-                        dashboard_tab.on_device_changed(source_id)
-                desktop_ctrl.tray.source_changed.connect(_on_tray_source)
-
-                # Add "Desktop Integration Settings" to tray menu
-                from PySide6.QtGui import QAction as _QAction
-                settings_act = _QAction("Desktop integration settings…", main_window)
-                settings_act.triggered.connect(
-                    lambda: desktop_ctrl.show_settings(main_window))
-                desktop_ctrl.tray._tray.contextMenu().insertAction(
-                    desktop_ctrl.tray._tray.contextMenu().actions()[0], settings_act)
-                desktop_ctrl.tray._tray.contextMenu().insertSeparator(
-                    desktop_ctrl.tray._tray.contextMenu().actions()[1])
-
-                desktop_ctrl.tray.show_window_requested.connect(main_window.showMaximized)
-                desktop_ctrl.tray.show_window_requested.connect(main_window.raise_)
 
             tabs_data = {
                 'dashboard': dashboard_tab,
