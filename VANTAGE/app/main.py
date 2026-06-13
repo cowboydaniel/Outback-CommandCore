@@ -313,6 +313,21 @@ class VantageUI(QMainWindow):
                     del self.tabs[title]
                     break
     
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        # Hide from taskbar — the tray applet is the app's presence there.
+        # Must run after the window is mapped so the X11 window ID is valid.
+        try:
+            import subprocess
+            wid = str(int(self.winId()))
+            subprocess.Popen(
+                ['xprop', '-id', wid,
+                 '-f', '_NET_WM_STATE', '32a',
+                 '-set', '_NET_WM_STATE', '_NET_WM_STATE_SKIP_TASKBAR'],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception:
+            pass
+
     def on_tab_changed(self, index: int) -> None:
         """Handle tab change events.
 
@@ -409,6 +424,13 @@ def main():
     app.setApplicationName("VANTAGE")
     app.setApplicationDisplayName("VANTAGE - Device Intelligence Platform")
     app.setApplicationVersion("1.0.0")
+
+    # Set application icon so the DE/taskbar/tray all use the real image
+    _icon_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                              '..', 'icons', 'vantage.png')
+    _icon_path = os.path.normpath(_icon_path)
+    if os.path.exists(_icon_path):
+        app.setWindowIcon(QIcon(_icon_path))
     
     # Show splash screen
     splash = show_splash_screen()
