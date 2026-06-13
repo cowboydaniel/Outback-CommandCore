@@ -43,6 +43,7 @@ def setup_storage_tab(module) -> None:
             stderr=subprocess.PIPE,
             text=True,
             check=False,
+            timeout=10,
         )
 
         if result.returncode == 0:

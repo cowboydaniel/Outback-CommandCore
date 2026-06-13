@@ -1402,10 +1402,13 @@ if __name__ == "__main__":
         remaining = max(0, minimum_splash_duration - elapsed)
 
         def finish_startup() -> None:
-            try:
-                if splash and splash.isVisible():
-                    splash.close()
+            # Close splash and flush the event queue so it's visually gone
+            # before any blocking work or modal dialogs appear.
+            if splash and splash.isVisible():
+                splash.close()
+            app.processEvents()
 
+            try:
                 window = QMainWindow()
                 window.setWindowTitle("PC-X")
                 window.setGeometry(100, 100, 1280, 800)
@@ -1417,9 +1420,20 @@ if __name__ == "__main__":
                 window.showMaximized()
             except Exception as exc:
                 import traceback
-                traceback.print_exc()
-                from PySide6.QtWidgets import QMessageBox
-                QMessageBox.critical(None, "PC-X Startup Error", str(exc))
+                err_text = traceback.format_exc()
+                # Write to a log file so it's visible even if the dialog is missed
+                _err_log = Path.home() / ".local" / "share" / "pc-x" / "startup_error.log"
+                try:
+                    _err_log.parent.mkdir(parents=True, exist_ok=True)
+                    _err_log.write_text(err_text)
+                except Exception:
+                    pass
+                sys.stderr.write(err_text)
+                QMessageBox.critical(
+                    None,
+                    "PC-X Startup Error",
+                    f"{exc}\n\nFull traceback written to:\n{_err_log}",
+                )
                 app.quit()
 
         QTimer.singleShot(int(remaining * 1000), finish_startup)
