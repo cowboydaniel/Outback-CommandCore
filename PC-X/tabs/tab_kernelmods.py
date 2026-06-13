@@ -182,10 +182,10 @@ def setup_kernelmods_tab(module) -> None:
 
     def _reload():
         refresh_btn.setEnabled(False)
-        _sigs.append(_Signals())
-        _sigs[-1].loaded.connect(_populate)
         threading.Thread(
-            target=lambda: _sigs[-1].loaded.emit(_load_modules()),
+            target=lambda: module.post_ui_update(
+                lambda mods=_load_modules(): _populate(mods)
+            ),
             daemon=True,
         ).start()
 

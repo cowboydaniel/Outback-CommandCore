@@ -235,10 +235,10 @@ def setup_processes_tab(module) -> None:
         refresh_btn.setEnabled(False)
         fu = user_cb.currentText()
         ft = search_edit.text()
-        _sigs.append(_Signals())
-        _sigs[-1].loaded.connect(_populate)
         threading.Thread(
-            target=lambda: _sigs[-1].loaded.emit(_load_procs(fu, ft)),
+            target=lambda: module.post_ui_update(
+                lambda rows=_load_procs(fu, ft): _populate(rows)
+            ),
             daemon=True,
         ).start()
 

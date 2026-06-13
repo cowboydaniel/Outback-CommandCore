@@ -222,10 +222,10 @@ def setup_scheduler_tab(module) -> None:
     def _reload():
         refresh_btn.setEnabled(False)
         user = user_cb.currentText()
-        _sigs.append(_Signals()); sig = _sigs[-1]
-        sig.loaded.connect(_populate)
         threading.Thread(
-            target=lambda: sig.loaded.emit(_load_all_jobs(user)),
+            target=lambda: module.post_ui_update(
+                lambda jobs=_load_all_jobs(user): _populate(jobs)
+            ),
             daemon=True,
         ).start()
 

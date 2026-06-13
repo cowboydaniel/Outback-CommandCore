@@ -223,10 +223,10 @@ def setup_startup_tab(module) -> None:
 
     def _reload_svc():
         sv_refresh.setEnabled(False)
-        _sigs.append(_Signals()); sig = _sigs[-1]
-        sig.loaded.connect(_populate_svc)
         threading.Thread(
-            target=lambda: sig.loaded.emit(_load_systemd_user()),
+            target=lambda: module.post_ui_update(
+                lambda rows=_load_systemd_user(): _populate_svc(rows)
+            ),
             daemon=True,
         ).start()
 
@@ -308,10 +308,10 @@ def setup_startup_tab(module) -> None:
 
     def _reload_xdg():
         xdg_refresh.setEnabled(False)
-        _sigs.append(_Signals()); sig = _sigs[-1]
-        sig.loaded.connect(_populate_xdg)
         threading.Thread(
-            target=lambda: sig.loaded.emit(_load_autostart()),
+            target=lambda: module.post_ui_update(
+                lambda rows=_load_autostart(): _populate_xdg(rows)
+            ),
             daemon=True,
         ).start()
 

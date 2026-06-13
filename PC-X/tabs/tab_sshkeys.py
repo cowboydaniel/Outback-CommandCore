@@ -159,10 +159,10 @@ def setup_sshkeys_tab(module) -> None:
 
     def _reload_auth():
         a_refresh.setEnabled(False)
-        _sigs.append(_Signals())
-        _sigs[-1].loaded.connect(_populate_auth)
         threading.Thread(
-            target=lambda: _sigs[-1].loaded.emit(_parse_authorized_keys()),
+            target=lambda: module.post_ui_update(
+                lambda rows=_parse_authorized_keys(): _populate_auth(rows)
+            ),
             daemon=True,
         ).start()
 
@@ -268,10 +268,10 @@ def setup_sshkeys_tab(module) -> None:
 
     def _reload_known():
         k_refresh.setEnabled(False)
-        _sigs.append(_Signals())
-        _sigs[-1].loaded.connect(_populate_known)
         threading.Thread(
-            target=lambda: _sigs[-1].loaded.emit(_parse_known_hosts()),
+            target=lambda: module.post_ui_update(
+                lambda rows=_parse_known_hosts(): _populate_known(rows)
+            ),
             daemon=True,
         ).start()
 

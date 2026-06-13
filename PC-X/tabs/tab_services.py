@@ -190,10 +190,10 @@ def setup_services_tab(module) -> None:
         refresh_btn.setEnabled(False)
         table.setRowCount(0)
         f = state_filter.currentText().lower()
-        module._svc_sig = _Signals()
-        module._svc_sig.loaded.connect(_populate)
         threading.Thread(
-            target=lambda: module._svc_sig.loaded.emit(_load_services(f if f != "all" else "")),
+            target=lambda: module.post_ui_update(
+                lambda rows=_load_services(f if f != "all" else ""): _populate(rows)
+            ),
             daemon=True,
         ).start()
 
