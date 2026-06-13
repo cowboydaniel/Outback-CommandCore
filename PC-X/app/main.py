@@ -41,7 +41,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from PySide6.QtCore import Qt, QObject, QThread, QTimer, Signal
+from PySide6.QtCore import Qt, QObject, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QIcon
 
 PCX_DIR = Path(__file__).resolve().parents[1]
@@ -1367,62 +1367,47 @@ if __name__ == "__main__":
         app.setWindowIcon(QIcon(str(icon_path)))
 
     # Show splash screen
+    _dbg_log = Path.home() / ".local" / "share" / "pc-x" / "startup_debug.log"
+    _dbg_log.parent.mkdir(parents=True, exist_ok=True)
+
+    def _dbg(msg: str) -> None:
+        with open(_dbg_log, "a") as f:
+            f.write(f"{time.time():.3f}  {msg}\n")
+
+    _dbg("=== PC-X startup begin ===")
+
     splash = show_splash_screen()
     app.processEvents()
+    _dbg("splash shown")
 
-    class StartupWorker(QObject):
-        status = Signal(str)
-        progress = Signal(int)
-        finished = Signal()
-        failed = Signal(str)
-
-        def run(self) -> None:
-            try:
-                self.status.emit("Loading system tools...")
-                self.status.emit("Ready!")
-                self.finished.emit()
-            except Exception as exc:
-                self.failed.emit(str(exc))
-
-    splash_start_time = time.time()
-    minimum_splash_duration = 5.9
-
-    thread = QThread()
-    worker = StartupWorker()
-    worker.moveToThread(thread)
-
-    worker.status.connect(splash.update_status)
-    if hasattr(splash, "set_progress"):
-        worker.progress.connect(splash.set_progress)
-
-    # Persistent lists so closures and timers aren't GC'd before they fire.
     main_windows: list = []
-    _live_refs: list = []
 
     def _finish_startup() -> None:
-        _live_refs.clear()
-        # Close splash and flush the event queue so it's visually gone
-        # before any blocking work or modal dialogs appear.
+        _dbg("_finish_startup called")
         if splash and splash.isVisible():
             splash.close()
         app.processEvents()
+        _dbg("splash closed + processEvents done")
 
         try:
+            _dbg("creating QMainWindow")
             window = QMainWindow()
             window.setWindowTitle("PC-X")
             window.setGeometry(100, 100, 1280, 800)
             window.setStyleSheet("QMainWindow { background-color: #2A2D2E; }")
-
+            _dbg("creating PCToolsModule")
             pc_tools = PCToolsModule(window, {"name": "Test User"})
+            _dbg("PCToolsModule created OK")
             window.setCentralWidget(pc_tools)
             main_windows.append(window)
             window.showMaximized()
+            _dbg("window.showMaximized() called — startup complete")
         except Exception as exc:
             import traceback
             err_text = traceback.format_exc()
+            _dbg(f"EXCEPTION: {err_text}")
             _err_log = Path.home() / ".local" / "share" / "pc-x" / "startup_error.log"
             try:
-                _err_log.parent.mkdir(parents=True, exist_ok=True)
                 _err_log.write_text(err_text)
             except Exception:
                 pass
@@ -1434,29 +1419,8 @@ if __name__ == "__main__":
             )
             app.quit()
 
-    def show_main() -> None:
-        elapsed = time.time() - splash_start_time
-        remaining = max(0, minimum_splash_duration - elapsed)
-        # Use a QTimer instance (not singleShot static) stored in _live_refs so
-        # neither the timer nor the callback closure is GC'd before it fires.
-        _t = QTimer()
-        _t.setSingleShot(True)
-        _t.timeout.connect(_finish_startup)
-        _t.start(int(remaining * 1000))
-        _live_refs.append(_t)
-
-    def handle_error(message: str) -> None:
-        if splash and splash.isVisible():
-            splash.update_status(f"Error: {message}")
-        QTimer.singleShot(2000, app.quit)
-
-    worker.finished.connect(show_main)
-    worker.failed.connect(handle_error)
-    worker.finished.connect(thread.quit)
-    worker.failed.connect(thread.quit)
-    worker.finished.connect(worker.deleteLater)
-    thread.finished.connect(thread.deleteLater)
-    thread.started.connect(worker.run)
-    thread.start()
+    _dbg("scheduling _finish_startup via QTimer.singleShot(6000)")
+    QTimer.singleShot(6000, _finish_startup)
+    _dbg("QTimer.singleShot scheduled, entering event loop")
 
     sys.exit(app.exec())
