@@ -366,7 +366,10 @@ class VantageUI(QMainWindow):
                     thread = getattr(widget, thread_attr, None)
                     if collector and hasattr(collector, 'stop'):
                         try:
+                            # stop() emits a signal; flush it to the worker
+                            # thread's event loop before we call quit()
                             collector.stop()
+                            QApplication.processEvents()
                         except Exception:
                             pass
                     if thread and thread.isRunning():
