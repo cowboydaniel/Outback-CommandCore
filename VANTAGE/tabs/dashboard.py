@@ -311,12 +311,12 @@ class MetricsCollector(QObject):
     def stop(self):
         """Thread-safe: emit signal so the timer is stopped on its own thread."""
         self.stop_requested.emit()
-        self._temp_executor.shutdown(wait=False)
 
     @Slot()
     def _do_stop(self):
         if self._timer:
             self._timer.stop()
+        self._temp_executor.shutdown(wait=False)
 
     @Slot()
     def _collect(self):
