@@ -291,6 +291,7 @@ class MetricsCollector(QObject):
     All psutil calls live here so the UI thread is never blocked.
     """
     metrics_ready = Signal(dict)
+    stop_requested = Signal()
 
     def __init__(self):
         super().__init__()
@@ -298,6 +299,7 @@ class MetricsCollector(QObject):
         self._last_temp = None
         self._temp_executor = ThreadPoolExecutor(max_workers=1)
         self._pending_temp = None
+        self.stop_requested.connect(self._do_stop)
 
     @Slot()
     def start(self):
@@ -307,9 +309,14 @@ class MetricsCollector(QObject):
         self._collect()
 
     def stop(self):
+        """Thread-safe: emit signal so the timer is stopped on its own thread."""
+        self.stop_requested.emit()
+        self._temp_executor.shutdown(wait=False)
+
+    @Slot()
+    def _do_stop(self):
         if self._timer:
             self._timer.stop()
-        self._temp_executor.shutdown(wait=False)
 
     @Slot()
     def _collect(self):

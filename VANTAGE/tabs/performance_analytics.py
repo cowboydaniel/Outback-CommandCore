@@ -17,6 +17,7 @@ logger = __import__('logging').getLogger(__name__)
 class PerfMetricsCollector(QObject):
     """All psutil calls for Performance Analytics — runs in a background QThread."""
     metrics_ready = Signal(dict)
+    stop_requested = Signal()
 
     def __init__(self):
         super().__init__()
@@ -24,6 +25,7 @@ class PerfMetricsCollector(QObject):
         self._last_disk_io = None
         self._last_net_io  = None
         self._last_io_time = None
+        self.stop_requested.connect(self._do_stop)
 
     @Slot()
     def start(self):
@@ -39,6 +41,11 @@ class PerfMetricsCollector(QObject):
         self._collect()
 
     def stop(self):
+        """Thread-safe: emit signal so the timer is stopped on its own thread."""
+        self.stop_requested.emit()
+
+    @Slot()
+    def _do_stop(self):
         if self._timer:
             self._timer.stop()
 
