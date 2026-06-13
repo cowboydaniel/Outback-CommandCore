@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QLabel, QTabWidget,
                              QHBoxLayout, QFormLayout, QSplitter)
-from PySide6.QtCharts import QChart, QChartView, QLineSeries, QSplineSeries, QValueAxis
+from PySide6.QtCharts import QChart, QChartView, QLineSeries, QSplineSeries, QValueAxis, QAreaSeries
 from PySide6.QtCore import Qt, QTimer, QMargins, QObject, QThread, Signal, Slot
 from PySide6.QtGui import QPainter, QColor, QPen
 import psutil
@@ -122,7 +122,7 @@ class PerformanceAnalyticsTab(QWidget):
         self.data_points = 60
         self.time_range  = 5        # minutes shown
         self.prediction_steps  = 30
-        self.prediction_window = 10
+        self.prediction_window = 20   # wider history → smoother, less reactive forecasts
         self._latest: dict = {}
         self.setup_ui()
         self._start_collector()
@@ -255,6 +255,21 @@ class PerformanceAnalyticsTab(QWidget):
         series.attachAxis(ax)
         series.attachAxis(ay)
 
+    def _make_band(self, chart, ax, ay, color: QColor) -> tuple:
+        """Create an QAreaSeries confidence band. Returns (area, upper, lower)."""
+        upper = QLineSeries()
+        lower = QLineSeries()
+        area  = QAreaSeries(upper, lower)
+        band_color = QColor(color)
+        band_color.setAlpha(55)
+        area.setBrush(band_color)
+        area.setPen(QPen(Qt.NoPen))
+        area.setOpacity(1.0)
+        chart.addSeries(area)
+        area.attachAxis(ax)
+        area.attachAxis(ay)
+        return area, upper, lower
+
     # ------------------------------------------------------------------
     # CPU tab
     # ------------------------------------------------------------------
@@ -285,6 +300,10 @@ class PerformanceAnalyticsTab(QWidget):
         self.cpu_divider.append(0, 0)
         self.cpu_divider.append(0, 100)
         self._attach(self.cpu_chart, self.cpu_divider, self.cpu_ax, self.cpu_ay)
+
+        # Confidence band (drawn before prediction line so line sits on top)
+        self.cpu_band, self.cpu_band_upper, self.cpu_band_lower = self._make_band(
+            self.cpu_chart, self.cpu_ax, self.cpu_ay, QColor(255, 100, 100))
 
         # Prediction series
         self.cpu_pred_series = QSplineSeries()
@@ -385,8 +404,9 @@ class PerformanceAnalyticsTab(QWidget):
                 self.cpu_series[core].append(i * ti, v)
 
         if self.prediction_window <= len(self.avg_cpu_data):
-            self._update_prediction(
+            self._update_holt_prediction(
                 self.avg_cpu_data, self.cpu_pred_series,
+                self.cpu_band_upper, self.cpu_band_lower,
                 alpha=0.4, beta=0.2, phi=0.85, max_step_range=(1.5, 8.0), clamp=(0, 100))
 
     # ------------------------------------------------------------------
@@ -429,7 +449,9 @@ class PerformanceAnalyticsTab(QWidget):
         self.mem_used_series      = _mseries("Used (%)",         "#ff8c00")
         self.swap_used_series     = _mseries("Swap Used (%)",    "#dc143c")
         self.swap_percent_series  = _mseries("Swap Usage (%)",   "#ffd700")
-        self.mem_pred_series      = QSplineSeries()
+        self.mem_band, self.mem_band_upper, self.mem_band_lower = self._make_band(
+            self.mem_chart, self.mem_ax, self.mem_ay, QColor(255, 100, 100))
+        self.mem_pred_series = QSplineSeries()
         self.mem_pred_series.setName("Predicted")
         self.mem_pred_series.setPen(self._pred_pen(QColor(255, 100, 100)))
         self._attach(self.mem_chart, self.mem_pred_series, self.mem_ax, self.mem_ay)
@@ -511,8 +533,9 @@ class PerformanceAnalyticsTab(QWidget):
                 series.append(i * ti, v)
 
         if self.prediction_window <= len(self.mem_data):
-            self._update_prediction(
+            self._update_holt_prediction(
                 self.mem_data, self.mem_pred_series,
+                self.mem_band_upper, self.mem_band_lower,
                 alpha=0.3, beta=0.1, phi=0.7, max_step_range=(0.5, 4.0), clamp=(0, 100))
 
     # ------------------------------------------------------------------
@@ -540,7 +563,11 @@ class PerformanceAnalyticsTab(QWidget):
 
         self.disk_read_series  = _dseries("Read (KB/s)",  "#ff8c00")
         self.disk_write_series = _dseries("Write (KB/s)", "#ff4500")
-        self.disk_read_pred    = QSplineSeries()
+        self.disk_read_band, self.disk_read_band_upper, self.disk_read_band_lower = self._make_band(
+            self.disk_chart, self.disk_ax, self.disk_ay, QColor(255, 200, 120))
+        self.disk_write_band, self.disk_write_band_upper, self.disk_write_band_lower = self._make_band(
+            self.disk_chart, self.disk_ax, self.disk_ay, QColor(255, 140, 120))
+        self.disk_read_pred = QSplineSeries()
         self.disk_read_pred.setName("Read (Predicted)")
         self.disk_read_pred.setPen(self._pred_pen(QColor(255, 200, 120)))
         self._attach(self.disk_chart, self.disk_read_pred, self.disk_ax, self.disk_ay)
@@ -617,10 +644,12 @@ class PerformanceAnalyticsTab(QWidget):
             self.disk_write_series.append(i * ti, self.disk_write_data[i])
 
         if len(self.disk_read_data) >= 2:
-            self._update_prediction(self.disk_read_data, self.disk_read_pred,
-                alpha=0.35, beta=0.15, phi=0.8, max_step_range=(5.0, 200.0))
-            self._update_prediction(self.disk_write_data, self.disk_write_pred,
-                alpha=0.35, beta=0.15, phi=0.8, max_step_range=(5.0, 200.0))
+            self._update_median_prediction(
+                self.disk_read_data,  self.disk_read_pred,
+                self.disk_read_band_upper,  self.disk_read_band_lower)
+            self._update_median_prediction(
+                self.disk_write_data, self.disk_write_pred,
+                self.disk_write_band_upper, self.disk_write_band_lower)
 
     # ------------------------------------------------------------------
     # Network tab
@@ -641,7 +670,11 @@ class PerformanceAnalyticsTab(QWidget):
 
         self.net_sent_series = _nseries("Sent",     "#ff6347")
         self.net_recv_series = _nseries("Received", "#6495ed")
-        self.net_sent_pred   = QSplineSeries()
+        self.net_sent_band, self.net_sent_band_upper, self.net_sent_band_lower = self._make_band(
+            self.net_chart, self.net_ax, self.net_ay, QColor(255, 160, 140))
+        self.net_recv_band, self.net_recv_band_upper, self.net_recv_band_lower = self._make_band(
+            self.net_chart, self.net_ax, self.net_ay, QColor(140, 180, 255))
+        self.net_sent_pred = QSplineSeries()
         self.net_sent_pred.setName("Sent (Predicted)")
         self.net_sent_pred.setPen(self._pred_pen(QColor(255, 160, 140)))
         self._attach(self.net_chart, self.net_sent_pred, self.net_ax, self.net_ay)
@@ -717,19 +750,26 @@ class PerformanceAnalyticsTab(QWidget):
             self.net_recv_series.append(i * ti, self.net_recv_data[i])
 
         if len(self.net_sent_data) >= 2:
-            self._update_prediction(self.net_sent_data, self.net_sent_pred,
-                alpha=0.35, beta=0.15, phi=0.8, max_step_range=(5.0, 200.0))
-            self._update_prediction(self.net_recv_data, self.net_recv_pred,
-                alpha=0.35, beta=0.15, phi=0.8, max_step_range=(5.0, 200.0))
+            self._update_median_prediction(
+                self.net_sent_data, self.net_sent_pred,
+                self.net_sent_band_upper, self.net_sent_band_lower)
+            self._update_median_prediction(
+                self.net_recv_data, self.net_recv_pred,
+                self.net_recv_band_upper, self.net_recv_band_lower)
 
     # ------------------------------------------------------------------
-    # Shared prediction engine (Holt's damped linear trend)
+    # Prediction engines
     # ------------------------------------------------------------------
 
-    def _update_prediction(self, data: list, series: QSplineSeries, *,
-                            alpha: float, beta: float, phi: float,
-                            max_step_range: tuple,
-                            clamp: tuple | None = None):
+    def _update_holt_prediction(self, data: list, series: QSplineSeries,
+                                 band_upper: QLineSeries, band_lower: QLineSeries, *,
+                                 alpha: float, beta: float, phi: float,
+                                 max_step_range: tuple,
+                                 clamp: tuple | None = None):
+        """
+        Holt's damped linear trend for slowly-varying signals (CPU, Memory).
+        Confidence band widens proportionally to sqrt(step) × recent σ.
+        """
         window = data[:self.prediction_window]
         if len(window) < 2:
             return
@@ -738,16 +778,28 @@ class PerformanceAnalyticsTab(QWidget):
         level = chronological[0]
         trend = chronological[1] - chronological[0]
         for v in chronological[1:]:
-            prev = level
+            prev  = level
             level = alpha * v + (1 - alpha) * (level + trend)
             trend = beta * (level - prev) + (1 - beta) * trend
 
-        deltas = [abs(b - a) for a, b in zip(chronological[:-1], chronological[1:])]
-        avg_d = sum(deltas) / len(deltas) if deltas else 0
+        deltas   = [abs(b - a) for a, b in zip(chronological[:-1], chronological[1:])]
+        avg_d    = sum(deltas) / len(deltas) if deltas else 0
         max_step = max(max_step_range[0], min(max_step_range[1], avg_d * 1.5))
+        # σ for the band: std-dev of recent deltas
+        if len(deltas) > 1:
+            mean_d = avg_d
+            sigma  = (sum((d - mean_d) ** 2 for d in deltas) / len(deltas)) ** 0.5
+        else:
+            sigma = avg_d
 
         series.clear()
-        series.append(0, data[0])  # connect to "now"
+        band_upper.clear()
+        band_lower.clear()
+
+        # Anchor at "now"
+        series.append(0, data[0])
+        band_upper.append(0, data[0])
+        band_lower.append(0, data[0])
 
         last_y = data[0]
         for i in range(1, self.prediction_steps + 1):
@@ -763,11 +815,54 @@ class PerformanceAnalyticsTab(QWidget):
             if clamp:
                 forecast = max(clamp[0], min(clamp[1], forecast))
             else:
-                forecast = max(0, forecast)
+                forecast = max(0.0, forecast)
 
-            time_point = -i * (30.0 / self.prediction_steps)
-            series.append(time_point, forecast)
+            half_band = sigma * (i ** 0.5) * 1.2
+            lo = forecast - half_band
+            hi = forecast + half_band
+            if clamp:
+                lo = max(clamp[0], lo)
+                hi = min(clamp[1], hi)
+            else:
+                lo = max(0.0, lo)
+
+            tp = -i * (30.0 / self.prediction_steps)
+            series.append(tp, forecast)
+            band_upper.append(tp, hi)
+            band_lower.append(tp, lo)
             last_y = forecast
+
+    def _update_median_prediction(self, data: list, series: QSplineSeries,
+                                   band_upper: QLineSeries, band_lower: QLineSeries,
+                                   window: int = 15):
+        """
+        Rolling-median prediction for bursty signals (Disk I/O, Network).
+        Predicts 'activity stays similar to recent median' — honest flat line.
+        Confidence band = median ± 1.5 × MAD (median absolute deviation).
+        """
+        recent = sorted(data[:window])
+        if not recent:
+            return
+        n = len(recent)
+        median = (recent[n // 2] if n % 2 else (recent[n // 2 - 1] + recent[n // 2]) / 2)
+        abs_devs = sorted(abs(v - median) for v in recent)
+        mad = (abs_devs[n // 2] if n % 2 else (abs_devs[n // 2 - 1] + abs_devs[n // 2]) / 2)
+        hi = median + 1.5 * mad
+        lo = max(0.0, median - 1.5 * mad)
+
+        series.clear()
+        band_upper.clear()
+        band_lower.clear()
+
+        # Anchor at now, then flat line at median
+        for src, y in [(series, data[0]), (band_upper, data[0]), (band_lower, data[0])]:
+            src.append(0, y)
+
+        for i in range(1, self.prediction_steps + 1):
+            tp = -i * (30.0 / self.prediction_steps)
+            series.append(tp, median)
+            band_upper.append(tp, hi)
+            band_lower.append(tp, lo)
 
     # ------------------------------------------------------------------
     # Main refresh (called by UI timer every second)
