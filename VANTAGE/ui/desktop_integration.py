@@ -249,6 +249,7 @@ class TrayApplet(QObject):
 
     def _on_activated(self, reason):
         if reason == QSystemTrayIcon.DoubleClick:
+            self._popup.hide()
             self.show_window_requested.emit()
         elif reason == QSystemTrayIcon.Trigger:
             if self._popup.isVisible():
