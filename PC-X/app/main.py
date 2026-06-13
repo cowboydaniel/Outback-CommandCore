@@ -69,6 +69,7 @@ from tabs import (
     tab_services,
     tab_storage,
     tab_sysconfig,
+    tab_logs,
     tab_system,
     tab_users,
     tab_utilities,
@@ -261,7 +262,7 @@ class PCToolsModule(QWidget):
         mgmt_layout.addWidget(self.mgmt_notebook)
 
         self.mgmt_tabs = {}
-        mgmt_subtabs = ["Services", "Firewall", "Users", "Scheduler", "Sysconfig"]
+        mgmt_subtabs = ["Services", "Firewall", "Users", "Scheduler", "Sysconfig", "Logs"]
 
         for name in mgmt_subtabs:
             tab = QWidget()
@@ -302,6 +303,7 @@ class PCToolsModule(QWidget):
         self.setup_sysconfig_tab()
         self.setup_utilities_tab()
         self.setup_diagnostics_tab()
+        self.setup_logs_tab()
 
         # Initial update
         self.update_last_update_time()
@@ -479,6 +481,10 @@ class PCToolsModule(QWidget):
     def setup_diagnostics_tab(self):
         """Set up the Diagnostics tab."""
         tab_diagnostics.setup_diagnostics_tab(self)
+
+    def setup_logs_tab(self):
+        """Set up the Log Viewer tab."""
+        tab_logs.setup_logs_tab(self)
 
     # Helper methods
 
