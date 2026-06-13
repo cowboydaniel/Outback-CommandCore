@@ -74,6 +74,7 @@ from tabs import (
     tab_diskusage,
     tab_envvars,
     tab_processes,
+    tab_sshkeys,
     tab_system,
     tab_users,
     tab_utilities,
@@ -266,7 +267,7 @@ class PCToolsModule(QWidget):
         mgmt_layout.addWidget(self.mgmt_notebook)
 
         self.mgmt_tabs = {}
-        mgmt_subtabs = ["Services", "Firewall", "Users", "Scheduler", "Sysconfig", "Logs", "Startup", "Env Vars"]
+        mgmt_subtabs = ["Services", "Firewall", "Users", "Scheduler", "Sysconfig", "Logs", "Startup", "Env Vars", "SSH Keys"]
 
         for name in mgmt_subtabs:
             tab = QWidget()
@@ -312,6 +313,7 @@ class PCToolsModule(QWidget):
         self.setup_diskusage_tab()
         self.setup_envvars_tab()
         self.setup_processes_tab()
+        self.setup_sshkeys_tab()
 
         # Initial update
         self.update_last_update_time()
@@ -509,6 +511,10 @@ class PCToolsModule(QWidget):
     def setup_processes_tab(self):
         """Set up the Process Manager tab."""
         tab_processes.setup_processes_tab(self)
+
+    def setup_sshkeys_tab(self):
+        """Set up the SSH Key Manager tab."""
+        tab_sshkeys.setup_sshkeys_tab(self)
 
     # Helper methods
 
