@@ -1404,7 +1404,7 @@ if __name__ == "__main__":
         def finish_startup() -> None:
             try:
                 if splash and splash.isVisible():
-                    splash.finish(None)
+                    splash.close()
 
                 window = QMainWindow()
                 window.setWindowTitle("PC-X")
