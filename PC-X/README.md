@@ -1,98 +1,60 @@
 # PC-X
 
-PC-X is a powerful cross-platform tactical systems toolkit designed for advanced diagnostics, system manipulation, and penetration testing on Windows, Linux, and macOS desktops and laptops.
+PC-X is a Linux system management toolkit with a dark-themed GUI. It provides a single window with sidebar navigation covering 20 system management areas.
 
-## Key Features
+## Features
 
-- **System Diagnostics**: Comprehensive hardware and software analysis tools
-- **Privileged Access**: Deep system internals exploration with elevated privileges
-- **Security Testing**: Custom exploit and payload deployment capabilities
-- **Real-time Monitoring**: Live tracking of system resources and security status
-- **Extensible Design**: Modular architecture supporting plugin extensions
-- **Secure Operations**: Protected execution environment with detailed audit trails
+| Section | Tools |
+|---------|-------|
+| **Device Info** | System overview, Hardware (CPU/RAM/GPU/battery), Storage, Network interfaces |
+| **Tools** | Package manager, Process manager, Benchmarks, Disk usage, Utilities, Diagnostics |
+| **Management** | Services (systemd), Firewall (UFW), Users & groups, Scheduler (cron), System config, Logs, Startup apps, Environment variables, SSH keys, Kernel modules |
 
 ## Requirements
 
-### Python Version
-- Python 3.10 or higher
+**Python:** 3.10 or higher
 
-### Python Dependencies
-Install via pip:
+**Python dependencies:**
 ```bash
-pip install -r requirements.txt
+pip install -r PC-X/requirements.txt
 ```
-- `psutil>=5.9.0` – System and process monitoring library
-- `PySide6>=6.5.0` – Qt6 bindings for Python (modern cross-platform GUI framework)
+- `psutil>=5.9.0`
+- `PySide6>=6.5.0`
 
-### Supported Platforms
-- Linux (primary target)
-- macOS (partial support)
-- Windows (partial support)
-
-### OS-Level Dependencies (Linux)
-For full hardware diagnostics functionality.
-
-> **See [docs/system-deps.md](../docs/system-deps.md#pc-x) for comprehensive system dependency documentation.**
-
-**Debian/Ubuntu:**
+**OS-level tools (Debian/Ubuntu):**
 ```bash
-sudo apt-get install smartmontools policykit-1
+sudo apt-get install smartmontools lshw pciutils policykit-1 ufw
 ```
 
-**Fedora/RHEL:**
+**OS-level tools (Fedora/RHEL):**
 ```bash
-sudo dnf install smartmontools polkit
+sudo dnf install smartmontools lshw pciutils polkit ufw
 ```
 
-Required tools:
-- `smartctl` – SMART disk monitoring
-- `pkexec` – PolicyKit for privilege escalation
+> See [docs/system-deps.md](../docs/system-deps.md#pc-x) for the full dependency list.
 
-### Permissions
-- Elevated privileges required for hardware access (SMART data, low-level diagnostics)
-- PC-X is designed for desktop launches: privileged commands first try existing passwordless `sudo -n`, then fall back to one long-lived `pkexec` helper so the desktop PolicyKit authentication agent should ask once per app launch and reuse that access until PC-X closes
-- Optionally configure passwordless sudo for specific commands to skip even the first PolicyKit prompt
+## Running
 
-## Getting Started
-
-1. Clone the repository and navigate to the PC-X directory
-2. Install Python dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-3. Install OS-level dependencies (see above)
-4. Launch the application
-
-## Usage
-
-### Entry Point
 ```bash
-# Run from repository root
-python PC-X/pc_tools_linux.py
+# From the repository root
+python PC-X/app/main.py
 
-# Or directly
-cd PC-X && python pc_tools_linux.py
-```
-
-### Module Path
-`PC-X.pc_tools_linux` (main module: `pc_tools_linux.py`)
-
-### Examples
-```bash
-# Launch the PC-X GUI
+# Or via the launcher wrapper
 python PC-X/pc_tools_linux.py
 ```
 
-**First-time setup:**
-- On first run, you may be prompted to configure passwordless sudo access for hardware monitoring tools
-- This allows seamless access to SMART data and other low-level diagnostics
+## Permissions
 
-**Available diagnostics:**
-- CPU and memory monitoring
-- Disk health (SMART data)
-- Network interface information
-- Process management
-- System resource tracking
+Many features (SMART diagnostics, hardware info, service control) require elevated privileges. PC-X handles this without needing a terminal password prompt:
+
+1. **Passwordless sudo** — if already configured for the relevant commands, used automatically with `sudo -n`
+2. **PolicyKit (pkexec)** — if sudo isn't configured, a single desktop authentication prompt appears on first privileged action; that session is reused until PC-X closes
+
+To configure passwordless sudo, use the optional setup in Settings or follow the instructions in the docs.
+
+## Platform
+
+Linux only. Tested on Debian/Ubuntu and Fedora.
 
 ## License
 

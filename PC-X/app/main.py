@@ -30,19 +30,16 @@ import psutil
 from PySide6.QtWidgets import (
     QApplication,
     QFrame,
-    QGroupBox,
     QHBoxLayout,
     QLabel,
     QListWidget,
     QListWidgetItem,
     QMainWindow,
-    QPushButton,
+    QMessageBox,
     QStackedWidget,
-    QTabWidget,
+    QStyleFactory,
     QVBoxLayout,
     QWidget,
-    QMessageBox,
-    QStyleFactory,
 )
 from PySide6.QtCore import Qt, QObject, QThread, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QIcon
@@ -54,12 +51,9 @@ if str(PCX_DIR) not in sys.path:
 from app import config
 from core.base import ensure_logs_dir, get_paths
 from core.utils import (
-    check_and_install_dependencies,
-    check_and_setup_sudoers,
     configure_logging,
     format_smartctl_output,
     run_privileged_command,
-    setup_passwordless_sudo,
 )
 from tabs import (
     tab_benchmarks,
@@ -1340,6 +1334,13 @@ logging.info("PC Tools module loaded - PySide6 implementation")
 
 # For standalone execution
 if __name__ == "__main__":
+    if importlib.util.find_spec("PySide6") is None:
+        print(
+            "Error: PySide6 is required.\n"
+            "Install dependencies with: pip install -r PC-X/requirements.txt"
+        )
+        sys.exit(1)
+
     app = QApplication(sys.argv)
     app.setStyle(QStyleFactory.create("Fusion"))
 
@@ -1361,12 +1362,9 @@ if __name__ == "__main__":
     app.setPalette(_palette)
 
     # Set window icon
-    if importlib.util.find_spec("PIL") is not None:
-        from PIL import Image  # noqa: F401
-
-        icon_path = ROOT_DIR / "icons" / "pc-x.png"
-        if icon_path.exists():
-            app.setWindowIcon(QIcon(str(icon_path)))
+    icon_path = ROOT_DIR / "icons" / "pc-x.png"
+    if icon_path.exists():
+        app.setWindowIcon(QIcon(str(icon_path)))
 
     # Show splash screen
     splash = show_splash_screen()
