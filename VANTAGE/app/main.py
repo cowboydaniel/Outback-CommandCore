@@ -424,6 +424,13 @@ def main():
     app.setApplicationName("VANTAGE")
     app.setApplicationDisplayName("VANTAGE - Device Intelligence Platform")
     app.setApplicationVersion("1.0.0")
+
+    # Set application icon so the DE/taskbar/tray all use the real image
+    _icon_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                              '..', 'icons', 'vantage.png')
+    _icon_path = os.path.normpath(_icon_path)
+    if os.path.exists(_icon_path):
+        app.setWindowIcon(QIcon(_icon_path))
     
     # Show splash screen
     splash = show_splash_screen()
