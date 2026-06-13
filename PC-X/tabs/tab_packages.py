@@ -201,12 +201,12 @@ def setup_packages_tab(module) -> None:
         visible = sum(1 for r in range(table.rowCount()) if not table.isRowHidden(r))
         checked = _checked_packages()
         total_kb = sum(
-            table.item(r, 3).data(Qt.UserRole) or 0
+            (table.item(r, 3).data(Qt.UserRole) or 0) if table.item(r, 3) else 0
             for r in range(table.rowCount())
             if not table.isRowHidden(r)
         )
         checked_kb = sum(
-            table.item(r, 3).data(Qt.UserRole) or 0
+            (table.item(r, 3).data(Qt.UserRole) or 0) if table.item(r, 3) else 0
             for r in _checked_rows()
         )
         module._pkg_summary_label.setText(
@@ -218,6 +218,10 @@ def setup_packages_tab(module) -> None:
     def _populate_table(rows: List[Tuple[str, str, int, str, bool]]):
         module._pkg_all_rows = rows
         table.setSortingEnabled(False)
+        try:
+            table.itemChanged.disconnect()
+        except RuntimeError:
+            pass
         table.setRowCount(len(rows))
         for r, (name, version, size_kb, desc, orphan) in enumerate(rows):
             chk = QTableWidgetItem()
@@ -248,10 +252,6 @@ def setup_packages_tab(module) -> None:
         table.setSortingEnabled(True)
         table.sortByColumn(3, Qt.DescendingOrder)
         _apply_filter()
-        try:
-            table.itemChanged.disconnect()
-        except RuntimeError:
-            pass
         table.itemChanged.connect(lambda _: _update_summary())
 
     def _checked_rows():
