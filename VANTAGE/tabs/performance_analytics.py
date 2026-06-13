@@ -1174,7 +1174,7 @@ class PerformanceAnalyticsTab(QWidget):
             connections = psutil.net_connections(kind='inet')
             active_connections = len([conn for conn in connections if conn.status == 'ESTABLISHED'])
             self.net_connections_label.setText(f"{active_connections} established")
-        except:
+        except Exception:
             self.net_connections_label.setText("N/A")
         
         # Update data
