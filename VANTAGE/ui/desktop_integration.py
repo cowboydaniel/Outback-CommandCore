@@ -272,12 +272,18 @@ class DesktopWidget(QWidget):
     source_changed = Signal(str)
 
     def __init__(self, registry, initial_source: str = "local", parent=None):
-        super().__init__(None, Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnBottomHint)
+        # No Qt.Tool — it causes the window to float above normal windows on
+        # many WMs regardless of WindowStaysOnBottomHint.
+        super().__init__(None,
+                         Qt.Window |
+                         Qt.FramelessWindowHint |
+                         Qt.WindowStaysOnBottomHint |
+                         Qt.NoDropShadowWindowHint)
         self._registry = registry
         self.setAttribute(Qt.WA_TranslucentBackground)
-        self.setAttribute(Qt.WA_X11NetWmWindowTypeDesktop, True)
+        self.setAttribute(Qt.WA_ShowWithoutActivating)
         self.setWindowFlag(Qt.WindowDoesNotAcceptFocus, True)
-        self._set_desktop_hint()
+        self._hints_set = False
 
         self._data: dict = {}
         self._label: str = "Local"
@@ -291,12 +297,30 @@ class DesktopWidget(QWidget):
         self._load_geometry()
         self.show()
 
-    def _set_desktop_hint(self):
+    def showEvent(self, event):
+        super().showEvent(event)
+        # Set X11 hints after the window is mapped so winId() is valid.
+        # Do this only once; repeated calls on re-show are harmless but wasteful.
+        if not self._hints_set:
+            self._hints_set = True
+            QTimer.singleShot(0, self._set_x11_hints)
+
+    def _set_x11_hints(self):
+        """Push _NET_WM_WINDOW_TYPE_DESKTOP + _NET_WM_STATE_BELOW via xprop."""
+        wid = str(int(self.winId()))
         try:
             subprocess.Popen(
-                ['xprop', '-id', str(int(self.winId())),
+                ['xprop', '-id', wid,
                  '-f', '_NET_WM_WINDOW_TYPE', '32a',
                  '-set', '_NET_WM_WINDOW_TYPE', '_NET_WM_WINDOW_TYPE_DESKTOP'],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception:
+            pass
+        try:
+            subprocess.Popen(
+                ['xprop', '-id', wid,
+                 '-f', '_NET_WM_STATE', '32a',
+                 '-set', '_NET_WM_STATE', '_NET_WM_STATE_BELOW'],
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except Exception:
             pass
