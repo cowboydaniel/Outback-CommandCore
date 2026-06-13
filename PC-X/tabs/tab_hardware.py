@@ -1,6 +1,7 @@
 """Hardware tab layout for PC-X."""
 
 import os
+import threading
 
 import psutil
 from PySide6.QtCore import Qt
@@ -96,15 +97,14 @@ def setup_hardware_tab(module) -> None:
         total_ram = f"{mem.total / (1024**3):.2f} GB"
         available_ram = f"{mem.available / (1024**3):.2f} GB"
         used_ram = f"{mem.used / (1024**3):.2f} GB ({mem.percent}%)"
-        ram_speed = module.get_ram_speed()
     except Exception:
-        total_ram = available_ram = used_ram = ram_speed = "Unknown"
+        total_ram = available_ram = used_ram = "Unknown"
 
     memory_info = [
         ("Total Memory", total_ram),
         ("Available Memory", available_ram),
         ("Used Memory", used_ram),
-        ("Memory Speed", ram_speed),
+        ("Memory Speed", "Loading..."),
     ]
 
     for row, (label, value) in enumerate(memory_info):
@@ -119,6 +119,16 @@ def setup_hardware_tab(module) -> None:
             module.hardware_info_labels[label] = value_label
 
     content_layout.addWidget(memory_group)
+
+    # Fetch RAM speed via dmidecode in a background thread — calling it
+    # synchronously blocks Qt's event loop and prevents the splash closing.
+    _ram_speed_label = memory_layout.itemAtPosition(3, 1).widget()
+
+    def _fetch_ram_speed():
+        speed = module.get_ram_speed()
+        module.post_ui_update(lambda s=speed: _ram_speed_label.setText(s))
+
+    threading.Thread(target=_fetch_ram_speed, daemon=True).start()
 
     gpu_group = QGroupBox("Graphics Information")
     gpu_layout = QGridLayout(gpu_group)
