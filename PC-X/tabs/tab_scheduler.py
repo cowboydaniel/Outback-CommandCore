@@ -33,11 +33,14 @@ from PySide6.QtWidgets import (
 )
 
 CRON_DIRS = [
-    ("/etc/cron.d",       "cron.d"),
-    ("/etc/cron.daily",   "daily"),
-    ("/etc/cron.hourly",  "hourly"),
-    ("/etc/cron.weekly",  "weekly"),
-    ("/etc/cron.monthly", "monthly"),
+    ("/etc/cron.d", "cron.d"),
+]
+
+CRON_SCRIPT_DIRS = [
+    ("/etc/cron.daily",   "@daily",   "daily"),
+    ("/etc/cron.hourly",  "@hourly",  "hourly"),
+    ("/etc/cron.weekly",  "@weekly",  "weekly"),
+    ("/etc/cron.monthly", "@monthly", "monthly"),
 ]
 
 SCHEDULE_PRESETS = [
@@ -57,22 +60,29 @@ class _Signals(QObject):
     done = Signal(int, str)
 
 
-def _parse_crontab(text: str, source: str) -> list:
+def _parse_crontab(text: str, source: str, system: bool = False) -> list:
+    """Parse crontab text into (schedule, command, source, raw_line) tuples.
+
+    system=True: entries have an extra user field after the 5 time fields.
+    """
     jobs = []
     for line in text.splitlines():
         line = line.strip()
         if not line or line.startswith("#"):
             continue
-        parts = line.split(None, 5)
-        if len(parts) >= 6 and not line.startswith("@"):
-            schedule = " ".join(parts[:5])
-            command = parts[5]
-        elif line.startswith("@") and len(parts) >= 2:
-            schedule = parts[0]
-            command = " ".join(parts[1:])
-        else:
+        # Skip environment variable assignments (VAR=value)
+        if "=" in line.split()[0] if line.split() else False:
             continue
-        jobs.append((schedule, command, source, line))
+        parts = line.split(None, 6 if system else 5)
+        if line.startswith("@"):
+            if len(parts) >= (3 if system else 2):
+                schedule = parts[0]
+                command = " ".join(parts[2:]) if system else " ".join(parts[1:])
+                jobs.append((schedule, command, source, line))
+        elif len(parts) >= (7 if system else 6):
+            schedule = " ".join(parts[:5])
+            command = parts[6] if system else parts[5]
+            jobs.append((schedule, command, source, line))
     return jobs
 
 
@@ -84,11 +94,11 @@ def _load_all_jobs(user: str) -> list:
         cmd = ["crontab", "-l"] if user == getpass.getuser() else ["sudo", "-n", "crontab", "-u", user, "-l"]
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
         if r.returncode == 0:
-            jobs += _parse_crontab(r.stdout, f"crontab ({user})")
+            jobs += _parse_crontab(r.stdout, f"crontab ({user})", system=False)
     except Exception:
         pass
 
-    # System cron directories
+    # /etc/cron.d — system crontab format (5 time + user + command)
     for path, label in CRON_DIRS:
         if not os.path.isdir(path):
             continue
@@ -96,9 +106,20 @@ def _load_all_jobs(user: str) -> list:
             fpath = os.path.join(path, fname)
             try:
                 with open(fpath, "r", errors="replace") as f:
-                    jobs += _parse_crontab(f.read(), f"{label}/{fname}")
+                    jobs += _parse_crontab(f.read(), f"{label}/{fname}", system=True)
             except Exception:
                 pass
+
+    # /etc/cron.daily|weekly|monthly|hourly — shell scripts, not crontab format
+    # Each file runs as a whole on its implied schedule
+    for path, schedule, label in CRON_SCRIPT_DIRS:
+        if not os.path.isdir(path):
+            continue
+        for fname in sorted(os.listdir(path)):
+            fpath = os.path.join(path, fname)
+            if os.path.isfile(fpath) and not fname.startswith("."):
+                raw = f"{schedule} {fpath}"
+                jobs.append((schedule, fpath, label, raw))
 
     return jobs
 
