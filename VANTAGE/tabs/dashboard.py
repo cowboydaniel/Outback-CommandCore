@@ -896,13 +896,20 @@ class DashboardTab(QWidget):
         self.storage_card.value_label.setText(storage_value)
         self.storage_card.unit_label.setText(storage_unit)
 
-        # Temperature not available via SSH without extra commands
-        self.set_metric_unavailable(self.temp_card, "°C")
-        self.temp_card.value_label.setText("N/A")
+        # Temperature
+        if m.cpu_temp is not None:
+            self.temp_card.value_label.setText(f"{m.cpu_temp:.0f}")
+            self.temp_card.unit_label.setText("°C")
+        else:
+            self.set_metric_unavailable(self.temp_card, "°C")
+            self.temp_card.value_label.setText("N/A")
 
-        # Uptime not available without extra SSH command
-        self.set_metric_unavailable(self.uptime_card)
-        self.uptime_card.value_label.setText("N/A")
+        # Uptime
+        if m.uptime_seconds > 0:
+            self.uptime_card.value_label.setText(self.format_uptime(m.uptime_seconds))
+        else:
+            self.set_metric_unavailable(self.uptime_card)
+            self.uptime_card.value_label.setText("N/A")
 
         # Device count: local + all registered servers
         self.device_card.value_label.setText(str(1 + len(self._registry.all_servers())))
@@ -1390,6 +1397,17 @@ class DashboardTab(QWidget):
             return
         self.current_device_id = server_id
         logger.info("Dashboard switched to device: %s", self.device_dropdown.itemText(index))
+
+        # Clear chart history so previous device's data doesn't bleed through
+        self.chart_data_points.clear()
+        self.health_history.clear()
+        self.performance_history.clear()
+        self._last_performance_score = None
+        self.cpu_series.clear()
+        self.memory_series.clear()
+        self.cpu_glow.clear()
+        self.memory_glow.clear()
+
         if server_id != "local":
             # Clear stale cache so the UI shows "Connecting…" immediately
             self._remote_metrics.pop(server_id, None)
