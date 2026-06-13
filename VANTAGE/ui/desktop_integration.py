@@ -248,7 +248,9 @@ class TrayApplet(QObject):
         self._tray.setToolTip(f"CPU: {cpu:.0f}%{temp_str}  Mem: {mem:.0f}%")
 
     def _on_activated(self, reason):
-        if reason == QSystemTrayIcon.Trigger:
+        if reason == QSystemTrayIcon.DoubleClick:
+            self.show_window_requested.emit()
+        elif reason == QSystemTrayIcon.Trigger:
             if self._popup.isVisible():
                 self._popup.hide()
             else:
@@ -338,16 +340,20 @@ class DesktopWidget(QWidget):
         layout.setSpacing(5)
         self._title_lbl = QLabel("VANTAGE")
         self._title_lbl.setAlignment(Qt.AlignCenter)
+        self._title_lbl.setSizePolicy(
+            self._title_lbl.sizePolicy().horizontalPolicy(),
+            self._title_lbl.sizePolicy().verticalPolicy())
         layout.addWidget(self._title_lbl)
         self._lines: list[QLabel] = []
         for _ in range(6):
             lbl = QLabel("—")
             lbl.setAlignment(Qt.AlignLeft)
+            lbl.setWordWrap(False)
             layout.addWidget(lbl)
             self._lines.append(lbl)
         self._apply_fonts()
-        self.setMinimumSize(210, 170)
-        self.adjustSize()
+        # Wide enough for longest expected line; will grow if needed
+        self.setMinimumWidth(260)
 
     def _apply_fonts(self):
         alpha = int(self._opacity * 255)
@@ -365,6 +371,7 @@ class DesktopWidget(QWidget):
         self._title_lbl.setText(f"VANTAGE — {label}")
         for lbl, val in zip(self._lines, _metric_lines(data)):
             lbl.setText(val)
+        self.adjustSize()
 
     def paintEvent(self, _):
         p = QPainter(self)
