@@ -1358,6 +1358,7 @@ if __name__ == "__main__":
         sys.exit(1)
 
     app = QApplication(sys.argv)
+    app.setQuitOnLastWindowClosed(False)
     app.setStyle(QStyleFactory.create("Fusion"))
 
     from PySide6.QtGui import QPalette, QColor
@@ -1416,6 +1417,8 @@ if __name__ == "__main__":
             _dbg("PCToolsModule created OK")
             window.setCentralWidget(pc_tools)
             main_windows.append(window)
+            window.setAttribute(Qt.WA_DeleteOnClose)
+            window.destroyed.connect(app.quit)
             window.showMaximized()
             _dbg("window.showMaximized() called — startup complete")
         except Exception as exc:
