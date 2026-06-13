@@ -315,16 +315,58 @@ class VantageUI(QMainWindow):
     
     def on_tab_changed(self, index: int) -> None:
         """Handle tab change events.
-        
+
         Args:
             index: The index of the newly selected tab
         """
         self.tab_changed.emit(index)
-        
+
         # Update window title with current tab
         if self.tab_widget:
             tab_text = self.tab_widget.tabText(index)
             self.setWindowTitle(f"VANTAGE - {tab_text}")
+
+    def closeEvent(self, event) -> None:
+        """Gracefully stop all background threads before the window is destroyed."""
+        # Stop each tab's background thread
+        if self.tab_widget:
+            for i in range(self.tab_widget.count()):
+                widget = self.tab_widget.widget(i)
+                # Stop collector + wait for its thread
+                for collector_attr, thread_attr in (
+                    ('_collector', '_metrics_thread'),
+                    ('_collector', '_thread'),
+                ):
+                    collector = getattr(widget, collector_attr, None)
+                    thread = getattr(widget, thread_attr, None)
+                    if collector and hasattr(collector, 'stop'):
+                        try:
+                            collector.stop()
+                        except Exception:
+                            pass
+                    if thread and thread.isRunning():
+                        thread.quit()
+                        thread.wait(3000)
+                # Disconnect any open SSH clients
+                remote_clients = getattr(widget, '_remote_clients', {})
+                for client in remote_clients.values():
+                    try:
+                        client.disconnect()
+                    except Exception:
+                        pass
+
+        # Stop the desktop integration remote-fetch timer and SSH clients
+        ctrl = getattr(self, '_desktop_ctrl', None)
+        if ctrl:
+            ctrl._remote_timer.stop()
+            for client in ctrl._clients.values():
+                try:
+                    client.disconnect()
+                except Exception:
+                    pass
+
+        event.accept()
+        super().closeEvent(event)
 
 
 class StartupWorker(QObject):
