@@ -54,6 +54,8 @@ class VantageUI(QMainWindow):
         if os.path.exists(icon_path):
             self.setWindowIcon(QIcon(icon_path))
         
+        self._force_quit = False
+
         # Initialize tabs
         self.tabs: Dict[str, QWidget] = {}
         self.tab_widget: Optional[QTabWidget] = None
@@ -342,12 +344,20 @@ class VantageUI(QMainWindow):
             self.setWindowTitle(f"VANTAGE - {tab_text}")
 
     def closeEvent(self, event) -> None:
-        """Gracefully stop all background threads before the window is destroyed."""
-        # Stop each tab's background thread
+        """Hide to tray on X; only truly quit when the tray menu triggers it."""
+        ctrl = getattr(self, '_desktop_ctrl', None)
+        tray_available = ctrl and ctrl.tray is not None
+
+        if tray_available and not self._force_quit:
+            # Minimise to tray instead of closing
+            event.ignore()
+            self.hide()
+            return
+
+        # Real shutdown — stop all background threads
         if self.tab_widget:
             for i in range(self.tab_widget.count()):
                 widget = self.tab_widget.widget(i)
-                # Stop collector + wait for its thread
                 for collector_attr, thread_attr in (
                     ('_collector', '_metrics_thread'),
                     ('_collector', '_thread'),
@@ -362,16 +372,12 @@ class VantageUI(QMainWindow):
                     if thread and thread.isRunning():
                         thread.quit()
                         thread.wait(3000)
-                # Disconnect any open SSH clients
-                remote_clients = getattr(widget, '_remote_clients', {})
-                for client in remote_clients.values():
+                for client in getattr(widget, '_remote_clients', {}).values():
                     try:
                         client.disconnect()
                     except Exception:
                         pass
 
-        # Stop the desktop integration remote-fetch timer and SSH clients
-        ctrl = getattr(self, '_desktop_ctrl', None)
         if ctrl:
             ctrl._remote_timer.stop()
             for client in ctrl._clients.values():
@@ -382,6 +388,11 @@ class VantageUI(QMainWindow):
 
         event.accept()
         super().closeEvent(event)
+
+    def quit_to_close(self) -> None:
+        """Called by the tray Quit action to do a real close."""
+        self._force_quit = True
+        self.close()
 
 
 class StartupWorker(QObject):
@@ -512,6 +523,13 @@ def main():
 
             # Keep a reference so it isn't garbage-collected
             main_window._desktop_ctrl = desktop_ctrl
+
+            # Tray Quit → real shutdown; tray show → restore window
+            if desktop_ctrl.tray:
+                desktop_ctrl.tray.quit_requested.disconnect()
+                desktop_ctrl.tray.quit_requested.connect(main_window.quit_to_close)
+                desktop_ctrl.tray.show_window_requested.connect(main_window.showMaximized)
+                desktop_ctrl.tray.show_window_requested.connect(main_window.raise_)
 
             tabs_data = {
                 'dashboard': dashboard_tab,

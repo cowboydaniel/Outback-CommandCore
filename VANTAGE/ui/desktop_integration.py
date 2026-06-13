@@ -248,7 +248,9 @@ class TrayApplet(QObject):
         self._tray.setToolTip(f"CPU: {cpu:.0f}%{temp_str}  Mem: {mem:.0f}%")
 
     def _on_activated(self, reason):
-        if reason == QSystemTrayIcon.Trigger:
+        if reason == QSystemTrayIcon.DoubleClick:
+            self.show_window_requested.emit()
+        elif reason == QSystemTrayIcon.Trigger:
             if self._popup.isVisible():
                 self._popup.hide()
             else:
