@@ -399,6 +399,7 @@ class DashboardTab(QWidget):
         
         self.network_card = MetricCard("Network I/O", initial_metrics["network_value"], "MB/s")
         self.storage_card = MetricCard("Storage Used", initial_metrics["storage_value"], initial_metrics["storage_unit"])
+        self.storage_card.value_label.setTextFormat(Qt.RichText)
         self.temp_card = MetricCard("Avg. Temp", initial_metrics["temp_value"], "°C")
         self.uptime_card = MetricCard("Uptime", initial_metrics["uptime_value"], "")
         
