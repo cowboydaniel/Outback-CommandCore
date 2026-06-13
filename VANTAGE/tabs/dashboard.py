@@ -10,8 +10,9 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                              QSizePolicy, QFrame, QGraphicsDropShadowEffect, 
                              QScrollArea, QComboBox)
 from PySide6 import QtCore
-from PySide6.QtCore import (Qt, QPropertyAnimation, QEasingCurve, QPointF, 
-                          QTimer, QDateTime, Signal, QPoint, QRectF, QMargins)
+from PySide6.QtCore import (Qt, QPropertyAnimation, QEasingCurve, QPointF,
+                          QTimer, QDateTime, Signal, Slot, QPoint, QRectF, QMargins,
+                          QThread, QObject)
 from PySide6.QtGui import QFont, QPalette, QColor, QPainter, QPen, QLinearGradient, QGradient, QPainterPath, QPixmap, QBrush
 from PySide6.QtCharts import (QChart, QChartView, QLineSeries, QValueAxis, 
                             QPieSeries, QPieSlice, QBarSet, QBarSeries, 
@@ -284,6 +285,88 @@ class AnimatedGaugeWidget(QWidget):
         title_rect = self.rect().adjusted(10, 0, -10, -15)
         painter.drawText(title_rect, Qt.AlignHCenter | Qt.AlignBottom, self.title)
 
+class MetricsCollector(QObject):
+    """
+    Runs in a background QThread and emits a metrics dict every second.
+    All psutil calls live here so the UI thread is never blocked.
+    """
+    metrics_ready = Signal(dict)
+
+    def __init__(self):
+        super().__init__()
+        self._timer = None
+        self._last_temp = None
+        self._temp_executor = ThreadPoolExecutor(max_workers=1)
+        self._pending_temp = None
+
+    @Slot()
+    def start(self):
+        self._timer = QTimer()
+        self._timer.timeout.connect(self._collect)
+        self._timer.start(1000)
+        self._collect()
+
+    def stop(self):
+        if self._timer:
+            self._timer.stop()
+        self._temp_executor.shutdown(wait=False)
+
+    @Slot()
+    def _collect(self):
+        try:
+            m = {}
+            m['cpu_percent']    = psutil.cpu_percent(interval=None)
+            vm                  = psutil.virtual_memory()
+            m['memory_percent'] = vm.percent
+            m['memory_used']    = vm.used
+            m['memory_total']   = vm.total
+            disk                = psutil.disk_usage('/')
+            m['disk_percent']   = disk.percent
+            m['disk_used']      = disk.used
+            m['disk_total']     = disk.total
+            net                 = psutil.net_io_counters()
+            m['net_bytes_sent'] = net.bytes_sent
+            m['net_bytes_recv'] = net.bytes_recv
+            m['boot_time']      = psutil.boot_time()
+            try:
+                m['iowait'] = psutil.cpu_times_percent().iowait
+            except Exception:
+                m['iowait'] = 0.0
+            # Temperature: fire-and-forget; use last known value this tick
+            if self._pending_temp is not None and self._pending_temp.done():
+                try:
+                    result = self._pending_temp.result(timeout=0)
+                    if result is not None:
+                        self._last_temp = result
+                except Exception:
+                    pass
+                self._pending_temp = None
+            if self._pending_temp is None:
+                self._pending_temp = self._temp_executor.submit(self._read_temp)
+            m['cpu_temp']  = self._last_temp
+            m['timestamp'] = time.time()
+            self.metrics_ready.emit(m)
+        except Exception as exc:
+            logger.exception("MetricsCollector error: %s", exc)
+
+    @staticmethod
+    def _read_temp():
+        try:
+            temps = psutil.sensors_temperatures()
+            if not temps:
+                return None
+            vals = [
+                e.current
+                for name, entries in temps.items()
+                if any(k in name.lower() for k in ('core', 'cpu', 'k10temp', 'coretemp'))
+                for e in entries
+                if e.current and e.current > 0
+            ]
+            return sum(vals) / len(vals) if vals else None
+        except Exception:
+            return None
+
+
 class DashboardTab(QWidget):
     """Modern dashboard tab with smooth animated visualizations"""
     
@@ -297,8 +380,7 @@ class DashboardTab(QWidget):
         self.health_history = []     # Store health scores for trend calculation
         self.max_health_history = 6  # Keep last 6 scores for trend (30s history at 5s updates)
         self.health_window_seconds = 15  # Time window for health score calculation (seconds)
-        self._temp_probe_executor = ThreadPoolExecutor(max_workers=1)
-        self._temp_probe_timeout = 0.75
+        self._latest_metrics: dict = {}
         self._last_cpu_temp = None
 
         # Performance score tracking
@@ -655,8 +737,24 @@ class DashboardTab(QWidget):
         self._remote_fetch_timer.timeout.connect(self._fetch_remote_metrics_async)
         self._remote_fetch_timer.start(3000)
 
+        # Background metrics collector — keeps all psutil calls off the UI thread
+        self._metrics_thread = QThread()
+        self._collector = MetricsCollector()
+        self._collector.moveToThread(self._metrics_thread)
+        self._metrics_thread.started.connect(self._collector.start)
+        self._collector.metrics_ready.connect(self._on_metrics_ready)
+        self._metrics_thread.start()
+
+    @Slot(dict)
+    def _on_metrics_ready(self, metrics: dict):
+        self._latest_metrics = metrics
+        if metrics.get('cpu_temp') is not None:
+            self._last_cpu_temp = metrics['cpu_temp']
+
     def closeEvent(self, event):
-        self._temp_probe_executor.shutdown(wait=False)
+        self._collector.stop()
+        self._metrics_thread.quit()
+        self._metrics_thread.wait(2000)
         for client in self._remote_clients.values():
             client.disconnect()
         super().closeEvent(event)
@@ -846,7 +944,7 @@ class DashboardTab(QWidget):
             metrics["device_count"] = "1"
 
             net_io = psutil.net_io_counters()
-            self._prev_net_io = net_io
+            self._prev_net_io   = {'sent': net_io.bytes_sent, 'recv': net_io.bytes_recv}
             self._prev_net_time = time.time()
             metrics["network_value"] = "0.0/0.0"
 
@@ -872,50 +970,9 @@ class DashboardTab(QWidget):
             card.trend_label.setText("!")
             card.trend_label.setStyleSheet("color: #b0b0b0; font-size: 16px; font-weight: bold;")
 
-    def _read_average_cpu_temp(self):
-        """Probe CPU temperature from sensors (blocking)."""
-        temps = psutil.sensors_temperatures()
-        if not temps:
-            return None
-
-        cpu_temps = []
-        for name, entries in temps.items():
-            if 'core' in name.lower() or 'cpu' in name.lower() or 'k10temp' in name.lower() or 'coretemp' in name.lower():
-                for entry in entries:
-                    if entry.current and entry.current > 0:
-                        cpu_temps.append(entry.current)
-
-        if cpu_temps:
-            return sum(cpu_temps) / len(cpu_temps)
-        return None
-
-    def _reset_temp_probe_executor(self):
-        """Reset the temperature probe executor to avoid stalled threads."""
-        if self._temp_probe_executor:
-            self._temp_probe_executor.shutdown(wait=False, cancel_futures=True)
-        self._temp_probe_executor = ThreadPoolExecutor(max_workers=1)
-
     def get_average_cpu_temp(self):
-        """Return average CPU temperature with bounded probe time."""
-        avg_temp = None
-        try:
-            future = self._temp_probe_executor.submit(self._read_average_cpu_temp)
-            avg_temp = future.result(timeout=self._temp_probe_timeout)
-        except FuturesTimeoutError:
-            logger.warning(
-                "CPU temperature probe timed out after %.2fs",
-                self._temp_probe_timeout
-            )
-            self._reset_temp_probe_executor()
-        except BaseException as e:
-            logger.warning("CPU temperature probe failed: %s", e, exc_info=True)
-
-        if avg_temp is not None:
-            self._last_cpu_temp = avg_temp
-            return avg_temp
-        if self._last_cpu_temp is not None:
-            return self._last_cpu_temp
-        return None
+        """Return the most recent CPU temperature from the background collector."""
+        return self._latest_metrics.get('cpu_temp', self._last_cpu_temp)
 
     def format_storage_usage(self, disk_usage):
         """Format storage usage display values."""
@@ -969,7 +1026,7 @@ class DashboardTab(QWidget):
                 memory_score = max(0, 100 - (60 * 0.5) - (25 * 1.5) - ((memory_usage - 85) * 4))
 
             try:
-                io_wait = psutil.cpu_times_percent().iowait
+                io_wait = self._latest_metrics.get('iowait', 0)
                 disk_io_score = max(0, 100 - (io_wait * 2))
             except Exception as e:
                 logger.exception("Error reading I/O wait time: %s", e)
@@ -1004,161 +1061,64 @@ class DashboardTab(QWidget):
         """)
     
     def calculate_system_health(self):
-        """Calculate system health score based on various metrics with 15-second moving average."""
+        """Calculate system health score from cached metrics (non-blocking)."""
+        m = self._latest_metrics
+        if not m:
+            return None
         try:
-            # Get system metrics
-            cpu_usage = psutil.cpu_percent(interval=1)
-            memory = psutil.virtual_memory()
-            disk = psutil.disk_usage('/')
-            
-            # Calculate individual scores (0-100 scale)
-            cpu_score = max(0, 100 - (cpu_usage * 1.2))  # Slight penalty for high CPU
-            
-            # More forgiving memory scoring
-            memory_usage = memory.percent
+            cpu_usage    = m.get('cpu_percent', 0)
+            memory_usage = m.get('memory_percent', 0)
+            disk_pct     = m.get('disk_percent', 0)
+            iowait       = m.get('iowait', 0)
+            boot_time    = m.get('boot_time', time.time())
+            temp         = m.get('cpu_temp')
+
+            cpu_score = max(0.0, 100 - cpu_usage * 1.2)
+
             if memory_usage < 40:
-                # 0-40% usage: 100-95% score (very forgiving)
-                memory_score = 100 - (memory_usage * 0.125)
+                memory_score = 100 - memory_usage * 0.125
             elif memory_usage < 70:
-                # 40-70% usage: 95-85% score (gentle slope)
-                memory_score = 95 - ((memory_usage - 40) * 0.333)
+                memory_score = 95 - (memory_usage - 40) * 0.333
             elif memory_usage < 90:
-                # 70-90% usage: 85-50% score (steeper drop)
-                memory_score = 85 - ((memory_usage - 70) * 1.75)
+                memory_score = 85 - (memory_usage - 70) * 1.75
             else:
-                # 90%+ usage: 50-0% score (very steep drop)
-                memory_score = max(0, 50 - ((memory_usage - 90) * 5))
-            
-            # Disk score - 100% until 95% full, then drops sharply
-            disk_used_percent = (disk.used / disk.total * 100) if disk.total > 0 else 0
-            if disk_used_percent < 95:
-                disk_free_score = 100  # Full score until 95% full
-            else:
-                # Drop sharply from 100 to 0 in the last 5%
-                disk_free_score = max(0, 100 - ((disk_used_percent - 95) * 20))
-                
-            try:
-                disk_io_wait = psutil.cpu_times_percent().iowait
-                disk_io_score = max(0, 100 - (disk_io_wait * 2))  # Less aggressive I/O penalty
-            except Exception as e:
-                logger.exception("Error reading disk I/O wait: %s", e)
-                disk_io_score = 100
-                
-            disk_score = (disk_free_score * 0.8) + (disk_io_score * 0.2)  # Favor free space more
-            
-            # More granular temperature scoring
-            try:
-                temp = self.get_average_cpu_temp()
-                if temp is None:
-                    temp_score = 100
-                elif temp < 60:
-                    temp_score = 100
-                elif temp < 70:
-                    temp_score = 95
-                elif temp < 75:
-                    temp_score = 90
-                elif temp < 80:
-                    temp_score = 80
-                elif temp < 85:
-                    temp_score = 70
-                else:
-                    temp_score = 50
-            except Exception as e:
-                logger.exception("Error reading temperature: %s", e)
-                temp_score = 100  # If temp can't be read, assume it's fine
-                
-            # Network score - check if there's any network activity
-            try:
-                net_io = psutil.net_io_counters()
-                bytes_sent = getattr(net_io, 'bytes_sent', 0)
-                bytes_recv = getattr(net_io, 'bytes_recv', 0)
-                if bytes_sent > 0 or bytes_recv > 0:
-                    net_score = 100  # Network is active
-                else:
-                    net_score = 90  # No network activity but interface is up
-            except Exception as e:
-                logger.exception("Error reading network counters: %s", e)
-                net_score = 90  # Default if can't check
-            
-            # Get system uptime in hours
-            uptime_seconds = time.time() - psutil.boot_time()
-            uptime_hours = uptime_seconds / 3600
-            
-            # Uptime score (100% if < 12 hours, decreasing to 0% at 5 days)
-            if uptime_hours <= 12:
-                uptime_score = 100
-            else:
-                # Linear decrease from 100% at 12h to 0% at 120h (5 days)
-                uptime_score = max(0, 100 - ((uptime_hours - 12) * (100 / 108)))
-            
-            # Weighted average with updated weights (sums to 100%)
-            weights = {
-                'cpu': 0.30,      # 30% weight
-                'memory': 0.25,    # 25% weight
-                'disk': 0.15,      # 15% weight
-                'temp': 0.25,      # 25% weight
-                'network': 0.01,   # 1% weight
-                'uptime': 0.04     # 4% weight
-            }
-            
-            # Calculate weighted components for debugging
-            weighted_scores = {
-                'cpu': cpu_score * weights['cpu'],
-                'memory': memory_score * weights['memory'],
-                'disk': disk_score * weights['disk'],
-                'temp': temp_score * weights['temp'],
-                'network': net_score * weights['network'],
-                'uptime': uptime_score * weights['uptime']
-            }
-            
-            # Calculate current health score
-            current_health_score = sum(weighted_scores.values())
-            current_health_score = min(100, max(0, current_health_score))
-            
-            # Get current timestamp
-            current_time = time.time()
-            
-            # Add current score to history with timestamp
-            self.health_history.append((current_time, current_health_score))
-            
-            # Remove entries older than 15 seconds
-            cutoff_time = current_time - self.health_window_seconds
-            self.health_history = [(t, s) for t, s in self.health_history if t >= cutoff_time]
-            
-            # Calculate moving average
-            if self.health_history:
-                avg_health = sum(s for _, s in self.health_history) / len(self.health_history)
-                
-                # Calculate trend based on first and last values in the window
-                if len(self.health_history) > 1:
-                    first_time, first_score = self.health_history[0]
-                    last_time, last_score = self.health_history[-1]
-                    time_diff = last_time - first_time
-                    if time_diff > 0:  # Avoid division by zero
-                        trend = (last_score - first_score) / time_diff
-                        print(f"Trend: {trend:+.4f}% per second (over {time_diff:.1f}s window)")
-                
-                # Debug output
-                print("\n=== System Health Debug ===")
-                print(f"Current Health Score: {current_health_score:.2f}%")
-                print(f"15s Moving Average: {avg_health:.2f}% (based on {len(self.health_history)} samples)")
-                print(f"Raw Scores (weighted):")
-                for metric, score in weighted_scores.items():
-                    print(f"  {metric:8}: {score:6.2f} (weight: {weights[metric]:.2f})")
-                print(f"\nRaw Scores (unweighted):")
-                print(f"  {'CPU:':8} {cpu_score:6.2f}% (usage: {cpu_usage}%)")
-                print(f"  {'Memory:':8} {memory_score:6.2f}% (usage: {memory_usage}%)")
-                print(f"  {'Disk:':8} {disk_score:6.2f}% (used: {disk_used_percent:.1f}%, io_wait: {disk_io_wait if 'disk_io_wait' in locals() else 'N/A'})")
-                print(f"  {'Temp:':8} {temp_score:6.2f}% ({temp if 'temp' in locals() else 'N/A'}°C)")
-                print(f"  {'Network:':8} {net_score:6.2f}%")
-                print(f"  {'Uptime:':8} {uptime_score:6.2f}% ({uptime_hours:.1f} hours)")
-                
-                return avg_health  # Return the moving average instead of current score
-            
-            return current_health_score  # Fallback if no history yet
-            
-        except Exception as e:
-            logger.exception("Error calculating system health: %s", e)
+                memory_score = max(0.0, 50 - (memory_usage - 90) * 5)
+
+            disk_free_score = 100 if disk_pct < 95 else max(0.0, 100 - (disk_pct - 95) * 20)
+            disk_io_score   = max(0.0, 100 - iowait * 2)
+            disk_score      = disk_free_score * 0.8 + disk_io_score * 0.2
+
+            if temp is None:          temp_score = 100
+            elif temp < 60:           temp_score = 100
+            elif temp < 70:           temp_score = 95
+            elif temp < 75:           temp_score = 90
+            elif temp < 80:           temp_score = 80
+            elif temp < 85:           temp_score = 70
+            else:                     temp_score = 50
+
+            net_score = 100 if (m.get('net_bytes_sent', 0) + m.get('net_bytes_recv', 0)) > 0 else 90
+
+            uptime_hours = (time.time() - boot_time) / 3600
+            uptime_score = 100 if uptime_hours <= 12 else max(0.0, 100 - (uptime_hours - 12) * (100 / 108))
+
+            current = min(100, max(0, (
+                cpu_score    * 0.30 +
+                memory_score * 0.25 +
+                disk_score   * 0.15 +
+                temp_score   * 0.25 +
+                net_score    * 0.01 +
+                uptime_score * 0.04
+            )))
+
+            now = time.time()
+            self.health_history.append((now, current))
+            cutoff = now - self.health_window_seconds
+            self.health_history = [(t, s) for t, s in self.health_history if t >= cutoff]
+
+            return sum(s for _, s in self.health_history) / len(self.health_history)
+
+        except Exception as exc:
+            logger.exception("Error calculating system health: %s", exc)
             return None
     
     def update_dashboard(self):
@@ -1169,9 +1129,9 @@ class DashboardTab(QWidget):
             self._update_dashboard_remote(self.current_device_id)
             return
 
-        # Get real system data
-        cpu_usage = psutil.cpu_percent(interval=None)
-        memory_usage = psutil.virtual_memory().percent
+        # Read from background-collected cache — no blocking psutil calls here
+        cpu_usage    = self._latest_metrics.get('cpu_percent', 0)
+        memory_usage = self._latest_metrics.get('memory_percent', 0)
         
         # Update gauges with smooth animation
         self.cpu_gauge.set_value(cpu_usage)
@@ -1320,31 +1280,33 @@ class DashboardTab(QWidget):
             print(f"Error updating chart animation: {e}")
     
     def update_system_metrics(self):
-        """Update additional system metrics."""
+        """Update additional system metrics from the background-collected cache."""
+        m = self._latest_metrics
+        if not m:
+            return
         try:
-            # Network I/O
-            net_io = psutil.net_io_counters()
+            # Network I/O delta
+            ts  = m.get('timestamp', time.time())
+            sent = m.get('net_bytes_sent', 0)
+            recv = m.get('net_bytes_recv', 0)
             if hasattr(self, '_prev_net_io') and hasattr(self, '_prev_net_time'):
-                time_delta = time.time() - self._prev_net_time
+                time_delta = ts - self._prev_net_time
                 if time_delta > 0:
-                    bytes_sent_per_sec = (net_io.bytes_sent - self._prev_net_io.bytes_sent) / time_delta
-                    bytes_recv_per_sec = (net_io.bytes_recv - self._prev_net_io.bytes_recv) / time_delta
-                    
-                    # Convert to MB/s
-                    mb_sent = bytes_sent_per_sec / (1024 * 1024)
-                    mb_recv = bytes_recv_per_sec / (1024 * 1024)
-                    
-                    self.network_card.value_label.setText(f"{mb_recv:.1f}/{mb_sent:.1f}")
+                    mb_sent = (sent - self._prev_net_io['sent']) / time_delta / (1024 * 1024)
+                    mb_recv = (recv - self._prev_net_io['recv']) / time_delta / (1024 * 1024)
+                    self.network_card.value_label.setText(f"{max(0, mb_recv):.1f}/{max(0, mb_sent):.1f}")
                 else:
                     self.set_metric_unavailable(self.network_card, "MB/s")
             else:
                 self.set_metric_unavailable(self.network_card, "MB/s")
-            
-            self._prev_net_io = net_io
-            self._prev_net_time = time.time()
-            
-            # Storage usage for boot drive
-            boot_drive = psutil.disk_usage('/')
+            self._prev_net_io   = {'sent': sent, 'recv': recv}
+            self._prev_net_time = ts
+
+            # Storage — build a duck-typed object format_storage_usage expects
+            class _D:
+                def __init__(self, used, total, pct):
+                    self.used = used; self.total = total; self.percent = pct
+            boot_drive = _D(m.get('disk_used', 0), m.get('disk_total', 1), m.get('disk_percent', 0))
 
             # Update the storage card with formatted values
             storage_value, storage_unit = self.format_storage_usage(boot_drive)
@@ -1394,24 +1356,25 @@ class DashboardTab(QWidget):
             return f"{seconds}s"
     
     def update_uptime(self):
-        """Update the uptime display with real system uptime."""
+        """Update the uptime display from cached boot time."""
         try:
-            boot_time = datetime.fromtimestamp(psutil.boot_time())
-            uptime_seconds = (datetime.now() - boot_time).total_seconds()
+            boot_time = self._latest_metrics.get('boot_time') or psutil.boot_time()
+            uptime_seconds = time.time() - boot_time
             self.uptime_card.value_label.setText(self.format_uptime(uptime_seconds))
         except Exception as e:
             logger.exception("Error updating uptime: %s", e)
             self.set_metric_unavailable(self.uptime_card)
 
     def update_alerts(self, cpu_usage=None, memory_usage=None):
-        """Update the alert count based on current system thresholds."""
+        """Update the alert count from cached metrics."""
         try:
+            m = self._latest_metrics
             if cpu_usage is None:
-                cpu_usage = psutil.cpu_percent(interval=None)
+                cpu_usage = m.get('cpu_percent', 0)
             if memory_usage is None:
-                memory_usage = psutil.virtual_memory().percent
+                memory_usage = m.get('memory_percent', 0)
 
-            disk_percent = psutil.disk_usage('/').percent
+            disk_percent = m.get('disk_percent', 0)
             alert_count = self.calculate_alert_count(cpu_usage, memory_usage, disk_percent)
             self.alerts_card.value_label.setText(str(alert_count))
         except Exception as e:
