@@ -12,7 +12,16 @@ def get_paths() -> Tuple[Path, Path]:
 
 
 def ensure_logs_dir(root_dir: Path) -> Path:
-    """Ensure the logs directory exists and return its path."""
-    logs_dir = root_dir / "logs"
-    logs_dir.mkdir(parents=True, exist_ok=True)
-    return logs_dir
+    """Ensure the logs directory exists and return its path.
+
+    When installed system-wide (root_dir not writable), falls back to
+    ~/.local/share/pc-x/logs so the app can run without root privileges.
+    """
+    candidate = root_dir / "logs"
+    try:
+        candidate.mkdir(parents=True, exist_ok=True)
+        return candidate
+    except PermissionError:
+        fallback = Path.home() / ".local" / "share" / "pc-x" / "logs"
+        fallback.mkdir(parents=True, exist_ok=True)
+        return fallback
