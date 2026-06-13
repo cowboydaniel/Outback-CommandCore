@@ -285,13 +285,11 @@ class VantageUI(QMainWindow):
         
         # Store reference to the tab widget
         self.tabs[title] = widget
-        
+
         # Set tab tooltip
         self.tab_widget.setTabToolTip(index, f"Switch to {title}")
         if icon:
             self.tab_widget.setTabIcon(index, icon)
-            
-        self.tabs[title] = widget
         self.tab_widget.setCurrentIndex(index)
         return index
     
