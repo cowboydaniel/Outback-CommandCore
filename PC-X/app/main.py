@@ -75,6 +75,7 @@ from tabs import (
     tab_envvars,
     tab_processes,
     tab_sshkeys,
+    tab_kernelmods,
     tab_system,
     tab_users,
     tab_utilities,
@@ -267,7 +268,7 @@ class PCToolsModule(QWidget):
         mgmt_layout.addWidget(self.mgmt_notebook)
 
         self.mgmt_tabs = {}
-        mgmt_subtabs = ["Services", "Firewall", "Users", "Scheduler", "Sysconfig", "Logs", "Startup", "Env Vars", "SSH Keys"]
+        mgmt_subtabs = ["Services", "Firewall", "Users", "Scheduler", "Sysconfig", "Logs", "Startup", "Env Vars", "SSH Keys", "Kernel Mods"]
 
         for name in mgmt_subtabs:
             tab = QWidget()
@@ -314,6 +315,7 @@ class PCToolsModule(QWidget):
         self.setup_envvars_tab()
         self.setup_processes_tab()
         self.setup_sshkeys_tab()
+        self.setup_kernelmods_tab()
 
         # Initial update
         self.update_last_update_time()
@@ -515,6 +517,10 @@ class PCToolsModule(QWidget):
     def setup_sshkeys_tab(self):
         """Set up the SSH Key Manager tab."""
         tab_sshkeys.setup_sshkeys_tab(self)
+
+    def setup_kernelmods_tab(self):
+        """Set up the Kernel Module Manager tab."""
+        tab_kernelmods.setup_kernelmods_tab(self)
 
     # Helper methods
 
