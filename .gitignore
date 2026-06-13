@@ -4,3 +4,5 @@ __pycache__/
 *.log
 build/
 *.egg-info/
+build/deb/pc-x/
+build/*.deb
