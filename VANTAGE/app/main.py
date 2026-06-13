@@ -396,9 +396,19 @@ class VantageUI(QMainWindow):
         super().closeEvent(event)
 
     def quit_to_close(self) -> None:
-        """Called by the tray Quit action to do a real close."""
+        """Called by the tray Quit action — tears down everything and exits."""
         self._force_quit = True
+        # Hide tray and desktop widget first so Qt's event loop isn't kept
+        # alive by a visible QSystemTrayIcon after the window closes.
+        ctrl = getattr(self, '_desktop_ctrl', None)
+        if ctrl:
+            if ctrl.tray:
+                ctrl.tray.destroy()
+            if ctrl.desktop_widget:
+                ctrl.desktop_widget.hide()
+                ctrl.desktop_widget.deleteLater()
         self.close()
+        QApplication.quit()
 
 
 class StartupWorker(QObject):
