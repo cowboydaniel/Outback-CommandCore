@@ -311,6 +311,7 @@ class DashboardTab(QWidget):
         self._remote_clients: dict[str, RemoteClient] = {}
         self._remote_metrics: dict[str, RemoteMetrics | None] = {}
         self._remote_prev_net: dict[str, dict] = {}  # per-server net delta state
+        self.current_device_id = "local"
 
         self.setup_ui()
         self.setup_data_refresh()
@@ -503,9 +504,6 @@ class DashboardTab(QWidget):
 
         # Connect to device change signal
         self.device_dropdown.currentIndexChanged.connect(self.on_device_changed)
-
-        # Store current device ID
-        self.current_device_id = "local"  # Default to local device
         
         # Add device dropdown to layout
         title_layout.addWidget(self.device_dropdown)
