@@ -49,10 +49,12 @@ cp    "$PCX_SRC/pc_tools_linux.py" "$BUILD_DIR/usr/share/pc-x/"
 find "$BUILD_DIR/usr/share/pc-x" -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 find "$BUILD_DIR/usr/share/pc-x" -type d -name "tests"       -exec rm -rf {} + 2>/dev/null || true
 
-# Copy icon
+# Copy icon — install to hicolor theme tree for proper desktop integration
 if [ -f "$REPO_ROOT/icons/pc-x.png" ]; then
     cp "$REPO_ROOT/icons/pc-x.png" "$BUILD_DIR/usr/share/pc-x/icons/pc-x.png"
     cp "$REPO_ROOT/icons/pc-x.png" "$BUILD_DIR/usr/share/pixmaps/pc-x.png"
+    mkdir -p "$BUILD_DIR/usr/share/icons/hicolor/256x256/apps"
+    cp "$REPO_ROOT/icons/pc-x.png" "$BUILD_DIR/usr/share/icons/hicolor/256x256/apps/pc-x.png"
 fi
 
 # ── Bundle Python venv ──────────────────────────────────────────────────────
@@ -115,6 +117,7 @@ DESKTOP
 
 chmod 644 /usr/share/applications/pc-x.desktop
 update-desktop-database /usr/share/applications 2>/dev/null || true
+gtk-update-icon-cache -f -t /usr/share/icons/hicolor 2>/dev/null || true
 
 exit 0
 EOF
@@ -127,6 +130,7 @@ set -e
 
 rm -f /usr/share/applications/pc-x.desktop
 update-desktop-database /usr/share/applications 2>/dev/null || true
+gtk-update-icon-cache -f -t /usr/share/icons/hicolor 2>/dev/null || true
 
 exit 0
 EOF
