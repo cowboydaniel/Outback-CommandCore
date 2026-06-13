@@ -3,18 +3,18 @@
 VERSION = "0.1.0"
 
 COLOR_PALETTE = {
-    "primary": "#017E84",
-    "primary_dark": "#016169",
-    "secondary": "#4CAF50",
-    "warning": "#FF9800",
-    "danger": "#F44336",
-    "background": "#F5F5F5",
-    "card_bg": "#FFFFFF",
-    "text_primary": "#212121",
-    "text_secondary": "#757575",
-    "border": "#E0E0E0",
-    "highlight": "#E6F7F7",
-    "accent": "#00B8D4",
+    "primary": "#00a8ff",
+    "primary_dark": "#0090d8",
+    "secondary": "#00d2d3",
+    "warning": "#ffbe0b",
+    "danger": "#ff6b6b",
+    "background": "#2A2D2E",
+    "card_bg": "#3A3A3A",
+    "text_primary": "#ECF0F1",
+    "text_secondary": "#B0B0B0",
+    "border": "#3E3E3E",
+    "highlight": "#252729",
+    "accent": "#00d4aa",
 }
 
 CACHE_CONFIG = {

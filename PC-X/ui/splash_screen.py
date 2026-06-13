@@ -22,12 +22,12 @@ class GearCircuitBackground(QWidget):
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setAttribute(Qt.WA_OpaquePaintEvent, False)
 
-        # PC-X colors - industrial/mechanical theme
-        self.primary = QColor('#3498db')    # Steel blue
-        self.accent = QColor('#2ecc71')     # Green (success/active)
-        self.secondary = QColor('#95a5a6')  # Gray (metal)
+        # Suite palette — CommandCore dark theme
+        self.primary = QColor('#00a8ff')    # CommandCore Blue
+        self.accent = QColor('#00d2d3')     # CommandCore Teal
+        self.secondary = QColor('#95a5a6')  # Metal gray
         self.copper = QColor('#e67e22')     # Copper traces
-        self.bg_color = QColor(20, 25, 30)
+        self.bg_color = QColor(42, 45, 46)
 
         self.time = 0.0
         self.gears = []

@@ -85,6 +85,206 @@ from ui.splash_screen import show_splash_screen
 configure_logging()
 
 ROOT_DIR, _ = get_paths()
+
+DARK_STYLESHEET = """
+QWidget {
+    background-color: #2A2D2E;
+    color: #ECF0F1;
+    font-family: 'Segoe UI', Arial, sans-serif;
+}
+QTabWidget {
+    border: none;
+}
+QTabWidget::pane {
+    border: 1px solid #3E3E3E;
+    background: #2A2D2E;
+    border-top: none;
+}
+QTabBar::tab {
+    background: #252729;
+    color: #ECF0F1;
+    padding: 8px 16px;
+    border: 1px solid #3E3E3E;
+    border-bottom: none;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+    margin-right: 2px;
+    min-width: 90px;
+    font-weight: 500;
+    text-align: center;
+}
+QTabBar::tab:selected {
+    background: #00a8ff;
+    color: white;
+    border-color: #0090d8;
+}
+QTabBar::tab:hover:!selected {
+    background: #3E3E3E;
+}
+QPushButton {
+    background-color: #3A3A3A;
+    color: #ECF0F1;
+    border: 1px solid #4A4A4A;
+    padding: 6px 14px;
+    border-radius: 4px;
+    font-weight: 500;
+    min-width: 80px;
+}
+QPushButton:hover {
+    background-color: #00a8ff;
+    border-color: #00a8ff;
+    color: white;
+}
+QPushButton:pressed {
+    background-color: #0090d8;
+}
+QPushButton:disabled {
+    background-color: #2E2E2E;
+    color: #555555;
+    border-color: #3A3A3A;
+}
+QLineEdit, QTextEdit, QPlainTextEdit, QComboBox, QSpinBox, QDoubleSpinBox {
+    background-color: #3A3A3A;
+    color: #ECF0F1;
+    border: 1px solid #4A4A4A;
+    border-radius: 4px;
+    padding: 4px 6px;
+}
+QLineEdit:focus, QTextEdit:focus, QComboBox:focus {
+    border-color: #00a8ff;
+}
+QLabel {
+    color: #ECF0F1;
+    background: transparent;
+}
+QGroupBox {
+    border: 1px solid #3E3E3E;
+    border-radius: 6px;
+    margin-top: 8px;
+    padding-top: 14px;
+    color: #ECF0F1;
+    background: transparent;
+}
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    padding: 0 6px;
+    color: #00a8ff;
+    font-weight: 600;
+}
+QScrollArea {
+    border: none;
+    background: transparent;
+}
+QScrollArea > QWidget > QWidget {
+    background: transparent;
+}
+QScrollBar:vertical {
+    background: #2A2D2E;
+    width: 10px;
+    border-radius: 5px;
+}
+QScrollBar::handle:vertical {
+    background: #4A4A4A;
+    border-radius: 5px;
+    min-height: 20px;
+}
+QScrollBar::handle:vertical:hover {
+    background: #00a8ff;
+}
+QScrollBar:horizontal {
+    background: #2A2D2E;
+    height: 10px;
+    border-radius: 5px;
+}
+QScrollBar::handle:horizontal {
+    background: #4A4A4A;
+    border-radius: 5px;
+    min-width: 20px;
+}
+QScrollBar::add-line, QScrollBar::sub-line {
+    background: none;
+    border: none;
+}
+QTableWidget {
+    background-color: #2A2D2E;
+    alternate-background-color: #303336;
+    color: #ECF0F1;
+    gridline-color: #3E3E3E;
+    border: 1px solid #3E3E3E;
+    border-radius: 4px;
+}
+QTableWidget::item:selected {
+    background-color: #00a8ff;
+    color: white;
+}
+QHeaderView::section {
+    background-color: #252729;
+    color: #ECF0F1;
+    border: 1px solid #3E3E3E;
+    padding: 4px 8px;
+    font-weight: 600;
+}
+QProgressBar {
+    border: 1px solid #4A4A4A;
+    border-radius: 3px;
+    background-color: #3A3A3A;
+    text-align: center;
+    color: #ECF0F1;
+}
+QProgressBar::chunk {
+    background-color: #00a8ff;
+    border-radius: 3px;
+}
+QFrame {
+    background: transparent;
+}
+QCheckBox {
+    color: #ECF0F1;
+    spacing: 6px;
+    background: transparent;
+}
+QCheckBox::indicator {
+    width: 16px;
+    height: 16px;
+    border: 1px solid #4A4A4A;
+    border-radius: 3px;
+    background: #3A3A3A;
+}
+QCheckBox::indicator:checked {
+    background: #00a8ff;
+    border-color: #00a8ff;
+}
+QListWidget {
+    background-color: #2A2D2E;
+    color: #ECF0F1;
+    border: 1px solid #3E3E3E;
+    border-radius: 4px;
+}
+QListWidget::item:selected {
+    background-color: #00a8ff;
+    color: white;
+}
+QListWidget::item:hover {
+    background-color: #3E3E3E;
+}
+QToolTip {
+    background-color: #252729;
+    color: #ECF0F1;
+    border: 1px solid #3E3E3E;
+    padding: 4px;
+}
+QComboBox::drop-down {
+    border: none;
+    background: transparent;
+}
+QComboBox QAbstractItemView {
+    background-color: #3A3A3A;
+    color: #ECF0F1;
+    border: 1px solid #4A4A4A;
+    selection-background-color: #00a8ff;
+}
+"""
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 ensure_logs_dir(ROOT_DIR)
@@ -174,124 +374,91 @@ class PCToolsModule(QWidget):
 
     def create_widgets(self):
         """Create the main UI widgets."""
+        self.setStyleSheet(DARK_STYLESHEET)
+
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(10, 10, 10, 10)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
 
-        # Start the live refresh timer
-        self.start_live_refresh()
-
-        # Header with logo
-        header_frame = QFrame()
-        header_layout = QHBoxLayout(header_frame)
-        header_layout.setContentsMargins(0, 0, 0, 0)
-
-        header_label = QLabel("PC-X - Linux System Management")
-        header_label.setFont(QFont("Arial", 14, QFont.Bold))
-        header_label.setStyleSheet(f"color: {self.colors['primary']};")
-        header_layout.addWidget(header_label)
-        header_layout.addStretch()
-
-        main_layout.addWidget(header_frame)
-
-        # Tools Status frame
-        status_group = QGroupBox("Tools Status")
-        status_layout = QVBoxLayout(status_group)
-
-        smartctl_available = shutil.which("smartctl") is not None
-        smartctl_row, self.smartctl_label = self.create_tool_status_row(
-            "SMART Diagnostics Tools",
-            smartctl_available,
-        )
-        status_layout.addWidget(smartctl_row)
-
-        lshw_available = shutil.which("lshw") is not None
-        lshw_row, self.lshw_label = self.create_tool_status_row(
-            "Hardware Info Tools",
-            lshw_available,
-        )
-        status_layout.addWidget(lshw_row)
-
-        main_layout.addWidget(status_group)
-
-        # Main notebook/tabs
+        # Single flat tab widget — all 20 sections at the top level
         self.notebook = QTabWidget()
-        self.notebook.setStyleSheet("QTabBar { border: none; } QTabWidget { border: none; }")
         self.notebook.currentChanged.connect(self.on_tab_changed)
-
-        # Create the three main tabs
-        self.device_info_tab = QWidget()
-        self.pc_tools_tab = QWidget()
-        self.mgmt_tab = QWidget()
-
-        self.notebook.addTab(self.device_info_tab, "Device Info")
-        self.notebook.addTab(self.pc_tools_tab, "PC Tools")
-        self.notebook.addTab(self.mgmt_tab, "Management")
-
-        # Create Device Info subtabs
-        device_layout = QVBoxLayout(self.device_info_tab)
-        device_layout.setContentsMargins(5, 5, 5, 5)
-
-        self.device_notebook = QTabWidget()
-        self.device_notebook.setStyleSheet("QTabBar { border: none; } QTabWidget { border: none; }")
-        device_layout.addWidget(self.device_notebook)
-
-        self.device_tabs = {}
-        device_subtabs = ["System", "Hardware", "Storage", "Network"]
-
-        for name in device_subtabs:
-            tab = QWidget()
-            self.device_notebook.addTab(tab, name)
-            self.device_tabs[name.lower()] = tab
-
-        # Create PC Tools subtabs
-        tools_layout = QVBoxLayout(self.pc_tools_tab)
-        tools_layout.setContentsMargins(5, 5, 5, 5)
-
-        self.tools_notebook = QTabWidget()
-        self.tools_notebook.setStyleSheet("QTabBar { border: none; } QTabWidget { border: none; }")
-        tools_layout.addWidget(self.tools_notebook)
-
-        self.tools_tabs = {}
-        tools_subtabs = ["Packages", "Processes", "Benchmarks", "Disk Usage", "Utilities", "Diagnostics"]
-
-        for name in tools_subtabs:
-            tab = QWidget()
-            self.tools_notebook.addTab(tab, name)
-            self.tools_tabs[name.lower()] = tab
-
-        # Create Management subtabs
-        mgmt_layout = QVBoxLayout(self.mgmt_tab)
-        mgmt_layout.setContentsMargins(5, 5, 5, 5)
-
-        self.mgmt_notebook = QTabWidget()
-        self.mgmt_notebook.setStyleSheet("QTabBar { border: none; } QTabWidget { border: none; }")
-        mgmt_layout.addWidget(self.mgmt_notebook)
-
-        self.mgmt_tabs = {}
-        mgmt_subtabs = ["Services", "Firewall", "Users", "Scheduler", "Sysconfig", "Logs", "Startup", "Env Vars", "SSH Keys", "Kernel Mods"]
-
-        for name in mgmt_subtabs:
-            tab = QWidget()
-            self.mgmt_notebook.addTab(tab, name)
-            self.mgmt_tabs[name.lower()] = tab
-
         main_layout.addWidget(self.notebook)
 
-        # Status bar
+        # Build tab widgets and populate the dicts that tab modules use
+        _tab_defs = [
+            ("device_tabs", "system",      "System"),
+            ("device_tabs", "hardware",    "Hardware"),
+            ("device_tabs", "storage",     "Storage"),
+            ("device_tabs", "network",     "Network"),
+            ("tools_tabs",  "packages",    "Packages"),
+            ("tools_tabs",  "processes",   "Processes"),
+            ("tools_tabs",  "benchmarks",  "Benchmarks"),
+            ("tools_tabs",  "disk usage",  "Disk Usage"),
+            ("tools_tabs",  "utilities",   "Utilities"),
+            ("tools_tabs",  "diagnostics", "Diagnostics"),
+            ("mgmt_tabs",   "services",    "Services"),
+            ("mgmt_tabs",   "firewall",    "Firewall"),
+            ("mgmt_tabs",   "users",       "Users"),
+            ("mgmt_tabs",   "scheduler",   "Scheduler"),
+            ("mgmt_tabs",   "sysconfig",   "Sysconfig"),
+            ("mgmt_tabs",   "logs",        "Logs"),
+            ("mgmt_tabs",   "startup",     "Startup"),
+            ("mgmt_tabs",   "env vars",    "Env Vars"),
+            ("mgmt_tabs",   "ssh keys",    "SSH Keys"),
+            ("mgmt_tabs",   "kernel mods", "Kernel Mods"),
+        ]
+
+        self.device_tabs: dict = {}
+        self.tools_tabs: dict = {}
+        self.mgmt_tabs: dict = {}
+        _dict_map = {
+            "device_tabs": self.device_tabs,
+            "tools_tabs":  self.tools_tabs,
+            "mgmt_tabs":   self.mgmt_tabs,
+        }
+        for dict_name, key, label in _tab_defs:
+            tab = QWidget()
+            self.notebook.addTab(tab, label)
+            _dict_map[dict_name][key] = tab
+
+        # Slim status strip along the bottom
         self.status_bar = QFrame()
-        self.status_bar.setStyleSheet(f"background-color: {self.colors['border']};")
-        status_bar_layout = QHBoxLayout(self.status_bar)
-        status_bar_layout.setContentsMargins(8, 4, 8, 4)
+        self.status_bar.setFixedHeight(26)
+        self.status_bar.setStyleSheet(
+            "QFrame { background-color: #1E2022; border-top: 1px solid #3E3E3E; }"
+        )
+        sl = QHBoxLayout(self.status_bar)
+        sl.setContentsMargins(10, 0, 10, 0)
+        sl.setSpacing(0)
 
         self.status_message_label = QLabel("Ready")
-        self.status_message_label.setFont(QFont("Arial", 8))
-        status_bar_layout.addWidget(self.status_message_label)
+        self.status_message_label.setFont(QFont("Segoe UI", 8))
+        self.status_message_label.setStyleSheet("color: #B0B0B0; background: transparent;")
+        sl.addWidget(self.status_message_label)
 
-        status_bar_layout.addStretch()
+        sl.addStretch()
+
+        smartctl_ok = shutil.which("smartctl") is not None
+        lshw_ok = shutil.which("lshw") is not None
+        for tool, ok in [("SMART", smartctl_ok), ("lshw", lshw_ok)]:
+            sep = QLabel("  |  ")
+            sep.setStyleSheet("color: #4A4A4A; background: transparent;")
+            sl.addWidget(sep)
+            ind = QLabel(f"{tool}: {'✓' if ok else '✗'}")
+            ind.setStyleSheet(
+                f"color: {'#00d4aa' if ok else '#ff6b6b'}; font-size: 11px; background: transparent;"
+            )
+            sl.addWidget(ind)
+
+        sep_last = QLabel("  |  ")
+        sep_last.setStyleSheet("color: #4A4A4A; background: transparent;")
+        sl.addWidget(sep_last)
 
         self.last_update_label = QLabel("")
-        self.last_update_label.setFont(QFont("Arial", 8))
-        status_bar_layout.addWidget(self.last_update_label)
+        self.last_update_label.setFont(QFont("Segoe UI", 8))
+        self.last_update_label.setStyleSheet("color: #B0B0B0; background: transparent;")
+        sl.addWidget(self.last_update_label)
 
         main_layout.addWidget(self.status_bar)
 
@@ -317,10 +484,11 @@ class PCToolsModule(QWidget):
         self.setup_sshkeys_tab()
         self.setup_kernelmods_tab()
 
-        # Initial update
+        # Start the live refresh timer after all tabs are ready
+        self.start_live_refresh()
+
         self.update_last_update_time()
         self.refresh_system_info()
-
         self.log_message("PC Tools module initialized")
         self.update_status("Ready")
 
@@ -1097,9 +1265,24 @@ logging.info("PC Tools module loaded - PySide6 implementation")
 # For standalone execution
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-
-    # Set application style
     app.setStyle(QStyleFactory.create("Fusion"))
+
+    from PySide6.QtGui import QPalette, QColor
+    _palette = QPalette()
+    _palette.setColor(QPalette.Window, QColor(42, 45, 46))
+    _palette.setColor(QPalette.WindowText, QColor(236, 240, 241))
+    _palette.setColor(QPalette.Base, QColor(58, 58, 58))
+    _palette.setColor(QPalette.AlternateBase, QColor(48, 51, 54))
+    _palette.setColor(QPalette.ToolTipBase, QColor(42, 45, 46))
+    _palette.setColor(QPalette.ToolTipText, QColor(236, 240, 241))
+    _palette.setColor(QPalette.Text, QColor(236, 240, 241))
+    _palette.setColor(QPalette.Button, QColor(58, 58, 58))
+    _palette.setColor(QPalette.ButtonText, QColor(236, 240, 241))
+    _palette.setColor(QPalette.BrightText, QColor(255, 107, 107))
+    _palette.setColor(QPalette.Link, QColor(0, 168, 255))
+    _palette.setColor(QPalette.Highlight, QColor(0, 168, 255))
+    _palette.setColor(QPalette.HighlightedText, QColor(255, 255, 255))
+    app.setPalette(_palette)
 
     # Set window icon
     if importlib.util.find_spec("PIL") is not None:
@@ -1150,13 +1333,14 @@ if __name__ == "__main__":
                     splash.finish(None)
 
                 window = QMainWindow()
-                window.setWindowTitle("PC-X - Linux System Management")
-                window.setGeometry(100, 100, 1024, 768)
+                window.setWindowTitle("PC-X")
+                window.setGeometry(100, 100, 1280, 800)
+                window.setStyleSheet("QMainWindow { background-color: #2A2D2E; }")
 
                 pc_tools = PCToolsModule(window, {"name": "Test User"})
                 window.setCentralWidget(pc_tools)
                 main_windows.append(window)
-                window.show()
+                window.showMaximized()
             except Exception as exc:
                 import traceback
                 traceback.print_exc()
