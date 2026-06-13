@@ -33,16 +33,19 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QHBoxLayout,
     QLabel,
+    QListWidget,
+    QListWidgetItem,
     QMainWindow,
     QPushButton,
+    QStackedWidget,
     QTabWidget,
     QVBoxLayout,
     QWidget,
     QMessageBox,
     QStyleFactory,
 )
-from PySide6.QtCore import QObject, QThread, QTimer, Signal
-from PySide6.QtGui import QFont, QIcon
+from PySide6.QtCore import Qt, QObject, QThread, QTimer, Signal
+from PySide6.QtGui import QColor, QFont, QIcon
 
 PCX_DIR = Path(__file__).resolve().parents[1]
 if str(PCX_DIR) not in sys.path:
@@ -284,6 +287,30 @@ QComboBox QAbstractItemView {
     border: 1px solid #4A4A4A;
     selection-background-color: #00a8ff;
 }
+QListWidget#sidebar {
+    background-color: #1E2022;
+    border: none;
+    border-right: 1px solid #3E3E3E;
+    font-size: 13px;
+    padding: 8px 4px;
+    outline: none;
+}
+QListWidget#sidebar::item {
+    padding: 9px 12px;
+    border-radius: 5px;
+    margin: 1px 4px;
+    min-height: 32px;
+    color: #B0B0B0;
+}
+QListWidget#sidebar::item:selected {
+    background-color: #00a8ff;
+    color: white;
+    font-weight: 600;
+}
+QListWidget#sidebar::item:hover:!selected {
+    background-color: #2E3032;
+    color: #ECF0F1;
+}
 """
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
@@ -376,37 +403,56 @@ class PCToolsModule(QWidget):
         """Create the main UI widgets."""
         self.setStyleSheet(DARK_STYLESHEET)
 
-        main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.setSpacing(0)
+        outer_layout = QVBoxLayout(self)
+        outer_layout.setContentsMargins(0, 0, 0, 0)
+        outer_layout.setSpacing(0)
 
-        # Single flat tab widget — all 20 sections at the top level
-        self.notebook = QTabWidget()
-        self.notebook.currentChanged.connect(self.on_tab_changed)
-        main_layout.addWidget(self.notebook)
+        # ── body: sidebar + content stack ──────────────────────────────────────
+        body = QWidget()
+        body_layout = QHBoxLayout(body)
+        body_layout.setContentsMargins(0, 0, 0, 0)
+        body_layout.setSpacing(0)
 
-        # Build tab widgets and populate the dicts that tab modules use
-        _tab_defs = [
-            ("device_tabs", "system",      "System"),
-            ("device_tabs", "hardware",    "Hardware"),
-            ("device_tabs", "storage",     "Storage"),
-            ("device_tabs", "network",     "Network"),
-            ("tools_tabs",  "packages",    "Packages"),
-            ("tools_tabs",  "processes",   "Processes"),
-            ("tools_tabs",  "benchmarks",  "Benchmarks"),
-            ("tools_tabs",  "disk usage",  "Disk Usage"),
-            ("tools_tabs",  "utilities",   "Utilities"),
-            ("tools_tabs",  "diagnostics", "Diagnostics"),
-            ("mgmt_tabs",   "services",    "Services"),
-            ("mgmt_tabs",   "firewall",    "Firewall"),
-            ("mgmt_tabs",   "users",       "Users"),
-            ("mgmt_tabs",   "scheduler",   "Scheduler"),
-            ("mgmt_tabs",   "sysconfig",   "Sysconfig"),
-            ("mgmt_tabs",   "logs",        "Logs"),
-            ("mgmt_tabs",   "startup",     "Startup"),
-            ("mgmt_tabs",   "env vars",    "Env Vars"),
-            ("mgmt_tabs",   "ssh keys",    "SSH Keys"),
-            ("mgmt_tabs",   "kernel mods", "Kernel Mods"),
+        # Sidebar
+        self.sidebar = QListWidget()
+        self.sidebar.setObjectName("sidebar")
+        self.sidebar.setFixedWidth(200)
+        body_layout.addWidget(self.sidebar)
+
+        # Content stack
+        self.stacked = QStackedWidget()
+        body_layout.addWidget(self.stacked, 1)
+
+        outer_layout.addWidget(body, 1)
+
+        # ── build sections + pages ─────────────────────────────────────────────
+        _sections = [
+            ("DEVICE INFO", [
+                ("device_tabs", "system",      "System"),
+                ("device_tabs", "hardware",    "Hardware"),
+                ("device_tabs", "storage",     "Storage"),
+                ("device_tabs", "network",     "Network"),
+            ]),
+            ("TOOLS", [
+                ("tools_tabs",  "packages",    "Packages"),
+                ("tools_tabs",  "processes",   "Processes"),
+                ("tools_tabs",  "benchmarks",  "Benchmarks"),
+                ("tools_tabs",  "disk usage",  "Disk Usage"),
+                ("tools_tabs",  "utilities",   "Utilities"),
+                ("tools_tabs",  "diagnostics", "Diagnostics"),
+            ]),
+            ("MANAGEMENT", [
+                ("mgmt_tabs",   "services",    "Services"),
+                ("mgmt_tabs",   "firewall",    "Firewall"),
+                ("mgmt_tabs",   "users",       "Users"),
+                ("mgmt_tabs",   "scheduler",   "Scheduler"),
+                ("mgmt_tabs",   "sysconfig",   "Sysconfig"),
+                ("mgmt_tabs",   "logs",        "Logs"),
+                ("mgmt_tabs",   "startup",     "Startup"),
+                ("mgmt_tabs",   "env vars",    "Env Vars"),
+                ("mgmt_tabs",   "ssh keys",    "SSH Keys"),
+                ("mgmt_tabs",   "kernel mods", "Kernel Mods"),
+            ]),
         ]
 
         self.device_tabs: dict = {}
@@ -417,12 +463,37 @@ class PCToolsModule(QWidget):
             "tools_tabs":  self.tools_tabs,
             "mgmt_tabs":   self.mgmt_tabs,
         }
-        for dict_name, key, label in _tab_defs:
-            tab = QWidget()
-            self.notebook.addTab(tab, label)
-            _dict_map[dict_name][key] = tab
 
-        # Slim status strip along the bottom
+        # Maps sidebar list row → stacked widget index; header rows absent
+        self._sidebar_page_map: dict[int, int] = {}
+        stack_index = 0
+
+        for section_label, items in _sections:
+            # Non-selectable section header
+            header_item = QListWidgetItem(f"  {section_label}")
+            header_item.setFlags(Qt.ItemIsEnabled)
+            header_item.setForeground(QColor("#00a8ff"))
+            font = header_item.font()
+            font.setPointSize(8)
+            font.setBold(True)
+            font.setLetterSpacing(font.AbsoluteSpacing, 1.5)
+            header_item.setFont(font)
+            self.sidebar.addItem(header_item)
+
+            for dict_name, key, label in items:
+                row_item = QListWidgetItem(f"    {label}")
+                self.sidebar.addItem(row_item)
+                list_row = self.sidebar.count() - 1
+                self._sidebar_page_map[list_row] = stack_index
+
+                tab = QWidget()
+                self.stacked.addWidget(tab)
+                _dict_map[dict_name][key] = tab
+                stack_index += 1
+
+        self.sidebar.currentRowChanged.connect(self._on_sidebar_changed)
+
+        # ── status strip ───────────────────────────────────────────────────────
         self.status_bar = QFrame()
         self.status_bar.setFixedHeight(26)
         self.status_bar.setStyleSheet(
@@ -436,7 +507,6 @@ class PCToolsModule(QWidget):
         self.status_message_label.setFont(QFont("Segoe UI", 8))
         self.status_message_label.setStyleSheet("color: #B0B0B0; background: transparent;")
         sl.addWidget(self.status_message_label)
-
         sl.addStretch()
 
         smartctl_ok = shutil.which("smartctl") is not None
@@ -454,15 +524,14 @@ class PCToolsModule(QWidget):
         sep_last = QLabel("  |  ")
         sep_last.setStyleSheet("color: #4A4A4A; background: transparent;")
         sl.addWidget(sep_last)
-
         self.last_update_label = QLabel("")
         self.last_update_label.setFont(QFont("Segoe UI", 8))
         self.last_update_label.setStyleSheet("color: #B0B0B0; background: transparent;")
         sl.addWidget(self.last_update_label)
 
-        main_layout.addWidget(self.status_bar)
+        outer_layout.addWidget(self.status_bar)
 
-        # Set up tab contents
+        # ── set up content for each page ───────────────────────────────────────
         self.setup_system_info_tab()
         self.setup_hardware_tab()
         self.setup_storage_tab()
@@ -484,13 +553,20 @@ class PCToolsModule(QWidget):
         self.setup_sshkeys_tab()
         self.setup_kernelmods_tab()
 
-        # Start the live refresh timer after all tabs are ready
-        self.start_live_refresh()
+        # Select first real page (row 1, just after the first header)
+        self.sidebar.setCurrentRow(1)
 
+        self.start_live_refresh()
         self.update_last_update_time()
         self.refresh_system_info()
         self.log_message("PC Tools module initialized")
         self.update_status("Ready")
+
+    def _on_sidebar_changed(self, row: int) -> None:
+        """Switch stacked page on sidebar selection; ignore header rows."""
+        if row in self._sidebar_page_map:
+            self.stacked.setCurrentIndex(self._sidebar_page_map[row])
+            self.update_last_update_time()
 
     def create_tool_status_row(self, label_text, available):
         """Create a tool status row that uses SVG icons instead of emoji glyphs."""
