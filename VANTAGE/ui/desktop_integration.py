@@ -537,8 +537,8 @@ class DesktopIntegrationController(QObject):
         if enabled and not self._tray:
             if QSystemTrayIcon.isSystemTrayAvailable():
                 self._tray = TrayApplet(self._registry, parent=self)
-                self._tray.show_window_requested.connect(self._on_show_window)
-                self._tray.quit_requested.connect(QApplication.quit)
+                # show_window_requested and quit_requested are wired in main.py
+                # after start() returns, so the main_window reference is available.
                 self._tray.source_changed.connect(self._on_tray_source_changed)
                 self._tray._open_settings = self.show_settings
                 self._tray_enabled = True

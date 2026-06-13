@@ -531,8 +531,14 @@ def main():
             if desktop_ctrl.tray:
                 desktop_ctrl.tray.quit_requested.disconnect()
                 desktop_ctrl.tray.quit_requested.connect(main_window.quit_to_close)
-                desktop_ctrl.tray.show_window_requested.connect(main_window.showMaximized)
-                desktop_ctrl.tray.show_window_requested.connect(main_window.raise_)
+
+                def _restore_window():
+                    main_window.showMaximized()
+                    main_window.raise_()
+                    main_window.activateWindow()
+
+                desktop_ctrl.tray.show_window_requested.connect(_restore_window)
+                desktop_ctrl._show_window_cb = _restore_window
 
             tabs_data = {
                 'dashboard': dashboard_tab,
