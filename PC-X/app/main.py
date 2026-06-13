@@ -72,6 +72,7 @@ from tabs import (
     tab_logs,
     tab_startup,
     tab_diskusage,
+    tab_envvars,
     tab_system,
     tab_users,
     tab_utilities,
@@ -264,7 +265,7 @@ class PCToolsModule(QWidget):
         mgmt_layout.addWidget(self.mgmt_notebook)
 
         self.mgmt_tabs = {}
-        mgmt_subtabs = ["Services", "Firewall", "Users", "Scheduler", "Sysconfig", "Logs", "Startup"]
+        mgmt_subtabs = ["Services", "Firewall", "Users", "Scheduler", "Sysconfig", "Logs", "Startup", "Env Vars"]
 
         for name in mgmt_subtabs:
             tab = QWidget()
@@ -308,6 +309,7 @@ class PCToolsModule(QWidget):
         self.setup_logs_tab()
         self.setup_startup_tab()
         self.setup_diskusage_tab()
+        self.setup_envvars_tab()
 
         # Initial update
         self.update_last_update_time()
@@ -497,6 +499,10 @@ class PCToolsModule(QWidget):
     def setup_diskusage_tab(self):
         """Set up the Disk Usage tab."""
         tab_diskusage.setup_diskusage_tab(self)
+
+    def setup_envvars_tab(self):
+        """Set up the Environment Variables tab."""
+        tab_envvars.setup_envvars_tab(self)
 
     # Helper methods
 
