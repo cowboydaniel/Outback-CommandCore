@@ -317,15 +317,18 @@ class VantageUI(QMainWindow):
     
     def showEvent(self, event) -> None:
         super().showEvent(event)
-        # Hide from taskbar — the tray applet is the app's presence there.
-        # Must run after the window is mapped so the X11 window ID is valid.
+        if not getattr(self, '_taskbar_hint_set', False):
+            self._taskbar_hint_set = True
+            # Use wmctrl to ADD skip_taskbar without replacing the full
+            # _NET_WM_STATE (xprop -set would wipe maximized/minimize hints).
+            QTimer.singleShot(100, self._set_skip_taskbar)
+
+    def _set_skip_taskbar(self) -> None:
         try:
             import subprocess
-            wid = str(int(self.winId()))
+            wid = hex(int(self.winId()))
             subprocess.Popen(
-                ['xprop', '-id', wid,
-                 '-f', '_NET_WM_STATE', '32a',
-                 '-set', '_NET_WM_STATE', '_NET_WM_STATE_SKIP_TASKBAR'],
+                ['wmctrl', '-i', '-r', wid, '-b', 'add,skip_taskbar'],
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except Exception:
             pass
