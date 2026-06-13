@@ -282,7 +282,9 @@ class DesktopWidget(QWidget):
         self._registry = registry
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setAttribute(Qt.WA_ShowWithoutActivating)
+        self.setAttribute(Qt.WA_X11DoNotAcceptFocus, True)
         self.setWindowFlag(Qt.WindowDoesNotAcceptFocus, True)
+        self.setWindowFlag(Qt.X11BypassWindowManagerHint, False)  # keep WM hints active
         self._hints_set = False
 
         self._data: dict = {}
@@ -306,8 +308,9 @@ class DesktopWidget(QWidget):
             QTimer.singleShot(0, self._set_x11_hints)
 
     def _set_x11_hints(self):
-        """Push _NET_WM_WINDOW_TYPE_DESKTOP + _NET_WM_STATE_BELOW via xprop."""
+        """Set X11 window type + state hints after the window is mapped."""
         wid = str(int(self.winId()))
+        # Desktop window type: most WMs will keep it below everything
         try:
             subprocess.Popen(
                 ['xprop', '-id', wid,
@@ -316,11 +319,15 @@ class DesktopWidget(QWidget):
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except Exception:
             pass
+        # State: below + skip taskbar + skip pager
+        state = ('_NET_WM_STATE_BELOW, '
+                 '_NET_WM_STATE_SKIP_TASKBAR, '
+                 '_NET_WM_STATE_SKIP_PAGER')
         try:
             subprocess.Popen(
                 ['xprop', '-id', wid,
                  '-f', '_NET_WM_STATE', '32a',
-                 '-set', '_NET_WM_STATE', '_NET_WM_STATE_BELOW'],
+                 '-set', '_NET_WM_STATE', state],
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except Exception:
             pass
@@ -484,6 +491,11 @@ class DesktopIntegrationController(QObject):
     fetched in background threads on a timer.
     """
 
+    # Signal used to marshal remote fetch results back to the main thread.
+    # Qt signals are thread-safe; QTimer.singleShot is not when called from
+    # a plain threading.Thread.
+    _remote_ready = Signal(str, object)   # source_id, metrics dict
+
     def __init__(self, registry=None, parent=None):
         super().__init__(parent)
         self._registry = registry
@@ -501,6 +513,9 @@ class DesktopIntegrationController(QObject):
         self._remote_timer = QTimer(self)
         self._remote_timer.timeout.connect(self._fetch_remotes)
         self._remote_timer.start(3000)
+
+        # Thread-safe bridge: background thread emits this, main thread updates cache
+        self._remote_ready.connect(self._on_remote_ready)
 
     # ------------------------------------------------------------------
     # Enable / disable
@@ -607,13 +622,17 @@ class DesktopIntegrationController(QObject):
         client = self._get_client(source_id)
         if not client:
             return
-        from core.remote_client import RemoteMetrics
         result = client.fetch_metrics()
         if result:
             import dataclasses
-            self._cache[source_id] = dataclasses.asdict(result)
-            # push on main thread via QTimer
-            QTimer.singleShot(0, self._push_to_consumers)
+            # Emit signal instead of QTimer.singleShot — signals are thread-safe,
+            # QTimer is not when called from a plain threading.Thread.
+            self._remote_ready.emit(source_id, dataclasses.asdict(result))
+
+    @Slot(str, object)
+    def _on_remote_ready(self, source_id: str, data: dict):
+        self._cache[source_id] = data
+        self._push_to_consumers()
 
     def _get_client(self, source_id: str):
         with self._client_lock:
