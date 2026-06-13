@@ -73,6 +73,7 @@ from tabs import (
     tab_startup,
     tab_diskusage,
     tab_envvars,
+    tab_processes,
     tab_system,
     tab_users,
     tab_utilities,
@@ -249,7 +250,7 @@ class PCToolsModule(QWidget):
         tools_layout.addWidget(self.tools_notebook)
 
         self.tools_tabs = {}
-        tools_subtabs = ["Packages", "Benchmarks", "Disk Usage", "Utilities", "Diagnostics"]
+        tools_subtabs = ["Packages", "Processes", "Benchmarks", "Disk Usage", "Utilities", "Diagnostics"]
 
         for name in tools_subtabs:
             tab = QWidget()
@@ -310,6 +311,7 @@ class PCToolsModule(QWidget):
         self.setup_startup_tab()
         self.setup_diskusage_tab()
         self.setup_envvars_tab()
+        self.setup_processes_tab()
 
         # Initial update
         self.update_last_update_time()
@@ -503,6 +505,10 @@ class PCToolsModule(QWidget):
     def setup_envvars_tab(self):
         """Set up the Environment Variables tab."""
         tab_envvars.setup_envvars_tab(self)
+
+    def setup_processes_tab(self):
+        """Set up the Process Manager tab."""
+        tab_processes.setup_processes_tab(self)
 
     # Helper methods
 
