@@ -41,7 +41,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from PySide6.QtCore import Qt, QObject, QTimer, Signal
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QColor, QFont, QIcon
 
 PCX_DIR = Path(__file__).resolve().parents[1]
@@ -319,7 +319,7 @@ class PCToolsModule(QWidget):
     smart_cache_max_age = config.SMART_CACHE_MAX_AGE
     sudo_authenticated = False
     smartctl_capabilities_set = False
-    ui_update_requested = Signal(object)
+
 
     def __init__(self, parent=None, current_user=None):
         """Initialize the PC Tools module."""
@@ -375,23 +375,39 @@ class PCToolsModule(QWidget):
         # Selected drive for SMART info
         self.selected_drive = None
 
-        # Update queue for thread-safe UI updates
-        self.update_queue = queue.Queue()
-        self.ui_update_requested.connect(self._run_ui_update)
+        # Thread-safe UI update queue: background threads (threading.Thread)
+        # cannot safely emit PySide6 signals or touch Qt widgets directly.
+        # They call post_ui_update() which puts a callable on this queue.
+        # A QTimer in the main thread drains the queue every 50 ms.
+        self.update_queue: queue.Queue = queue.Queue()
 
         # Create the UI
         self.create_widgets()
 
-    def post_ui_update(self, callback):
-        """Queue a callable to run on the Qt GUI thread."""
-        self.ui_update_requested.emit(callback)
+        # Start the queue-drain timer AFTER create_widgets so all widgets exist.
+        self._ui_drain_timer = QTimer(self)
+        self._ui_drain_timer.timeout.connect(self._drain_ui_queue)
+        self._ui_drain_timer.start(50)
 
-    def _run_ui_update(self, callback):
-        """Run a queued GUI-thread callback safely."""
-        try:
-            callback()
-        except Exception as exc:
-            logging.debug(f"Error running queued UI update: {exc}")
+    def post_ui_update(self, callback):
+        """Queue a callable to run on the Qt GUI (main) thread.
+
+        Safe to call from any Python thread (threading.Thread or QThread).
+        The callback is executed on the main thread within ~50 ms.
+        """
+        self.update_queue.put(callback)
+
+    def _drain_ui_queue(self):
+        """Drain pending UI callbacks — runs in the main thread every 50 ms."""
+        while True:
+            try:
+                cb = self.update_queue.get_nowait()
+            except queue.Empty:
+                break
+            try:
+                cb()
+            except Exception as exc:
+                logging.debug("Error in queued UI update: %s", exc)
 
     def create_widgets(self):
         """Create the main UI widgets."""
