@@ -296,10 +296,11 @@ class DashboardTab(QWidget):
         self._temp_probe_executor = ThreadPoolExecutor(max_workers=1)
         self._temp_probe_timeout = 0.75
         self._last_cpu_temp = None
-        
+
         # Performance score tracking
         self.performance_history = []  # Store (timestamp, score) tuples
         self.performance_window_seconds = 3  # 3-second window for performance average
+        self._last_performance_score = None
         self.setup_ui()
         self.setup_data_refresh()
     
@@ -634,6 +635,10 @@ class DashboardTab(QWidget):
         self.chart_animation_timer = QTimer(self)
         self.chart_animation_timer.timeout.connect(self.animate_chart_update)
         self.chart_animation_timer.start(16)  # ~60 FPS for smooth animation
+
+    def closeEvent(self, event):
+        self._temp_probe_executor.shutdown(wait=False)
+        super().closeEvent(event)
 
     def collect_initial_metrics(self):
         """Collect initial metric values for card initialization."""
@@ -1085,10 +1090,9 @@ class DashboardTab(QWidget):
                 
                 # Update trend indicator if it exists
                 if hasattr(self.performance_card, 'trend_label'):
-                    # Simple trend based on previous value if available
-                    if not hasattr(self, '_last_performance_score'):
+                    if self._last_performance_score is None:
                         self._last_performance_score = avg_score
-                    
+
                     trend = avg_score - self._last_performance_score
                     color = "#00d4aa" if trend > 1 else ("#ff6b6b" if trend < -1 else "#b0b0b0")
                     trend_icon = "↗" if trend > 1 else ("↘" if trend < -1 else "→")
