@@ -201,7 +201,7 @@ class TrayApplet(QObject):
         self._tray.setToolTip(f"VANTAGE — {self._label}\n{lines}")
 
     def _on_activated(self, reason):
-        if reason == QSystemTrayIcon.DoubleClick:
+        if reason in (QSystemTrayIcon.Trigger, QSystemTrayIcon.DoubleClick):
             self.show_window_requested.emit()
 
     @property
