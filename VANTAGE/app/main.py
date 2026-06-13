@@ -517,7 +517,7 @@ def main():
             # Wire "Open VANTAGE" before start() so the callback is set
             desktop_ctrl._show_window_cb = lambda: (
                 main_window.showMaximized(), main_window.raise_())
-            desktop_ctrl.start(enable_tray=True, enable_desktop_widget=False)
+            desktop_ctrl.start(enable_tray=True, enable_desktop_widget=True)
 
             # Bridge local MetricsCollector → tray / desktop widget
             if hasattr(dashboard_tab, '_collector') and dashboard_tab._collector:
