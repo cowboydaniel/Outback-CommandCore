@@ -1,5 +1,6 @@
 import sys
 import random
+import threading
 import time
 import logging
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
@@ -15,6 +16,9 @@ from PySide6.QtGui import QFont, QPalette, QColor, QPainter, QPen, QLinearGradie
 from PySide6.QtCharts import (QChart, QChartView, QLineSeries, QValueAxis, 
                             QPieSeries, QPieSlice, QBarSet, QBarSeries, 
                             QBarCategoryAxis, QBarLegendMarker, QSplineSeries)
+
+from core.server_registry import ServerRegistry
+from core.remote_client import RemoteClient, RemoteMetrics
 
 logger = logging.getLogger(__name__)
 
@@ -301,6 +305,13 @@ class DashboardTab(QWidget):
         self.performance_history = []  # Store (timestamp, score) tuples
         self.performance_window_seconds = 3  # 3-second window for performance average
         self._last_performance_score = None
+
+        # Remote server support
+        self._registry = ServerRegistry()
+        self._remote_clients: dict[str, RemoteClient] = {}
+        self._remote_metrics: dict[str, RemoteMetrics | None] = {}
+        self._remote_prev_net: dict[str, dict] = {}  # per-server net delta state
+
         self.setup_ui()
         self.setup_data_refresh()
     
@@ -484,10 +495,14 @@ class DashboardTab(QWidget):
         import socket
         current_device = socket.gethostname()
         self.device_dropdown.addItem(f"{current_device} (This Device)", "local")
-        
+
+        # Populate from registry and keep in sync
+        self._populate_remote_items()
+        self._registry.servers_changed.connect(self._populate_remote_items)
+
         # Connect to device change signal
         self.device_dropdown.currentIndexChanged.connect(self.on_device_changed)
-        
+
         # Store current device ID
         self.current_device_id = "local"  # Default to local device
         
@@ -636,9 +651,164 @@ class DashboardTab(QWidget):
         self.chart_animation_timer.timeout.connect(self.animate_chart_update)
         self.chart_animation_timer.start(16)  # ~60 FPS for smooth animation
 
+        # Fetch remote metrics every 3 seconds (SSH calls are slow)
+        self._remote_fetch_timer = QTimer(self)
+        self._remote_fetch_timer.timeout.connect(self._fetch_remote_metrics_async)
+        self._remote_fetch_timer.start(3000)
+
     def closeEvent(self, event):
         self._temp_probe_executor.shutdown(wait=False)
+        for client in self._remote_clients.values():
+            client.disconnect()
         super().closeEvent(event)
+
+    # ------------------------------------------------------------------
+    # Remote server helpers
+    # ------------------------------------------------------------------
+
+    def _populate_remote_items(self):
+        """Rebuild dropdown items for remote servers (keeps local entry at index 0)."""
+        # Block signals so on_device_changed isn't fired during rebuild
+        self.device_dropdown.blockSignals(True)
+        current_id = self.current_device_id
+
+        # Remove all items after the local one
+        while self.device_dropdown.count() > 1:
+            self.device_dropdown.removeItem(1)
+
+        for entry in self._registry.all_servers():
+            status_icon = "●" if entry.status == "online" else "○"
+            self.device_dropdown.addItem(
+                f"{status_icon} {entry.display_name}", entry.server_id
+            )
+
+        # Restore previous selection if still present
+        idx = self.device_dropdown.findData(current_id)
+        if idx >= 0:
+            self.device_dropdown.setCurrentIndex(idx)
+        else:
+            self.device_dropdown.setCurrentIndex(0)
+            self.current_device_id = "local"
+
+        self.device_dropdown.blockSignals(False)
+
+    def _get_or_create_client(self, server_id: str) -> RemoteClient | None:
+        """Return an existing RemoteClient or create one from the registry."""
+        if server_id in self._remote_clients:
+            return self._remote_clients[server_id]
+        entry = self._registry.get(server_id)
+        if entry is None:
+            return None
+        client = RemoteClient(
+            host=entry.host, port=entry.port, username=entry.username,
+            password=entry.password or None,
+            key_path=entry.key_path or None,
+        )
+        self._remote_clients[server_id] = client
+        return client
+
+    def _fetch_remote_metrics_async(self):
+        """Background-thread fetch for the currently selected remote server."""
+        if self.current_device_id == "local":
+            return
+        server_id = self.current_device_id
+
+        def _fetch():
+            client = self._get_or_create_client(server_id)
+            if client is None:
+                return
+            metrics = client.fetch_metrics()
+            self._remote_metrics[server_id] = metrics
+            status = "online" if metrics else "offline"
+            self._registry.update_status(server_id, status,
+                                         datetime.now().strftime("%H:%M:%S") if metrics else "")
+
+        threading.Thread(target=_fetch, daemon=True).start()
+
+    def _calculate_remote_health(self, m: RemoteMetrics) -> float:
+        """Simplified health score from remote metrics (no temperature or I/O wait)."""
+        cpu_score  = max(0.0, 100.0 - m.cpu_percent * 1.2)
+        mem_score  = max(0.0, 100.0 - m.memory_percent * 1.1)
+        disk_score = max(0.0, 100.0 - m.disk_percent * 1.5)
+        return cpu_score * 0.45 + mem_score * 0.35 + disk_score * 0.20
+
+    def _update_dashboard_remote(self, server_id: str):
+        """Update all dashboard cards from cached remote metrics."""
+        m = self._remote_metrics.get(server_id)
+        if m is None:
+            for card in (self.cpu_gauge, self.memory_gauge):
+                card.set_value(0)
+            for card in (self.health_card, self.performance_card, self.alerts_card,
+                         self.network_card, self.storage_card, self.temp_card,
+                         self.uptime_card, self.device_card):
+                self.set_metric_unavailable(card)
+            self.health_card.value_label.setText("Connecting…")
+            return
+
+        # Gauges
+        self.cpu_gauge.set_value(m.cpu_percent)
+        self.memory_gauge.set_value(m.memory_percent)
+
+        # Chart data
+        self.chart_data_points.append(
+            {'timestamp': m.timestamp, 'cpu': m.cpu_percent, 'memory': m.memory_percent}
+        )
+        if len(self.chart_data_points) > self.max_data_points:
+            self.chart_data_points = self.chart_data_points[-self.max_data_points:]
+
+        # Health
+        health = self._calculate_remote_health(m)
+        self.health_history.append((m.timestamp, health))
+        cutoff = m.timestamp - self.health_window_seconds
+        self.health_history = [(t, s) for t, s in self.health_history if t >= cutoff]
+        avg_health = sum(s for _, s in self.health_history) / len(self.health_history)
+        self.health_card.value_label.setText(f"{int(avg_health)}")
+
+        # Performance
+        perf = self.calculate_performance_score(m.cpu_percent, m.memory_percent)
+        if perf is not None:
+            self.performance_history.append((m.timestamp, perf))
+            cutoff_p = m.timestamp - self.performance_window_seconds
+            self.performance_history = [p for p in self.performance_history if p[0] >= cutoff_p]
+            avg_perf = max(0, min(100, sum(p[1] for p in self.performance_history) / len(self.performance_history)))
+            self.performance_card.value_label.setText(f"{int(avg_perf)}")
+
+        # Alerts (no temperature available remotely)
+        alerts = sum([m.cpu_percent >= 90, m.memory_percent >= 90, m.disk_percent >= 90])
+        self.alerts_card.value_label.setText(str(alerts))
+
+        # Network (delta between successive remote snapshots)
+        prev = self._remote_prev_net.get(server_id)
+        if prev:
+            dt = m.timestamp - prev['time']
+            if dt > 0:
+                mb_recv = (m.net_bytes_recv - prev['recv']) / dt / (1024 * 1024)
+                mb_sent = (m.net_bytes_sent - prev['sent']) / dt / (1024 * 1024)
+                self.network_card.value_label.setText(f"{max(0, mb_recv):.1f}/{max(0, mb_sent):.1f}")
+        self._remote_prev_net[server_id] = {
+            'time': m.timestamp, 'sent': m.net_bytes_sent, 'recv': m.net_bytes_recv
+        }
+
+        # Storage
+        class _FakeDisk:
+            def __init__(self, used, total):
+                self.used = used
+                self.total = total
+                self.percent = 100.0 * used / total if total else 0.0
+        storage_value, storage_unit = self.format_storage_usage(_FakeDisk(m.disk_used, m.disk_total))
+        self.storage_card.value_label.setText(storage_value)
+        self.storage_card.unit_label.setText(storage_unit)
+
+        # Temperature not available via SSH without extra commands
+        self.set_metric_unavailable(self.temp_card, "°C")
+        self.temp_card.value_label.setText("N/A")
+
+        # Uptime not available without extra SSH command
+        self.set_metric_unavailable(self.uptime_card)
+        self.uptime_card.value_label.setText("N/A")
+
+        # Device count: local + all registered servers
+        self.device_card.value_label.setText(str(1 + len(self._registry.all_servers())))
 
     def collect_initial_metrics(self):
         """Collect initial metric values for card initialization."""
@@ -994,9 +1164,12 @@ class DashboardTab(QWidget):
     
     def update_dashboard(self):
         """Update all dashboard metrics with real data."""
-        # Update timestamp
         self.update_timestamp()
-        
+
+        if self.current_device_id != "local":
+            self._update_dashboard_remote(self.current_device_id)
+            return
+
         # Get real system data
         cpu_usage = psutil.cpu_percent(interval=None)
         memory_usage = psutil.virtual_memory().percent
@@ -1247,61 +1420,36 @@ class DashboardTab(QWidget):
             self.set_metric_unavailable(self.alerts_card)
             
     def on_device_changed(self, index):
-        """Handle device selection change."""
-        if index >= 0:  # Check if the index is valid
-            device_data = self.device_dropdown.itemData(index)
-            if device_data:
-                self.current_device_id = device_data
-                print(f"Selected device: {self.device_dropdown.itemText(index)}")
-                # Here you would typically update the dashboard to show data for the selected device
-                # For now, we'll just store the device ID
-            else:
-                print("No device data available")
+        """Switch the dashboard to the selected device."""
+        if index < 0:
+            return
+        server_id = self.device_dropdown.itemData(index)
+        if not server_id:
+            return
+        self.current_device_id = server_id
+        logger.info("Dashboard switched to device: %s", self.device_dropdown.itemText(index))
+        if server_id != "local":
+            # Clear stale cache so the UI shows "Connecting…" immediately
+            self._remote_metrics.pop(server_id, None)
+            self._fetch_remote_metrics_async()
     
     def update_device_count(self):
-        """Update the active devices count based on the DevicesTab.
-        
-        Counts the number of devices listed in the DevicesTab plus the local device.
-        """
+        """Update the active devices count from the server registry."""
         try:
-            tab_widget = self.tab_widget
-            if tab_widget is None and self.main_window is not None:
-                tab_widget = self.main_window.tab_widget
-            if tab_widget is None:
-                logger.warning("DashboardTab has no tab widget reference for device count")
-                self.set_metric_unavailable(self.device_card)
-                return
-                
-            # Initialize device count to 1 for local device
-            device_count = 1
-            
-            # Try to find the DevicesTab
-            for i in range(tab_widget.count()):
-                widget = tab_widget.widget(i)
-                if widget and widget.objectName() == "DevicesTab":
-                    # Found the DevicesTab, now count the rows in its table
-                    if hasattr(widget, 'devices_table'):
-                        # Count non-empty rows in the devices table
-                        table = widget.devices_table
-                        for row in range(table.rowCount()):
-                            # Check if the first column has text (device ID)
-                            if table.item(row, 0) and table.item(row, 0).text().strip():
-                                device_count += 1
-                    break
-            
-            # Update the display
+            device_count = 1 + len(self._registry.all_servers())
             self.device_card.value_label.setText(str(device_count))
-            
-            # Update trend indicator
+
             if hasattr(self, 'last_device_count'):
-                trend = 1 if device_count > self.last_device_count else (-1 if device_count < self.last_device_count else 0)
+                trend = 1 if device_count > self.last_device_count else (
+                    -1 if device_count < self.last_device_count else 0)
                 if hasattr(self.device_card, 'trend_label'):
-                    self.device_card.trend_label.setText("↗" if trend > 0 else ("↘" if trend < 0 else "→"))
+                    self.device_card.trend_label.setText(
+                        "↗" if trend > 0 else ("↘" if trend < 0 else "→"))
                     color = "#00d4aa" if trend > 0 else ("#ff6b6b" if trend < 0 else "#b0b0b0")
-                    self.device_card.trend_label.setStyleSheet(f"color: {color}; font-size: 16px; font-weight: bold;")
-            
+                    self.device_card.trend_label.setStyleSheet(
+                        f"color: {color}; font-size: 16px; font-weight: bold;")
+
             self.last_device_count = device_count
-            
         except Exception as e:
             logger.exception("Error updating device count: %s", e)
             self.set_metric_unavailable(self.device_card)
