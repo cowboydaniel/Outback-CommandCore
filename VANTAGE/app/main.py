@@ -412,6 +412,10 @@ def main():
             from tabs.dashboard import DashboardTab
             from tabs.devices import DevicesTab
             from tabs.performance_analytics import PerformanceAnalyticsTab
+            from core.server_registry import ServerRegistry
+
+            # Initialise the singleton registry before any tab that uses it
+            ServerRegistry()
 
             main_window = VantageUI(show_immediately=False)
             dashboard_tab = DashboardTab(main_window=main_window)
@@ -422,8 +426,6 @@ def main():
                 dashboard_tab.initialize_data()
             if hasattr(performance_tab, 'start_data_collection'):
                 performance_tab.start_data_collection()
-            if hasattr(devices_tab, 'scan_devices'):
-                devices_tab.scan_devices()
 
             main_window.add_tab(dashboard_tab, "Dashboard")
             main_window.add_tab(performance_tab, "Performance Analytics")
