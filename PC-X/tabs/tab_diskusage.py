@@ -124,6 +124,7 @@ def _du_top(path: str, depth: int, count: int) -> list[tuple[str, int]]:
 
 def setup_diskusage_tab(module) -> None:
     tab = module.tools_tabs["disk usage"]
+    _sigs: list = []
     root = QVBoxLayout(tab)
     root.setContentsMargins(8, 8, 8, 8)
     root.setSpacing(6)
@@ -224,7 +225,7 @@ def setup_diskusage_tab(module) -> None:
         table.setRowCount(0)
         depth = depth_slider.value()
         count = count_slider.value()
-        sig = _Signals()
+        _sigs.append(_Signals()); sig = _sigs[-1]
         sig.loaded.connect(_populate)
         threading.Thread(
             target=lambda: sig.loaded.emit(_du_top(path, depth, count)),

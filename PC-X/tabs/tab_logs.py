@@ -58,6 +58,7 @@ def _fetch_log(source_args: list, lines: int) -> list:
 
 def setup_logs_tab(module) -> None:
     tab = module.mgmt_tabs["logs"]
+    _sigs: list = []
     root = QVBoxLayout(tab)
     root.setContentsMargins(8, 8, 8, 8)
     root.setSpacing(6)
@@ -157,7 +158,7 @@ def setup_logs_tab(module) -> None:
         idx = source_cb.currentIndex()
         _, args = LOG_SOURCES[idx]
         lines = lines_spin.value()
-        sig = _Signals()
+        _sigs.append(_Signals()); sig = _sigs[-1]
         sig.lines_ready.connect(lambda ls: (_render(ls), refresh_btn.setEnabled(True)))
         threading.Thread(
             target=lambda: sig.lines_ready.emit(_fetch_log(args, lines)),

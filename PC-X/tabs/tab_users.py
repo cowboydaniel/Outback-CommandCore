@@ -96,6 +96,7 @@ def _load_groups():
 
 def setup_users_tab(module) -> None:
     tab = module.mgmt_tabs["users"]
+    _sigs: list = []
     root = QVBoxLayout(tab)
     root.setContentsMargins(8, 8, 8, 8)
     root.setSpacing(6)
@@ -208,7 +209,7 @@ def setup_users_tab(module) -> None:
                                         QMessageBox.Yes | QMessageBox.No) != QMessageBox.Yes:
             return
         module._usr_output.clear()
-        sig = _Signals()
+        _sigs.append(_Signals()); sig = _sigs[-1]
         sig.done.connect(lambda rc, out: (
             module._usr_output.append(out or "(done)"),
             _reload_users(),
@@ -294,7 +295,7 @@ def setup_users_tab(module) -> None:
         if not pw1.text():
             return
         module._usr_output.clear()
-        sig = _Signals()
+        _sigs.append(_Signals()); sig = _sigs[-1]
         sig.done.connect(lambda rc, out: module._usr_output.append(
             "Password changed." if rc == 0 else f"Failed: {out}"
         ))
@@ -405,7 +406,7 @@ def setup_users_tab(module) -> None:
         gname = gname_edit.text().strip()
         if not gname:
             return
-        sig = _Signals()
+        _sigs.append(_Signals()); sig = _sigs[-1]
         sig.done.connect(lambda rc, out: (
             module._usr_output.append(out or "(done)"),
             _reload_groups(),
@@ -423,7 +424,7 @@ def setup_users_tab(module) -> None:
         if QMessageBox.question(tab, "Confirm", f"Delete group '{gname}'?",
                                 QMessageBox.Yes | QMessageBox.No) != QMessageBox.Yes:
             return
-        sig = _Signals()
+        _sigs.append(_Signals()); sig = _sigs[-1]
         sig.done.connect(lambda rc, out: (
             module._usr_output.append(out or "(done)"),
             _reload_groups(),

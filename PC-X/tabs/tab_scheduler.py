@@ -135,6 +135,7 @@ def _get_crontab_lines(user: str) -> list:
 
 def setup_scheduler_tab(module) -> None:
     tab = module.mgmt_tabs["scheduler"]
+    _sigs: list = []
     root = QVBoxLayout(tab)
     root.setContentsMargins(8, 8, 8, 8)
     root.setSpacing(6)
@@ -200,7 +201,7 @@ def setup_scheduler_tab(module) -> None:
     def _reload():
         refresh_btn.setEnabled(False)
         user = user_cb.currentText()
-        sig = _Signals()
+        _sigs.append(_Signals()); sig = _sigs[-1]
         sig.loaded.connect(_populate)
         threading.Thread(
             target=lambda: sig.loaded.emit(_load_all_jobs(user)),
@@ -281,7 +282,7 @@ def setup_scheduler_tab(module) -> None:
         user = user_cb.currentText()
         lines = _get_crontab_lines(user)
         lines.append(f"{sched} {cmd}")
-        sig = _Signals()
+        _sigs.append(_Signals()); sig = _sigs[-1]
         sig.done.connect(lambda rc, out: (
             module._sched_output.append("Job added." if rc == 0 else f"Failed: {out}"),
             _reload(),
@@ -309,7 +310,7 @@ def setup_scheduler_tab(module) -> None:
         lines = _get_crontab_lines(user)
         new_lines = [f"{new_sched} {new_cmd}" if l.strip() == orig.strip() else l
                      for l in lines]
-        sig = _Signals()
+        _sigs.append(_Signals()); sig = _sigs[-1]
         sig.done.connect(lambda rc, out: (
             module._sched_output.append("Job updated." if rc == 0 else f"Failed: {out}"),
             _reload(),
@@ -335,7 +336,7 @@ def setup_scheduler_tab(module) -> None:
         user = user_cb.currentText()
         lines = _get_crontab_lines(user)
         new_lines = [l for l in lines if l.strip() != orig.strip()]
-        sig = _Signals()
+        _sigs.append(_Signals()); sig = _sigs[-1]
         sig.done.connect(lambda rc, out: (
             module._sched_output.append("Job deleted." if rc == 0 else f"Failed: {out}"),
             _reload(),

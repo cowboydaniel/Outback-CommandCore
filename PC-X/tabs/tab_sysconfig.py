@@ -105,6 +105,7 @@ def _list_locales() -> list:
 
 def setup_sysconfig_tab(module) -> None:
     tab = module.mgmt_tabs["sysconfig"]
+    _sigs: list = []
     root = QVBoxLayout(tab)
     root.setContentsMargins(8, 8, 8, 8)
     root.setSpacing(8)
@@ -119,7 +120,7 @@ def setup_sysconfig_tab(module) -> None:
         module._syscfg_output.append(msg)
 
     def _run_bg(args, success_msg="Done.", reload_fn=None):
-        sig = _Signals()
+        _sigs.append(_Signals()); sig = _sigs[-1]
         sig.done.connect(lambda rc, out: (
             _log(success_msg if rc == 0 else f"Failed: {out}"),
             reload_fn() if reload_fn and rc == 0 else None,
@@ -185,7 +186,7 @@ def setup_sysconfig_tab(module) -> None:
     root.addWidget(tz_group)
 
     def _load_timezones():
-        sig = _Signals()
+        _sigs.append(_Signals()); sig = _sigs[-1]
 
         def _on_timezones(tzs):
             tz_combo.clear()
@@ -232,7 +233,7 @@ def setup_sysconfig_tab(module) -> None:
     root.addWidget(lc_group)
 
     def _load_locales():
-        sig = _Signals()
+        _sigs.append(_Signals()); sig = _sigs[-1]
 
         def _on_locales(lcs):
             lc_combo.clear()

@@ -190,10 +190,10 @@ def setup_services_tab(module) -> None:
         refresh_btn.setEnabled(False)
         table.setRowCount(0)
         f = state_filter.currentText().lower()
-        sig = _Signals()
-        sig.loaded.connect(_populate)
+        module._svc_sig = _Signals()
+        module._svc_sig.loaded.connect(_populate)
         threading.Thread(
-            target=lambda: sig.loaded.emit(_load_services(f if f != "all" else "")),
+            target=lambda: module._svc_sig.loaded.emit(_load_services(f if f != "all" else "")),
             daemon=True,
         ).start()
 
@@ -206,17 +206,17 @@ def setup_services_tab(module) -> None:
             module._svc_status_lbl.setText("Select a service first.")
             return
         module._svc_output.clear()
-        sig = _Signals()
-        sig.output.connect(module._svc_output.append)
-        sig.done.connect(lambda rc: (
+        module._svc_action_sig = _Signals()
+        module._svc_action_sig.output.connect(module._svc_output.append)
+        module._svc_action_sig.done.connect(lambda rc: (
             module._svc_status_lbl.setText("✓ Done" if rc == 0 else "✗ Failed"),
             _load(),
         ))
 
         def worker():
             rc, out = _run_systemctl([*args, svc])
-            sig.output.emit(out or "(no output)")
-            sig.done.emit(rc)
+            module._svc_action_sig.output.emit(out or "(no output)")
+            module._svc_action_sig.done.emit(rc)
 
         threading.Thread(target=worker, daemon=True).start()
 

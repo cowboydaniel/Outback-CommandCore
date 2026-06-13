@@ -143,6 +143,7 @@ def _load_autostart() -> list:
 
 def setup_startup_tab(module) -> None:
     tab = module.mgmt_tabs["startup"]
+    _sigs: list = []
     root = QVBoxLayout(tab)
     root.setContentsMargins(8, 8, 8, 8)
     root.setSpacing(6)
@@ -222,7 +223,7 @@ def setup_startup_tab(module) -> None:
 
     def _reload_svc():
         sv_refresh.setEnabled(False)
-        sig = _Signals()
+        _sigs.append(_Signals()); sig = _sigs[-1]
         sig.loaded.connect(_populate_svc)
         threading.Thread(
             target=lambda: sig.loaded.emit(_load_systemd_user()),
@@ -238,7 +239,7 @@ def setup_startup_tab(module) -> None:
         if not unit:
             _log("Select a service first.")
             return
-        sig = _Signals()
+        _sigs.append(_Signals()); sig = _sigs[-1]
         sig.done.connect(lambda rc, out: (_log(out or action + " done"), _reload_svc()))
         threading.Thread(
             target=lambda: sig.done.emit(*_run(["systemctl", "--user", action, unit])),
@@ -307,7 +308,7 @@ def setup_startup_tab(module) -> None:
 
     def _reload_xdg():
         xdg_refresh.setEnabled(False)
-        sig = _Signals()
+        _sigs.append(_Signals()); sig = _sigs[-1]
         sig.loaded.connect(_populate_xdg)
         threading.Thread(
             target=lambda: sig.loaded.emit(_load_autostart()),

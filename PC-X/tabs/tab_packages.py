@@ -99,6 +99,7 @@ def _format_size(kb: int) -> str:
 def setup_packages_tab(module) -> None:
     """Set up the Package Manager tab."""
     tab = module.tools_tabs["packages"]
+    _sigs: list = []
 
     root_layout = QVBoxLayout(tab)
     root_layout.setContentsMargins(8, 8, 8, 8)
@@ -272,7 +273,7 @@ def setup_packages_tab(module) -> None:
         module._pkg_summary_label.setText("Loading package list…")
         table.setRowCount(0)
 
-        signals = _PackageWorkerSignals()
+        _sigs.append(_PackageWorkerSignals()); signals = _sigs[-1]
         signals.packages_loaded.connect(_populate_table)
 
         def worker():
@@ -340,7 +341,7 @@ def setup_packages_tab(module) -> None:
         mod._pkg_output.clear()
         mod._pkg_output.append(f"Removing {len(pkgs)} package(s)…\n")
 
-        signals = _PackageWorkerSignals()
+        _sigs.append(_PackageWorkerSignals()); signals = _sigs[-1]
         signals.output_line.connect(mod._pkg_output.append)
         signals.finished.connect(lambda rc: _on_removal_done(rc, pkgs))
 

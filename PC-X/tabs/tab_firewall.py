@@ -83,6 +83,7 @@ def _run_ufw(args: list) -> tuple[int, str]:
 
 def setup_firewall_tab(module) -> None:
     tab = module.mgmt_tabs["firewall"]
+    _sigs: list = []
     root = QVBoxLayout(tab)
     root.setContentsMargins(8, 8, 8, 8)
     root.setSpacing(6)
@@ -191,7 +192,7 @@ def setup_firewall_tab(module) -> None:
             table.setRowHeight(r, 22)
 
     def _refresh():
-        sig = _Signals()
+        _sigs.append(_Signals()); sig = _sigs[-1]
         sig.status_loaded.connect(_populate)
         threading.Thread(
             target=lambda: sig.status_loaded.emit(*_parse_ufw_status()),
@@ -204,7 +205,7 @@ def setup_firewall_tab(module) -> None:
                                     QMessageBox.Yes | QMessageBox.No) != QMessageBox.Yes:
                 return
         module._fw_output.clear()
-        sig = _Signals()
+        _sigs.append(_Signals()); sig = _sigs[-1]
         sig.output.connect(module._fw_output.append)
         sig.done.connect(lambda rc: _refresh())
 
