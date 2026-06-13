@@ -71,6 +71,7 @@ from tabs import (
     tab_sysconfig,
     tab_logs,
     tab_startup,
+    tab_diskusage,
     tab_system,
     tab_users,
     tab_utilities,
@@ -247,7 +248,7 @@ class PCToolsModule(QWidget):
         tools_layout.addWidget(self.tools_notebook)
 
         self.tools_tabs = {}
-        tools_subtabs = ["Packages", "Benchmarks", "Utilities", "Diagnostics"]
+        tools_subtabs = ["Packages", "Benchmarks", "Disk Usage", "Utilities", "Diagnostics"]
 
         for name in tools_subtabs:
             tab = QWidget()
@@ -306,6 +307,7 @@ class PCToolsModule(QWidget):
         self.setup_diagnostics_tab()
         self.setup_logs_tab()
         self.setup_startup_tab()
+        self.setup_diskusage_tab()
 
         # Initial update
         self.update_last_update_time()
@@ -491,6 +493,10 @@ class PCToolsModule(QWidget):
     def setup_startup_tab(self):
         """Set up the Startup Apps tab."""
         tab_startup.setup_startup_tab(self)
+
+    def setup_diskusage_tab(self):
+        """Set up the Disk Usage tab."""
+        tab_diskusage.setup_diskusage_tab(self)
 
     # Helper methods
 
