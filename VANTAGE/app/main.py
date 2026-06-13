@@ -364,15 +364,15 @@ class VantageUI(QMainWindow):
                 ):
                     collector = getattr(widget, collector_attr, None)
                     thread = getattr(widget, thread_attr, None)
-                    if collector and hasattr(collector, 'stop'):
-                        try:
-                            # stop() emits a signal; flush it to the worker
-                            # thread's event loop before we call quit()
-                            collector.stop()
-                            QApplication.processEvents()
-                        except Exception:
-                            pass
                     if thread and thread.isRunning():
+                        # Emit stop_requested so the collector stops its own
+                        # timer from within its thread via queued connection,
+                        # then quit the thread's event loop and wait for exit.
+                        if collector and hasattr(collector, 'stop_requested'):
+                            try:
+                                collector.stop_requested.emit()
+                            except Exception:
+                                pass
                         thread.quit()
                         thread.wait(3000)
                 for client in getattr(widget, '_remote_clients', {}).values():
@@ -529,7 +529,6 @@ def main():
 
             # Tray Quit → real shutdown; tray show → restore window
             if desktop_ctrl.tray:
-                desktop_ctrl.tray.quit_requested.disconnect()
                 desktop_ctrl.tray.quit_requested.connect(main_window.quit_to_close)
 
                 def _restore_window():
