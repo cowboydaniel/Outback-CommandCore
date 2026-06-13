@@ -20,7 +20,7 @@ def _proc_metrics():
         with open('/proc/stat') as f:
             parts = f.readline().split()
         vals = [int(x) for x in parts[1:]]
-        return sum(vals), vals[3]  # total, idle
+        return sum(vals), vals[3]
     t1, i1 = _stat()
     time.sleep(0.1)
     t2, i2 = _stat()
@@ -49,9 +49,20 @@ def _proc_metrics():
                 fields = line.split(':')[1].split()
                 net_recv += int(fields[0])
                 net_sent += int(fields[8])
+    # Uptime
+    with open('/proc/uptime') as f:
+        uptime_seconds = float(f.read().split()[0])
+    # Temperature (Raspberry Pi and other ARM boards)
+    cpu_temp = None
+    try:
+        with open('/sys/class/thermal/thermal_zone0/temp') as f:
+            cpu_temp = int(f.read().strip()) / 1000.0
+    except Exception:
+        pass
     return dict(cpu_percent=cpu, memory_percent=mem_pct, memory_used=mem_used,
                 memory_total=mem_total, disk_percent=disk_pct, disk_used=disk_used,
                 disk_total=disk_total, net_bytes_sent=net_sent, net_bytes_recv=net_recv,
+                uptime_seconds=uptime_seconds, cpu_temp=cpu_temp,
                 timestamp=time.time(), ok=True, source='proc')
 
 try:
@@ -60,11 +71,31 @@ try:
     mem  = psutil.virtual_memory()
     disk = psutil.disk_usage('/')
     net  = psutil.net_io_counters()
+    uptime_seconds = time.time() - psutil.boot_time()
+    # Temperature
+    cpu_temp = None
+    try:
+        temps = psutil.sensors_temperatures()
+        vals = [e.current for n, es in temps.items()
+                if any(k in n.lower() for k in ('core','cpu','k10temp','coretemp','cpu_thermal'))
+                for e in es if e.current and e.current > 0]
+        if vals:
+            cpu_temp = sum(vals) / len(vals)
+    except Exception:
+        pass
+    # Fallback to thermal_zone0 for boards where psutil can't read sensors
+    if cpu_temp is None:
+        try:
+            with open('/sys/class/thermal/thermal_zone0/temp') as f:
+                cpu_temp = int(f.read().strip()) / 1000.0
+        except Exception:
+            pass
     print(json.dumps(dict(
         cpu_percent=cpu, memory_percent=mem.percent,
         memory_used=mem.used, memory_total=mem.total,
         disk_percent=disk.percent, disk_used=disk.used, disk_total=disk.total,
         net_bytes_sent=net.bytes_sent, net_bytes_recv=net.bytes_recv,
+        uptime_seconds=uptime_seconds, cpu_temp=cpu_temp,
         timestamp=time.time(), ok=True, source='psutil'
     )))
 except Exception:
@@ -86,6 +117,8 @@ class RemoteMetrics:
     disk_total: int = 0
     net_bytes_sent: int = 0
     net_bytes_recv: int = 0
+    uptime_seconds: float = 0.0
+    cpu_temp: Optional[float] = None
     timestamp: float = field(default_factory=time.time)
 
 
@@ -181,6 +214,8 @@ class RemoteClient:
                     disk_total=int(data['disk_total']),
                     net_bytes_sent=int(data['net_bytes_sent']),
                     net_bytes_recv=int(data['net_bytes_recv']),
+                    uptime_seconds=float(data.get('uptime_seconds', 0)),
+                    cpu_temp=float(data['cpu_temp']) if data.get('cpu_temp') is not None else None,
                     timestamp=float(data['timestamp']),
                 )
             except Exception as exc:
