@@ -273,6 +273,22 @@ sudo systemctl restart usbmuxd
 idevice_id -l
 ```
 
+### Forensics Tooling (Optional)
+
+ARES-i's **Forensics** category can launch the following third-party tools
+against a connected device or a prior `idevicebackup2` backup. They are not
+required for core ARES-i functionality and are installed/launched on demand
+from the UI (which offers a `pip install --user` action when missing).
+
+| Tool | Purpose | Install |
+|------|---------|---------|
+| [iLEAPP](https://github.com/abrignoni/iLEAPP) | iOS artifact parser/report generator | `pip install --user ileapp` |
+| [MVT](https://docs.mvt.re/) (`mvt-ios`) | Indicator-of-compromise scanning (built by Amnesty International) | `pip install --user mvt` |
+| [Autopsy](https://www.autopsy.com/download/) | Full forensic case analysis platform | Standalone install; `sudo apt-get install autopsy` on Debian/Ubuntu/Kali |
+
+`libimobiledevice` (already required above) remains the underlying transport
+these tools build on for acquiring data from the device.
+
 ---
 
 ## DROIDCOM
@@ -335,6 +351,20 @@ brew install android-platform-tools
 2. Enable **USB Debugging** in Developer Options
 3. Connect device via USB
 4. Accept RSA key fingerprint when prompted
+
+### Forensics Tooling (Optional)
+
+DROIDCOM's **Forensics** category can launch the following third-party tools
+against the connected device or a prior ADB backup/extraction. They are not
+required for core DROIDCOM functionality and are installed/launched on demand
+from the UI (which offers a `pip install --user` action when missing).
+
+| Tool | Purpose | Install |
+|------|---------|---------|
+| [Andriller](https://github.com/den4uk/andriller) | Android forensics toolkit; detects ADB devices automatically | `pip install --user andriller` |
+| [ALEAPP](https://github.com/abrignoni/ALEAPP) | Android artifact parser/report generator | `pip install --user aleapp` |
+| [MVT](https://docs.mvt.re/) (`mvt-android`) | Indicator-of-compromise scanning (built by Amnesty International) | `pip install --user mvt` |
+| [Autopsy](https://www.autopsy.com/download/) | Full forensic case analysis platform | Standalone install; `sudo apt-get install autopsy` on Debian/Ubuntu/Kali |
 
 ### Verification
 

@@ -10,6 +10,7 @@ ARES-i is a focused iOS device penetration and diagnostic tool, optimized for re
 - **Security Assessment**: Device integrity and security posture evaluation
 - **Forensic Capabilities**: Secure data extraction and export functionality
 - **Remote Operations**: Support for remote diagnostics and exploitation workflows
+- **Forensics Tooling**: Launchers for iLEAPP, MVT (Mobile Verification Toolkit), and Autopsy (see [docs/system-deps.md](../docs/system-deps.md#ares-i) for optional install instructions)
 
 ## Requirements
 

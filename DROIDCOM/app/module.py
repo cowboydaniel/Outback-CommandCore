@@ -35,6 +35,7 @@ from ..features.security import SecurityMixin
 from ..features.debugging import DebuggingMixin
 from ..features.advanced_tests import AdvancedTestsMixin
 from ..features.automation import AutomationMixin
+from ..features.forensics import ForensicsMixin
 
 
 class AndroidToolsModule(
@@ -52,6 +53,7 @@ class AndroidToolsModule(
     DebuggingMixin,
     AdvancedTestsMixin,
     AutomationMixin,
+    ForensicsMixin,
     QtWidgets.QWidget
 ):
     """Main Android Tools Module that combines all feature mixins."""

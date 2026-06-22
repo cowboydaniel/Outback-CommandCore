@@ -394,6 +394,12 @@ class WidgetsMixin:
             self._add_tool_button(layout, 4, 1, "CPU Max Load", self.run_cpu_max_load_test, "cpu")
             self._add_tool_button(layout, 5, 1, "Battery Drain", self.run_battery_drain_test, "battery")
 
+        elif category_name == "Forensics":
+            self._add_tool_button(layout, 0, 0, "Andriller", self.run_andriller, "search")
+            self._add_tool_button(layout, 1, 0, "ALEAPP Parser", self.run_aleapp, "clipboard")
+            self._add_tool_button(layout, 2, 0, "MVT Check", self.run_mvt_check, "shield")
+            self._add_tool_button(layout, 3, 0, "Autopsy", self.launch_autopsy, "rocket")
+
     def _create_log_section(self, content_layout, parent):
         """Create the log section with modern styling"""
         self.log_frame = QtWidgets.QGroupBox("Console Output", parent)

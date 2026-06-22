@@ -846,6 +846,7 @@ EMOJI_ICONS = {
     'Security & Permissions': 'lock',
     'Automation & Scripting': 'terminal',
     'Advanced Tests': 'sensor',
+    'Forensics': 'search',
 
     # Action button icons
     'connect': 'wifi-tethering',
