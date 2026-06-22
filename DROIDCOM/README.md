@@ -34,32 +34,40 @@ removed in favor of native Qt widgets and dialogs (`QMessageBox`,
 - macOS (with ADB installed)
 
 ### OS-Level Dependencies
-DROIDCOM requires Android Debug Bridge (ADB) and related tools.
+DROIDCOM requires Android Debug Bridge (ADB) and related tools, plus `scrcpy`
+(>= 2.1) for screen mirroring/control. DROIDCOM will attempt to auto-install
+both on Linux at startup, but installing them yourself first avoids the
+pkexec prompts.
 
 > **See [docs/system-deps.md](../docs/system-deps.md#droidcom) for comprehensive system dependency documentation.**
 
 **Debian/Ubuntu:**
 ```bash
-sudo apt-get install android-tools-adb android-tools-fastboot
+sudo apt-get install android-tools-adb android-tools-fastboot scrcpy
 ```
 
 **Fedora/RHEL:**
 ```bash
-sudo dnf install android-tools
+sudo dnf install android-tools scrcpy
 ```
 
 **macOS (Homebrew):**
 ```bash
-brew install android-platform-tools
+brew install android-platform-tools scrcpy
 ```
 
 **Windows:**
 - Download [Android SDK Platform Tools](https://developer.android.com/studio/releases/platform-tools)
-- Add to system PATH
+- Download [scrcpy](https://github.com/Genymobile/scrcpy/releases)
+- Add both to system PATH
 
 Required tools:
 - `adb` – Android Debug Bridge
 - `fastboot` – Bootloader/recovery communication
+- `scrcpy` (>= 2.1) – Screen mirroring and input control
+
+Distro-packaged `scrcpy` is frequently older than 2.1; DROIDCOM detects this
+and builds the latest release from source automatically on Linux at startup.
 
 ### Permissions
 - USB device access (user in `plugdev` group on Linux)

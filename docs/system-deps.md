@@ -276,14 +276,15 @@ idevice_id -l
 ### Forensics Tooling (Optional)
 
 ARES-i's **Forensics** category can launch the following third-party tools
-against a connected device or a prior `idevicebackup2` backup. They are not
-required for core ARES-i functionality and are installed/launched on demand
-from the UI (which offers a `pip install --user` action when missing).
+against a connected device or a prior `idevicebackup2` backup. iLEAPP and MVT
+are now pinned in `requirements.txt` and installed automatically by
+`pip install -r requirements.txt`. Autopsy is a standalone Java application
+and cannot be pip-installed, so it still needs a manual/system install.
 
 | Tool | Purpose | Install |
 |------|---------|---------|
-| [iLEAPP](https://github.com/abrignoni/iLEAPP) | iOS artifact parser/report generator | `pip install --user ileapp` |
-| [MVT](https://docs.mvt.re/) (`mvt-ios`) | Indicator-of-compromise scanning (built by Amnesty International) | `pip install --user mvt` |
+| [iLEAPP](https://github.com/abrignoni/iLEAPP) | iOS artifact parser/report generator | Bundled via `requirements.txt` (`pip install ileapp`) |
+| [MVT](https://docs.mvt.re/) (`mvt-ios`) | Indicator-of-compromise scanning (built by Amnesty International) | Bundled via `requirements.txt` (`pip install mvt`) |
 | [Autopsy](https://www.autopsy.com/download/) | Full forensic case analysis platform | Standalone install; `sudo apt-get install autopsy` on Debian/Ubuntu/Kali |
 
 `libimobiledevice` (already required above) remains the underlying transport
@@ -301,28 +302,32 @@ these tools build on for acquiring data from the device.
 |---------|---------|---------|
 | `android-tools-adb` | Android Debug Bridge | `adb` |
 | `android-tools-fastboot` | Bootloader communication | `fastboot` |
+| `scrcpy` (>= 2.1) | Screen mirroring and input control | `scrcpy` |
 
 ### Installation
 
 **Debian/Ubuntu:**
 ```bash
-sudo apt-get install android-tools-adb android-tools-fastboot
+sudo apt-get install android-tools-adb android-tools-fastboot scrcpy
 ```
 
 **Fedora/RHEL:**
 ```bash
-sudo dnf install android-tools
+sudo dnf install android-tools scrcpy
 ```
 
 **Arch Linux:**
 ```bash
-sudo pacman -S android-tools
+sudo pacman -S android-tools scrcpy
 ```
 
 **macOS (Homebrew):**
 ```bash
-brew install android-platform-tools
+brew install android-platform-tools scrcpy
 ```
+
+Distro-packaged `scrcpy` is frequently older than 2.1; DROIDCOM detects this
+and builds the latest release from source automatically on Linux at startup.
 
 **Windows:**
 1. Download [Android SDK Platform Tools](https://developer.android.com/studio/releases/platform-tools)
@@ -355,15 +360,17 @@ brew install android-platform-tools
 ### Forensics Tooling (Optional)
 
 DROIDCOM's **Forensics** category can launch the following third-party tools
-against the connected device or a prior ADB backup/extraction. They are not
-required for core DROIDCOM functionality and are installed/launched on demand
-from the UI (which offers a `pip install --user` action when missing).
+against the connected device or a prior ADB backup/extraction. Andriller,
+ALEAPP, and MVT are now pinned in `requirements.txt` and installed
+automatically by `pip install -r requirements.txt`. Autopsy is a standalone
+Java application and cannot be pip-installed, so it still needs a
+manual/system install.
 
 | Tool | Purpose | Install |
 |------|---------|---------|
-| [Andriller](https://github.com/den4uk/andriller) | Android forensics toolkit; detects ADB devices automatically | `pip install --user andriller` |
-| [ALEAPP](https://github.com/abrignoni/ALEAPP) | Android artifact parser/report generator | `pip install --user aleapp` |
-| [MVT](https://docs.mvt.re/) (`mvt-android`) | Indicator-of-compromise scanning (built by Amnesty International) | `pip install --user mvt` |
+| [Andriller](https://github.com/den4uk/andriller) | Android forensics toolkit; detects ADB devices automatically | Bundled via `requirements.txt` (`pip install andriller`) |
+| [ALEAPP](https://github.com/abrignoni/ALEAPP) | Android artifact parser/report generator | Bundled via `requirements.txt` (`pip install aleapp`) |
+| [MVT](https://docs.mvt.re/) (`mvt-android`) | Indicator-of-compromise scanning (built by Amnesty International) | Bundled via `requirements.txt` (`pip install mvt`) |
 | [Autopsy](https://www.autopsy.com/download/) | Full forensic case analysis platform | Standalone install; `sudo apt-get install autopsy` on Debian/Ubuntu/Kali |
 
 ### Verification
@@ -399,7 +406,7 @@ sudo apt-get install -y smartmontools policykit-1 lm-sensors dmidecode lshw
 sudo apt-get install -y libimobiledevice-utils ifuse usbmuxd
 
 # DROIDCOM dependencies
-sudo apt-get install -y android-tools-adb android-tools-fastboot
+sudo apt-get install -y android-tools-adb android-tools-fastboot scrcpy
 
 # Add user to required groups
 sudo usermod -aG plugdev,wireshark,disk $USER
@@ -425,7 +432,7 @@ sudo dnf install -y smartmontools polkit lm_sensors dmidecode lshw
 sudo dnf install -y libimobiledevice-utils ifuse usbmuxd
 
 # DROIDCOM dependencies
-sudo dnf install -y android-tools
+sudo dnf install -y android-tools scrcpy
 
 # Add user to required groups
 sudo usermod -aG plugdev,wireshark,disk $USER
@@ -452,6 +459,7 @@ echo "System dependencies installed. Please log out and back in for group change
 | usbmuxd | `usbmuxd` | `usbmuxd` | `usbmuxd` | ARES-i |
 | adb | `android-tools-adb` | `android-tools` | `android-tools` | DROIDCOM |
 | fastboot | `android-tools-fastboot` | `android-tools` | `android-tools` | DROIDCOM |
+| scrcpy | `scrcpy` | `scrcpy` | `scrcpy` | DROIDCOM |
 
 ### User Groups
 
@@ -485,7 +493,7 @@ which smartctl pkexec sensors dmidecode lshw
 which idevice_id ideviceinfo ifuse
 
 # DROIDCOM tools
-which adb fastboot
+which adb fastboot scrcpy
 ```
 
 ---
