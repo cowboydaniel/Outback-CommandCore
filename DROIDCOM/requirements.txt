@@ -1,4 +1,3 @@
 PySide6>=6.5.0
 andriller>=3.4
-aleapp
 mvt

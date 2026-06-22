@@ -5758,10 +5758,18 @@ class IOSToolsModule(BaseWindow):
 
     # ===== Forensics tooling (iLEAPP, MVT, Autopsy) =====
 
+    ILEAPP_REPO_URL = "https://github.com/abrignoni/iLEAPP.git"
+    ILEAPP_DIR = Path.home() / ".local" / "share" / "outback-commandcore" / "iLEAPP"
+
     def run_ileapp(self):
-        """Run the iLEAPP artifact parser against an extraction/backup folder"""
-        if not shutil.which("ileapp"):
-            self._offer_forensic_tool_pip_install("ileapp", "iLEAPP")
+        """Run the iLEAPP artifact parser against an extraction/backup folder.
+
+        iLEAPP has no PyPI package or console-script entry point, so it is
+        obtained by cloning its GitHub repo on demand and run as a script.
+        """
+        ileapp_script = self.ILEAPP_DIR / "ileapp.py"
+        if not ileapp_script.exists():
+            self._offer_git_clone_install(self.ILEAPP_REPO_URL, self.ILEAPP_DIR, "iLEAPP")
             return
 
         input_dir = QFileDialog.getExistingDirectory(
@@ -5777,7 +5785,7 @@ class IOSToolsModule(BaseWindow):
             return
 
         self._run_in_thread(lambda: self._run_forensic_tool_task(
-            "ileapp", ["-t", "fs", "-i", input_dir, "-o", output_dir], "iLEAPP"
+            sys.executable, [str(ileapp_script), "-t", "fs", "-i", input_dir, "-o", output_dir], "iLEAPP"
         ))
 
     def run_mvt_ios_check(self):
@@ -5820,6 +5828,65 @@ class IOSToolsModule(BaseWindow):
         except Exception as e:
             self.log_message(f"Failed to launch Autopsy: {str(e)}")
             self.show_info("Autopsy Error", f"Failed to launch Autopsy: {str(e)}")
+
+    def _offer_git_clone_install(self, repo_url, dest, tool_name):
+        reply = QMessageBox.question(
+            self, f"{tool_name} Not Found",
+            f"{tool_name} was not found.\n\n"
+            f"Clone it now from {repo_url} and install its dependencies?",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if reply == QMessageBox.Yes:
+            self._run_in_thread(lambda: self._git_clone_install_task(repo_url, dest, tool_name))
+
+    def _git_clone_install_task(self, repo_url, dest, tool_name):
+        self.log_message(f"Cloning {tool_name} from {repo_url}...")
+        try:
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            result = subprocess.run(
+                ["git", "clone", "--depth", "1", repo_url, str(dest)],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=300,
+            )
+            if result.returncode != 0:
+                error = result.stderr.strip()
+                self.log_message(f"{tool_name} clone failed: {error}")
+                QMetaObject.invokeMethod(
+                    self, "show_info", Qt.QueuedConnection,
+                    Q_ARG(str, "Install Error"),
+                    Q_ARG(str, f"Failed to clone {tool_name}: {error}"),
+                )
+                return
+
+            req_file = dest / "requirements.txt"
+            if req_file.exists():
+                self.log_message(f"Installing {tool_name} dependencies...")
+                pip_result = subprocess.run(
+                    [sys.executable, "-m", "pip", "install", "--user", "-r", str(req_file)],
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=300,
+                )
+                if pip_result.returncode != 0:
+                    error = pip_result.stderr.strip()
+                    self.log_message(f"{tool_name} dependency install failed: {error}")
+                    QMetaObject.invokeMethod(
+                        self, "show_info", Qt.QueuedConnection,
+                        Q_ARG(str, "Install Error"),
+                        Q_ARG(str, f"Failed to install {tool_name} dependencies: {error}"),
+                    )
+                    return
+
+            self.log_message(f"{tool_name} installed successfully")
+            QMetaObject.invokeMethod(
+                self, "show_info", Qt.QueuedConnection,
+                Q_ARG(str, "Install Complete"),
+                Q_ARG(str, f"{tool_name} installed successfully. You may need to re-run the action."),
+            )
+        except Exception as e:
+            self.log_message(f"Error installing {tool_name}: {str(e)}")
+            QMetaObject.invokeMethod(
+                self, "show_info", Qt.QueuedConnection,
+                Q_ARG(str, "Install Error"),
+                Q_ARG(str, f"Failed to install {tool_name}: {str(e)}"),
+            )
 
     def _offer_forensic_tool_pip_install(self, pip_package, tool_name):
         reply = QMessageBox.question(

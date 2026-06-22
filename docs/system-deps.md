@@ -276,14 +276,18 @@ idevice_id -l
 ### Forensics Tooling (Optional)
 
 ARES-i's **Forensics** category can launch the following third-party tools
-against a connected device or a prior `idevicebackup2` backup. iLEAPP and MVT
-are now pinned in `requirements.txt` and installed automatically by
-`pip install -r requirements.txt`. Autopsy is a standalone Java application
-and cannot be pip-installed, so it still needs a manual/system install.
+against a connected device or a prior `idevicebackup2` backup. MVT is pinned
+in `requirements.txt` and installed automatically by `pip install -r
+requirements.txt`. iLEAPP has no PyPI package — it ships only as a GitHub
+repo with no console-script entry point — so ARES-i clones it on demand into
+`~/.local/share/outback-commandcore/iLEAPP` the first time it's launched
+from the UI (and installs its `requirements.txt` into the same Python
+environment). Autopsy is a standalone Java application and cannot be
+pip-installed or auto-cloned, so it still needs a manual/system install.
 
 | Tool | Purpose | Install |
 |------|---------|---------|
-| [iLEAPP](https://github.com/abrignoni/iLEAPP) | iOS artifact parser/report generator | Bundled via `requirements.txt` (`pip install ileapp`) |
+| [iLEAPP](https://github.com/abrignoni/iLEAPP) | iOS artifact parser/report generator | Auto-cloned on first use from the UI (no PyPI package exists) |
 | [MVT](https://docs.mvt.re/) (`mvt-ios`) | Indicator-of-compromise scanning (built by Amnesty International) | Bundled via `requirements.txt` (`pip install mvt`) |
 | [Autopsy](https://www.autopsy.com/download/) | Full forensic case analysis platform | Standalone install; `sudo apt-get install autopsy` on Debian/Ubuntu/Kali |
 
@@ -360,16 +364,19 @@ and builds the latest release from source automatically on Linux at startup.
 ### Forensics Tooling (Optional)
 
 DROIDCOM's **Forensics** category can launch the following third-party tools
-against the connected device or a prior ADB backup/extraction. Andriller,
-ALEAPP, and MVT are now pinned in `requirements.txt` and installed
-automatically by `pip install -r requirements.txt`. Autopsy is a standalone
-Java application and cannot be pip-installed, so it still needs a
-manual/system install.
+against the connected device or a prior ADB backup/extraction. Andriller and
+MVT are pinned in `requirements.txt` and installed automatically by `pip
+install -r requirements.txt`. ALEAPP has no PyPI package — it ships only as
+a GitHub repo with no console-script entry point — so DROIDCOM clones it on
+demand into `~/.local/share/outback-commandcore/ALEAPP` the first time it's
+launched from the UI (and installs its `requirements.txt` into the same
+Python environment). Autopsy is a standalone Java application and cannot be
+pip-installed or auto-cloned, so it still needs a manual/system install.
 
 | Tool | Purpose | Install |
 |------|---------|---------|
 | [Andriller](https://github.com/den4uk/andriller) | Android forensics toolkit; detects ADB devices automatically | Bundled via `requirements.txt` (`pip install andriller`) |
-| [ALEAPP](https://github.com/abrignoni/ALEAPP) | Android artifact parser/report generator | Bundled via `requirements.txt` (`pip install aleapp`) |
+| [ALEAPP](https://github.com/abrignoni/ALEAPP) | Android artifact parser/report generator | Auto-cloned on first use from the UI (no PyPI package exists) |
 | [MVT](https://docs.mvt.re/) (`mvt-android`) | Indicator-of-compromise scanning (built by Amnesty International) | Bundled via `requirements.txt` (`pip install mvt`) |
 | [Autopsy](https://www.autopsy.com/download/) | Full forensic case analysis platform | Standalone install; `sudo apt-get install autopsy` on Debian/Ubuntu/Kali |
 

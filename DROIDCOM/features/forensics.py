@@ -9,8 +9,12 @@ from PySide6 import QtWidgets
 import shutil
 import subprocess
 import sys
+from pathlib import Path
 
 from ..utils.qt_dispatcher import emit_ui
+
+ALEAPP_REPO_URL = "https://github.com/abrignoni/ALEAPP.git"
+ALEAPP_DIR = Path.home() / ".local" / "share" / "outback-commandcore" / "ALEAPP"
 
 
 class ForensicsMixin:
@@ -25,9 +29,14 @@ class ForensicsMixin:
         )
 
     def run_aleapp(self):
-        """Run the ALEAPP artifact parser against an extraction/backup folder."""
-        if not shutil.which("aleapp"):
-            self._offer_pip_install("aleapp", "ALEAPP")
+        """Run the ALEAPP artifact parser against an extraction/backup folder.
+
+        ALEAPP has no PyPI package or console-script entry point, so it is
+        obtained by cloning its GitHub repo on demand and run as a script.
+        """
+        aleapp_script = ALEAPP_DIR / "aleapp.py"
+        if not aleapp_script.exists():
+            self._offer_git_clone_install(ALEAPP_REPO_URL, ALEAPP_DIR, "ALEAPP")
             return
 
         input_dir = QtWidgets.QFileDialog.getExistingDirectory(
@@ -43,7 +52,7 @@ class ForensicsMixin:
             return
 
         self._run_in_thread(lambda: self._run_forensic_tool_task(
-            "aleapp", ["-t", "fs", "-i", input_dir, "-o", output_dir], "ALEAPP"
+            sys.executable, [str(aleapp_script), "-t", "fs", "-i", input_dir, "-o", output_dir], "ALEAPP"
         ))
 
     def run_mvt_check(self):
@@ -131,6 +140,62 @@ class ForensicsMixin:
         )
         if choice == QtWidgets.QMessageBox.Yes:
             self._run_in_thread(lambda: self._pip_install_forensic_tool_task(pip_package, tool_name))
+
+    def _offer_git_clone_install(self, repo_url, dest, tool_name):
+        choice = QtWidgets.QMessageBox.question(
+            self, f"{tool_name} Not Found",
+            f"{tool_name} was not found.\n\n"
+            f"Clone it now from {repo_url} and install its dependencies?",
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+        )
+        if choice == QtWidgets.QMessageBox.Yes:
+            self._run_in_thread(lambda: self._git_clone_install_task(repo_url, dest, tool_name))
+
+    def _git_clone_install_task(self, repo_url, dest, tool_name):
+        self.update_status(f"Installing {tool_name}...")
+        self.log_message(f"Cloning {tool_name} from {repo_url}...")
+        try:
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            result = subprocess.run(
+                ["git", "clone", "--depth", "1", repo_url, str(dest)],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=300,
+            )
+            if result.returncode != 0:
+                self.log_message(f"{tool_name} clone failed: {result.stderr.strip()}")
+                self.update_status(f"{tool_name} install failed")
+                emit_ui(self, lambda: QtWidgets.QMessageBox.critical(
+                    self, "Install Error", f"Failed to clone {tool_name}: {result.stderr.strip()}"
+                ))
+                return
+
+            req_file = dest / "requirements.txt"
+            if req_file.exists():
+                self.log_message(f"Installing {tool_name} dependencies...")
+                pip_result = subprocess.run(
+                    [sys.executable, "-m", "pip", "install", "--user", "-r", str(req_file)],
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=300,
+                )
+                if pip_result.returncode != 0:
+                    self.log_message(f"{tool_name} dependency install failed: {pip_result.stderr.strip()}")
+                    self.update_status(f"{tool_name} install failed")
+                    emit_ui(self, lambda: QtWidgets.QMessageBox.critical(
+                        self, "Install Error",
+                        f"Failed to install {tool_name} dependencies: {pip_result.stderr.strip()}"
+                    ))
+                    return
+
+            self.log_message(f"{tool_name} installed successfully")
+            self.update_status(f"{tool_name} installed")
+            emit_ui(self, lambda: QtWidgets.QMessageBox.information(
+                self, "Install Complete",
+                f"{tool_name} installed successfully. You may need to re-run the action."
+            ))
+        except Exception as e:
+            self.log_message(f"Error installing {tool_name}: {str(e)}")
+            self.update_status(f"{tool_name} install failed")
+            emit_ui(self, lambda: QtWidgets.QMessageBox.critical(
+                self, "Install Error", f"Failed to install {tool_name}: {str(e)}"
+            ))
 
     def _pip_install_forensic_tool_task(self, pip_package, tool_name):
         self.update_status(f"Installing {tool_name}...")
