@@ -115,8 +115,10 @@ class ForensicsMixin:
             tool_name="Autopsy",
             install_hint=(
                 "Autopsy is a standalone Java application and is not distributed via pip.\n\n"
-                "Install it from https://www.autopsy.com/download/ or, on Debian/Ubuntu/Kali:\n"
-                "  sudo apt-get install autopsy"
+                "Install the modern Autopsy 4.x via Snap (do NOT use 'apt-get install autopsy' -- "
+                "that package is the abandoned, non-functional Autopsy 2.24):\n"
+                "  sudo snap install autopsy\n\n"
+                "Or download it directly from https://www.autopsy.com/download/"
             ),
         )
 

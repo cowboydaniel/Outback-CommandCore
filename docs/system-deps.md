@@ -289,7 +289,7 @@ pip-installed or auto-cloned, so it still needs a manual/system install.
 |------|---------|---------|
 | [iLEAPP](https://github.com/abrignoni/iLEAPP) | iOS artifact parser/report generator | Auto-cloned on first use from the UI (no PyPI package exists) |
 | [MVT](https://docs.mvt.re/) (`mvt-ios`) | Indicator-of-compromise scanning (built by Amnesty International) | Bundled via `requirements.txt` (`pip install mvt`) |
-| [Autopsy](https://www.autopsy.com/download/) | Full forensic case analysis platform | Standalone install; `sudo apt-get install autopsy` on Debian/Ubuntu/Kali |
+| [Autopsy](https://www.autopsy.com/download/) | Full forensic case analysis platform | Standalone install; `sudo snap install autopsy` (do **not** use `apt-get install autopsy` -- that's the abandoned, non-functional Autopsy 2.24) |
 
 `libimobiledevice` (already required above) remains the underlying transport
 these tools build on for acquiring data from the device.
@@ -378,7 +378,7 @@ pip-installed or auto-cloned, so it still needs a manual/system install.
 | [Andriller](https://github.com/den4uk/andriller) | Android forensics toolkit; detects ADB devices automatically | Bundled via `requirements.txt` (`pip install andriller`) |
 | [ALEAPP](https://github.com/abrignoni/ALEAPP) | Android artifact parser/report generator | Auto-cloned on first use from the UI (no PyPI package exists) |
 | [MVT](https://docs.mvt.re/) (`mvt-android`) | Indicator-of-compromise scanning (built by Amnesty International) | Bundled via `requirements.txt` (`pip install mvt`) |
-| [Autopsy](https://www.autopsy.com/download/) | Full forensic case analysis platform | Standalone install; `sudo apt-get install autopsy` on Debian/Ubuntu/Kali |
+| [Autopsy](https://www.autopsy.com/download/) | Full forensic case analysis platform | Standalone install; `sudo snap install autopsy` (do **not** use `apt-get install autopsy` -- that's the abandoned, non-functional Autopsy 2.24) |
 
 ### Verification
 
