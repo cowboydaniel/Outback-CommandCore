@@ -108,6 +108,7 @@ python DROIDCOM/main.py
 - **Security** – Security scanning and root detection
 - **Backup** – Device backup and restore operations
 - **Debugging** – Advanced debugging and testing tools
+- **Forensics** – Launchers for Andriller, ALEAPP, MVT (Mobile Verification Toolkit), and Autopsy (see [docs/system-deps.md](../docs/system-deps.md#droidcom) for optional install instructions)
 
 ### Examples
 ```bash

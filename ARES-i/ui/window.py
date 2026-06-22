@@ -1,5 +1,6 @@
 import sys
 import os
+import shutil
 import subprocess
 import json
 import time
@@ -1870,7 +1871,24 @@ class IOSToolsModule(BaseWindow):
         certs_btn = QPushButton("View Certificates")
         certs_btn.clicked.connect(self.view_certificates)
         layout.addWidget(certs_btn)
-    
+
+    def _add_forensics_widgets(self, layout):
+        """Add forensics tooling widgets to the layout"""
+        ileapp_btn = QPushButton("iLEAPP Parser")
+        ileapp_btn.setToolTip("Run iLEAPP against an extraction/backup folder")
+        ileapp_btn.clicked.connect(self.run_ileapp)
+        layout.addWidget(ileapp_btn)
+
+        mvt_btn = QPushButton("MVT Check")
+        mvt_btn.setToolTip("Run MVT (Mobile Verification Toolkit) against a backup")
+        mvt_btn.clicked.connect(self.run_mvt_ios_check)
+        layout.addWidget(mvt_btn)
+
+        autopsy_btn = QPushButton("Autopsy")
+        autopsy_btn.setToolTip("Launch the Autopsy forensic case analysis suite")
+        autopsy_btn.clicked.connect(self.launch_autopsy)
+        layout.addWidget(autopsy_btn)
+
     def run_script(self):
         """Run a custom script on the connected device"""
         if not self.device_connected:
@@ -5736,6 +5754,147 @@ class IOSToolsModule(BaseWindow):
                 Qt.QueuedConnection,
                 Q_ARG(str, "Installation Error"),
                 Q_ARG(str, f"Error during installation: {str(e)}")
+            )
+
+    # ===== Forensics tooling (iLEAPP, MVT, Autopsy) =====
+
+    def run_ileapp(self):
+        """Run the iLEAPP artifact parser against an extraction/backup folder"""
+        if not shutil.which("ileapp"):
+            self._offer_forensic_tool_pip_install("ileapp", "iLEAPP")
+            return
+
+        input_dir = QFileDialog.getExistingDirectory(
+            self, "Select iOS Extraction / Backup Folder"
+        )
+        if not input_dir:
+            return
+
+        output_dir = QFileDialog.getExistingDirectory(
+            self, "Select iLEAPP Report Output Folder"
+        )
+        if not output_dir:
+            return
+
+        self._run_in_thread(lambda: self._run_forensic_tool_task(
+            "ileapp", ["-t", "fs", "-i", input_dir, "-o", output_dir], "iLEAPP"
+        ))
+
+    def run_mvt_ios_check(self):
+        """Run MVT (Mobile Verification Toolkit) against a backup"""
+        if not shutil.which("mvt-ios"):
+            self._offer_forensic_tool_pip_install("mvt", "MVT (Mobile Verification Toolkit)")
+            return
+
+        backup_dir = QFileDialog.getExistingDirectory(
+            self, "Select idevicebackup2 Backup Folder", "", QFileDialog.ShowDirsOnly
+        )
+        if not backup_dir:
+            return
+
+        output_dir = QFileDialog.getExistingDirectory(
+            self, "Select MVT Report Output Folder"
+        )
+        if not output_dir:
+            return
+
+        args = ["check-backup", "--output", output_dir, backup_dir]
+        self._run_in_thread(lambda: self._run_forensic_tool_task("mvt-ios", args, "MVT"))
+
+    def launch_autopsy(self):
+        """Launch the Autopsy forensic suite for case-based analysis of extracted data"""
+        path = shutil.which("autopsy")
+        if not path:
+            self.show_info(
+                "Autopsy Not Found",
+                "Autopsy is a standalone Java application and is not distributed via pip.\n\n"
+                "Install it from https://www.autopsy.com/download/ or, on Debian/Ubuntu/Kali:\n"
+                "  sudo apt-get install autopsy"
+            )
+            return
+
+        self.log_message("Launching Autopsy...")
+        try:
+            subprocess.Popen([path])
+            self.status_var.setText("Autopsy launched")
+        except Exception as e:
+            self.log_message(f"Failed to launch Autopsy: {str(e)}")
+            self.show_info("Autopsy Error", f"Failed to launch Autopsy: {str(e)}")
+
+    def _offer_forensic_tool_pip_install(self, pip_package, tool_name):
+        reply = QMessageBox.question(
+            self, f"{tool_name} Not Found",
+            f"{tool_name} was not found on PATH.\n\n"
+            f"Install it now with 'pip install --user {pip_package}'?",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if reply == QMessageBox.Yes:
+            self._run_in_thread(lambda: self._pip_install_forensic_tool_task(pip_package, tool_name))
+
+    def _pip_install_forensic_tool_task(self, pip_package, tool_name):
+        self.log_message(f"Installing {tool_name} via pip...")
+        try:
+            result = subprocess.run(
+                [sys.executable, "-m", "pip", "install", "--user", pip_package],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=300,
+            )
+            if result.returncode == 0:
+                self.log_message(f"{tool_name} installed successfully")
+                QMetaObject.invokeMethod(
+                    self, "show_info", Qt.QueuedConnection,
+                    Q_ARG(str, "Install Complete"),
+                    Q_ARG(str, f"{tool_name} installed successfully. You may need to re-run the action."),
+                )
+            else:
+                error = result.stderr.strip()
+                self.log_message(f"{tool_name} install failed: {error}")
+                QMetaObject.invokeMethod(
+                    self, "show_info", Qt.QueuedConnection,
+                    Q_ARG(str, "Install Error"),
+                    Q_ARG(str, f"Failed to install {tool_name}: {error}"),
+                )
+        except Exception as e:
+            self.log_message(f"Error installing {tool_name}: {str(e)}")
+            QMetaObject.invokeMethod(
+                self, "show_info", Qt.QueuedConnection,
+                Q_ARG(str, "Install Error"),
+                Q_ARG(str, f"Failed to install {tool_name}: {str(e)}"),
+            )
+
+    def _run_forensic_tool_task(self, binary, args, tool_name):
+        self.log_message(f"Running: {binary} {' '.join(args)}")
+        try:
+            result = subprocess.run(
+                [binary] + args,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=1800,
+            )
+            if result.stdout:
+                for line in result.stdout.strip().splitlines()[-50:]:
+                    self.log_message(line)
+
+            if result.returncode == 0:
+                self.log_message(f"{tool_name} completed successfully")
+                QMetaObject.invokeMethod(
+                    self, "show_info", Qt.QueuedConnection,
+                    Q_ARG(str, f"{tool_name} Complete"),
+                    Q_ARG(str, f"{tool_name} finished successfully."),
+                )
+            else:
+                error_tail = result.stderr.strip()[-500:]
+                self.log_message(f"{tool_name} failed: {error_tail}")
+                QMetaObject.invokeMethod(
+                    self, "show_info", Qt.QueuedConnection,
+                    Q_ARG(str, f"{tool_name} Error"),
+                    Q_ARG(str, f"{tool_name} failed: {error_tail}"),
+                )
+        except subprocess.TimeoutExpired:
+            self.log_message(f"{tool_name} timed out")
+        except Exception as e:
+            self.log_message(f"Error running {tool_name}: {str(e)}")
+            QMetaObject.invokeMethod(
+                self, "show_info", Qt.QueuedConnection,
+                Q_ARG(str, f"{tool_name} Error"),
+                Q_ARG(str, f"Failed to run {tool_name}: {str(e)}"),
             )
 
 # Main execution

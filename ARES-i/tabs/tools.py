@@ -32,6 +32,7 @@ def setup_tools_tab(window) -> None:
         ("Security", window._add_security_widgets, 3, 0),
         ("Automation", window._add_automation_widgets, 3, 1),
         ("Advanced Tests", window._add_advanced_tests_widgets, 4, 0),
+        ("Forensics", window._add_forensics_widgets, 4, 1),
     ]
 
     for title, method, row, col in tool_categories:
