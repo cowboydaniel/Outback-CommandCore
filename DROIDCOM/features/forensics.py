@@ -6,6 +6,7 @@ device or a prior extraction/backup.
 """
 
 from PySide6 import QtWidgets
+import importlib.util
 import shutil
 import subprocess
 import sys
@@ -21,12 +22,24 @@ class ForensicsMixin:
     """Mixin providing launchers for external mobile-forensics tools."""
 
     def run_andriller(self):
-        """Launch Andriller, which auto-detects ADB devices on its own."""
-        self._launch_or_offer_install(
-            binary="andriller",
-            pip_package="andriller",
-            tool_name="Andriller",
-        )
+        """Launch Andriller, which auto-detects ADB devices on its own.
+
+        Andriller's pip package has no `andriller` console script (it only
+        ships a legacy `andriller-gui.py`), so it must be run as a module.
+        """
+        if importlib.util.find_spec("andriller") is None:
+            self._offer_pip_install("andriller", "Andriller")
+            return
+
+        self.log_message("Launching Andriller...")
+        try:
+            subprocess.Popen([sys.executable, "-m", "andriller"])
+            self.update_status("Andriller launched")
+        except Exception as e:
+            self.log_message(f"Failed to launch Andriller: {str(e)}")
+            QtWidgets.QMessageBox.critical(
+                self, "Andriller Error", f"Failed to launch Andriller: {str(e)}"
+            )
 
     def run_aleapp(self):
         """Run the ALEAPP artifact parser against an extraction/backup folder.
