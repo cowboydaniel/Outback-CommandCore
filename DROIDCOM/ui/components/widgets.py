@@ -833,6 +833,7 @@ class WidgetsMixin:
         """Create the main tabbed interface"""
         self.notebook = QtWidgets.QTabWidget(parent)
         self.notebook.setDocumentMode(True)
+        self.notebook.tabBar().setDrawBase(False)
         content_layout.addWidget(self.notebook, 1)
 
         # Device Info Tab
