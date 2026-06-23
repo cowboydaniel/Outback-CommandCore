@@ -237,8 +237,8 @@ class WidgetsMixin:
         # Settings/Help for visual consistency; shield icon, turns red when active.
         self.forensic_mode_btn, self.forensic_mode_icon, self.forensic_mode_label = \
             self._create_icon_text_header_button(
-                header_frame, "shield", "Forensic Mode",
-                "Toggle Forensic Mode", self.toggle_forensic_mode,
+                header_frame, "shield", "Forensic",
+                "Forensic Mode - click to toggle", self.toggle_forensic_mode,
                 checkable=True, return_widgets=True,
             )
         header_layout.addWidget(self.forensic_mode_btn)
@@ -275,7 +275,7 @@ class WidgetsMixin:
         container = QtWidgets.QPushButton(parent)
         container.setToolTip(tooltip)
         container.setCheckable(checkable)
-        container.setStyleSheet(get_secondary_button_style())
+        container.setStyleSheet(self._flat_header_button_style())
         container.setCursor(QtCore.Qt.PointingHandCursor)
         container.setFixedSize(70, 60)
         container.clicked.connect(callback)
@@ -305,14 +305,35 @@ class WidgetsMixin:
             return container, icon_widget, label
         return container
 
-    def _forensic_button_style(self, active):
-        """Standard secondary style when inactive; unmistakeable red/glow when active.
+    def _flat_header_button_style(self):
+        """No visible box in the default state -- just a subtle hover background.
 
-        Matches the fixed 56x44 icon-above/label-below layout shared with
+        Shared by the Settings, Help, and (when inactive) Forensic Mode
+        header buttons so none of them show a bounding box against the
+        header.
+        """
+        return f"""
+            QPushButton {{
+                background: transparent;
+                border: none;
+                border-radius: 8px;
+            }}
+            QPushButton:hover {{
+                background-color: {COLORS['background_hover']};
+            }}
+            QPushButton:checked {{
+                background-color: {COLORS['background_hover']};
+            }}
+        """
+
+    def _forensic_button_style(self, active):
+        """Flat/borderless when inactive; unmistakeable red/glow when active.
+
+        Matches the fixed 70x60 icon-above/label-below layout shared with
         the Settings and Help header buttons.
         """
         if not active:
-            return get_secondary_button_style()
+            return self._flat_header_button_style()
         return f"""
             QPushButton {{
                 background-color: {COLORS['error_bg']};
@@ -379,7 +400,7 @@ class WidgetsMixin:
             self.forensic_indicator.setVisible(False)
             self.forensic_mode_btn.setStyleSheet(self._forensic_button_style(active=False))
             self.forensic_mode_icon.setPixmap(load_svg_pixmap('shield', 16))
-            self.forensic_mode_label.setText("Forensic Mode")
+            self.forensic_mode_label.setText("Forensic")
             self.forensic_mode_label.setStyleSheet(f"""
                 font-size: 9px;
                 font-weight: 600;
