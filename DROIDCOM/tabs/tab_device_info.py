@@ -36,8 +36,8 @@ def create_device_info_tab(ui):
     # Create content widget and layout
     content_widget = QtWidgets.QWidget()
     device_layout = QtWidgets.QVBoxLayout(content_widget)
-    device_layout.setContentsMargins(8, 8, 8, 8)
-    device_layout.setSpacing(10)
+    device_layout.setContentsMargins(6, 6, 6, 6)
+    device_layout.setSpacing(7)
 
     # Set up the scroll area
     scroll_area.setWidget(content_widget)
@@ -49,8 +49,8 @@ def create_device_info_tab(ui):
     # === CONNECTION SECTION ===
     connection_frame = QtWidgets.QGroupBox("Device Connection", ui.device_frame)
     connection_layout = QtWidgets.QVBoxLayout(connection_frame)
-    connection_layout.setSpacing(8)
-    connection_layout.setContentsMargins(14, 20, 14, 12)
+    connection_layout.setSpacing(6)
+    connection_layout.setContentsMargins(10, 14, 10, 8)
     device_layout.addWidget(connection_frame)
 
     # Connection buttons
@@ -127,10 +127,12 @@ def create_device_info_tab(ui):
     list_label = QtWidgets.QLabel("Available Devices", list_frame)
     list_label.setStyleSheet(get_subheader_style())
     list_layout.addWidget(list_label)
+    list_layout.addSpacing(8)
 
     ui.device_listbox = ListBox(list_frame)
-    ui.device_listbox.setMinimumHeight(90)
-    ui.device_listbox.setMaximumHeight(120)
+    ui.device_listbox.setMinimumHeight(60)
+    ui.device_listbox.setMaximumHeight(140)
+    ui.device_listbox.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
     ui.device_listbox.show_placeholder("No devices connected — enable USB debugging and connect via USB")
     list_layout.addWidget(ui.device_listbox)
 
@@ -150,8 +152,8 @@ def create_onboarding_panel(ui, parent_layout):
     """Create a step-by-step getting-started panel shown when no device is connected."""
     ui.onboarding_frame = QtWidgets.QGroupBox("Getting Started", ui.device_frame)
     onboarding_layout = QtWidgets.QVBoxLayout(ui.onboarding_frame)
-    onboarding_layout.setContentsMargins(14, 20, 14, 12)
-    onboarding_layout.setSpacing(4)
+    onboarding_layout.setContentsMargins(10, 11, 10, 7)
+    onboarding_layout.setSpacing(1)
     parent_layout.addWidget(ui.onboarding_frame)
 
     steps = [
@@ -164,8 +166,8 @@ def create_onboarding_panel(ui, parent_layout):
         step_label = QtWidgets.QLabel(step, ui.onboarding_frame)
         step_label.setStyleSheet(f"""
             color: {COLORS['text_secondary']};
-            font-size: 13px;
-            padding: 2px 0;
+            font-size: 12px;
+            padding: 0px;
         """)
         onboarding_layout.addWidget(step_label)
 
@@ -174,15 +176,15 @@ def create_device_info_display(ui, parent_layout):
     """Create the device information display section."""
     device_info_frame = QtWidgets.QGroupBox("Device Information", ui.device_frame)
     device_info_layout = QtWidgets.QVBoxLayout(device_info_frame)
-    device_info_layout.setContentsMargins(14, 20, 14, 12)
+    device_info_layout.setContentsMargins(10, 14, 10, 8)
     parent_layout.addWidget(device_info_frame, 1)
 
     # Info content with grid layout
     info_content = QtWidgets.QWidget(device_info_frame)
     info_layout = QtWidgets.QGridLayout(info_content)
     info_layout.setContentsMargins(0, 0, 0, 0)
-    info_layout.setHorizontalSpacing(16)
-    info_layout.setVerticalSpacing(8)
+    info_layout.setHorizontalSpacing(12)
+    info_layout.setVerticalSpacing(6)
     device_info_layout.addWidget(info_content)
 
     # Basic device info fields (left column)
@@ -243,11 +245,9 @@ def create_device_info_display(ui, parent_layout):
         info_layout.addWidget(value_label, row, 3, QtCore.Qt.AlignLeft)
         row += 1
 
-    # Debug information section
+    # Debug information section - collapsed by default so Basic/Advanced
+    # Information stay visible without scrolling on a 1080p display.
     max_rows = max(len(ui.info_fields), len(ui.adv_info_fields)) + 2
-    debug_heading = QtWidgets.QLabel("Debug Information", info_content)
-    debug_heading.setStyleSheet(get_subheader_style())
-    info_layout.addWidget(debug_heading, max_rows, 0, 1, 4, QtCore.Qt.AlignLeft)
 
     debug_frame = QtWidgets.QWidget(info_content)
     debug_layout = QtWidgets.QVBoxLayout(debug_frame)
@@ -259,6 +259,33 @@ def create_device_info_display(ui, parent_layout):
     ui.debug_text.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred)
     ui.debug_text.setStyleSheet(get_log_text_style())
     debug_layout.addWidget(ui.debug_text)
+    debug_frame.setVisible(False)
+
+    debug_toggle_btn = QtWidgets.QToolButton(info_content)
+    debug_toggle_btn.setText("▸ Debug Information")
+    debug_toggle_btn.setCheckable(True)
+    debug_toggle_btn.setChecked(False)
+    debug_toggle_btn.setCursor(QtCore.Qt.PointingHandCursor)
+    debug_toggle_btn.setStyleSheet(f"""
+        QToolButton {{
+            color: {COLORS['text_secondary']};
+            font-size: 12px;
+            font-weight: 600;
+            background: transparent;
+            border: none;
+            padding: 3px 0;
+        }}
+        QToolButton:hover {{
+            color: {COLORS['text_primary']};
+        }}
+    """)
+
+    def _toggle_debug(checked):
+        debug_frame.setVisible(checked)
+        debug_toggle_btn.setText(("▾" if checked else "▸") + " Debug Information")
+
+    debug_toggle_btn.toggled.connect(_toggle_debug)
+    info_layout.addWidget(debug_toggle_btn, max_rows, 0, 1, 4, QtCore.Qt.AlignLeft)
     info_layout.addWidget(debug_frame, max_rows + 1, 0, 1, 4)
 
 
@@ -266,9 +293,9 @@ def create_device_actions(ui, parent_layout):
     """Create the device actions section."""
     actions_frame = QtWidgets.QGroupBox("Quick Actions", ui.device_frame)
     actions_layout = QtWidgets.QGridLayout(actions_frame)
-    actions_layout.setHorizontalSpacing(10)
-    actions_layout.setVerticalSpacing(8)
-    actions_layout.setContentsMargins(14, 20, 14, 12)
+    actions_layout.setHorizontalSpacing(7)
+    actions_layout.setVerticalSpacing(6)
+    actions_layout.setContentsMargins(10, 14, 10, 8)
     parent_layout.addWidget(actions_frame)
 
     action_btn_style = get_action_button_style()

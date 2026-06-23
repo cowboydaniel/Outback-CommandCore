@@ -824,7 +824,7 @@ def get_value_style_for(value):
     if value is None or str(value).strip().upper() in ("N/A", "UNKNOWN", ""):
         return f"""
             QLabel {{
-                color: #666666;
+                color: #6b6b6b;
                 font-size: 13px;
                 font-weight: 400;
                 background: transparent;

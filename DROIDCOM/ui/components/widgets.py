@@ -11,7 +11,7 @@ import logging
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from ...utils.qt_dispatcher import emit_ui
-from ..icon_utils import get_status_icon, create_icon_label
+from ..icon_utils import get_status_icon, create_icon_label, load_svg_pixmap
 from ..styles import (
     get_main_stylesheet,
     get_card_button_style,
@@ -226,13 +226,14 @@ class WidgetsMixin:
         self.forensic_indicator.setVisible(False)
         header_layout.addWidget(self.forensic_indicator)
 
-        # Forensic Mode toggle - visual state changes drastically when active
-        self.forensic_mode_btn = QtWidgets.QPushButton("Forensic Mode", header_frame)
-        self.forensic_mode_btn.setCheckable(True)
-        self.forensic_mode_btn.setStyleSheet(self._forensic_button_style(active=False))
-        self.forensic_mode_btn.setCursor(QtCore.Qt.PointingHandCursor)
-        self.forensic_mode_btn.setToolTip("Toggle Forensic Mode")
-        self.forensic_mode_btn.clicked.connect(self.toggle_forensic_mode)
+        # Forensic Mode toggle - same icon-above/label-below component as
+        # Settings/Help for visual consistency; shield icon, turns red when active.
+        self.forensic_mode_btn, self.forensic_mode_icon, self.forensic_mode_label = \
+            self._create_icon_text_header_button(
+                header_frame, "shield", "Forensic Mode",
+                "Toggle Forensic Mode", self.toggle_forensic_mode,
+                checkable=True, return_widgets=True,
+            )
         header_layout.addWidget(self.forensic_mode_btn)
 
         # Settings button - icon with a visible text label beneath it
@@ -257,10 +258,16 @@ class WidgetsMixin:
 
         content_layout.addWidget(header_frame)
 
-    def _create_icon_text_header_button(self, parent, icon_name, label_text, tooltip, callback):
-        """A small header button: icon on top, a visible text label beneath it."""
+    def _create_icon_text_header_button(self, parent, icon_name, label_text, tooltip, callback,
+                                         checkable=False, return_widgets=False):
+        """A small header button: icon on top, a visible text label beneath it.
+
+        Used for Settings, Help, and Forensic Mode so all three header
+        buttons share identical sizing/styling.
+        """
         container = QtWidgets.QPushButton(parent)
         container.setToolTip(tooltip)
+        container.setCheckable(checkable)
         container.setStyleSheet(get_secondary_button_style())
         container.setCursor(QtCore.Qt.PointingHandCursor)
         container.setFixedSize(56, 44)
@@ -283,23 +290,26 @@ class WidgetsMixin:
             background: transparent;
         """)
         label.setAlignment(QtCore.Qt.AlignCenter)
+        label.setWordWrap(True)
         btn_layout.addWidget(label, 0, QtCore.Qt.AlignCenter)
 
+        if return_widgets:
+            return container, icon_widget, label
         return container
 
     def _forensic_button_style(self, active):
-        """Standard secondary style when inactive; unmistakeable red/glow when active."""
+        """Standard secondary style when inactive; unmistakeable red/glow when active.
+
+        Matches the fixed 56x44 icon-above/label-below layout shared with
+        the Settings and Help header buttons.
+        """
         if not active:
             return get_secondary_button_style()
         return f"""
             QPushButton {{
                 background-color: {COLORS['error_bg']};
-                color: white;
                 border: 2px solid {COLORS['error']};
                 border-radius: 8px;
-                padding: 9px 16px;
-                font-size: 12px;
-                font-weight: 700;
             }}
             QPushButton:hover {{
                 background-color: {COLORS['error']};
@@ -346,14 +356,28 @@ class WidgetsMixin:
             if self.write_blocker is not None:
                 self.write_blocker.enabled = True
             self.forensic_indicator.setVisible(True)
-            self.forensic_mode_btn.setText("FORENSIC MODE ACTIVE")
             self.forensic_mode_btn.setStyleSheet(self._forensic_button_style(active=True))
+            self.forensic_mode_icon.setPixmap(load_svg_pixmap('warning', 16))
+            self.forensic_mode_label.setText("FORENSIC\nMODE ACTIVE")
+            self.forensic_mode_label.setStyleSheet("""
+                font-size: 8px;
+                font-weight: 700;
+                color: white;
+                background: transparent;
+            """)
             self.log_message("Forensic Mode enabled - write operations disabled", level="warning")
         else:
             self.forensic_mode = False
             self.forensic_indicator.setVisible(False)
-            self.forensic_mode_btn.setText("Forensic Mode")
             self.forensic_mode_btn.setStyleSheet(self._forensic_button_style(active=False))
+            self.forensic_mode_icon.setPixmap(load_svg_pixmap('shield', 16))
+            self.forensic_mode_label.setText("Forensic Mode")
+            self.forensic_mode_label.setStyleSheet(f"""
+                font-size: 9px;
+                font-weight: 600;
+                color: {COLORS['text_secondary']};
+                background: transparent;
+            """)
             self.log_message("Forensic Mode disabled", level="info")
         if hasattr(self, "update_forensic_lock_state"):
             self.update_forensic_lock_state()
@@ -380,13 +404,6 @@ class WidgetsMixin:
         Tools" button (and its padding) is never clipped by the frame.
         """
         self.setup_status_frame = QtWidgets.QFrame(parent)
-        self.setup_status_frame.setStyleSheet(f"""
-            QFrame {{
-                background-color: {COLORS['surface']};
-                border: 1px solid {COLORS['surface_border']};
-                border-radius: 10px;
-            }}
-        """)
         self.setup_status_frame.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
         setup_layout = QtWidgets.QHBoxLayout(self.setup_status_frame)
         setup_layout.setContentsMargins(12, 7, 12, 7)
@@ -398,19 +415,28 @@ class WidgetsMixin:
             icon_label.setStyleSheet("background: transparent;")
             setup_layout.addWidget(icon_label)
 
-        # Status text
-        tools_status = "Installed" if self.platform_tools_installed else "Not Installed"
-        status_color = COLORS['success'] if self.platform_tools_installed else COLORS['text_secondary']
-        self.tools_label = QtWidgets.QLabel(
-            f"Android Platform Tools: <span style='color: {status_color}; font-weight: 600;'>{tools_status}</span>",
-            self.setup_status_frame
-        )
-        self.tools_label.setTextFormat(QtCore.Qt.RichText)
-        self.tools_label.setStyleSheet(f"""
-            font-size: 11px;
-            color: {COLORS['text_primary']};
-            background: transparent;
-        """)
+        # Status text - fully green when installed, neutral otherwise
+        if self.platform_tools_installed:
+            self.tools_label = QtWidgets.QLabel(
+                "Android Platform Tools: Installed", self.setup_status_frame
+            )
+            self.tools_label.setStyleSheet(f"""
+                font-size: 11px;
+                font-weight: 600;
+                color: {COLORS['success']};
+                background: transparent;
+            """)
+        else:
+            self.tools_label = QtWidgets.QLabel(
+                f"Android Platform Tools: <span style='color: {COLORS['text_secondary']}; font-weight: 600;'>Not Installed</span>",
+                self.setup_status_frame
+            )
+            self.tools_label.setTextFormat(QtCore.Qt.RichText)
+            self.tools_label.setStyleSheet(f"""
+                font-size: 11px;
+                color: {COLORS['text_primary']};
+                background: transparent;
+            """)
         setup_layout.addWidget(self.tools_label)
         setup_layout.addStretch()
 
@@ -438,6 +464,24 @@ class WidgetsMixin:
             """)
             reinstall_link.clicked.connect(self.install_platform_tools)
             setup_layout.addWidget(reinstall_link)
+
+        # Subtle dark-green tint on the whole bar reinforces the confirmed status
+        if self.platform_tools_installed:
+            self.setup_status_frame.setStyleSheet(f"""
+                QFrame {{
+                    background-color: {COLORS['success']}1a;
+                    border: 1px solid {COLORS['success']}55;
+                    border-radius: 10px;
+                }}
+            """)
+        else:
+            self.setup_status_frame.setStyleSheet(f"""
+                QFrame {{
+                    background-color: {COLORS['surface']};
+                    border: 1px solid {COLORS['surface_border']};
+                    border-radius: 10px;
+                }}
+            """)
 
         content_layout.addWidget(self.setup_status_frame)
 
@@ -618,7 +662,7 @@ class WidgetsMixin:
                 border-radius: 12px;
             }}
         """)
-        self.log_frame.setFixedWidth(400)
+        self.log_frame.setFixedWidth(420)
         log_layout = QtWidgets.QVBoxLayout(self.log_frame)
         log_layout.setContentsMargins(14, 14, 14, 14)
         log_layout.setSpacing(10)
@@ -662,6 +706,8 @@ class WidgetsMixin:
         self.log_text = QtWidgets.QTextEdit(self.log_frame)
         self.log_text.setReadOnly(True)
         self.log_text.setMinimumHeight(400)
+        self.log_text.setLineWrapMode(QtWidgets.QTextEdit.WidgetWidth)
+        self.log_text.setWordWrapMode(QtGui.QTextOption.WordWrap)
         self.log_text.setStyleSheet(get_log_text_style())
         log_layout.addWidget(self.log_text, 1)
         split_layout.addWidget(self.log_frame)
