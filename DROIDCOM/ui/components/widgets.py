@@ -289,6 +289,7 @@ class WidgetsMixin:
         container.setCursor(QtCore.Qt.PointingHandCursor)
         container.setFixedSize(70, 60)
         container.setIconSize(QtCore.QSize(20, 20))
+        container.setFocusPolicy(QtCore.Qt.NoFocus)
         container.clicked.connect(callback)
 
         btn_layout = QtWidgets.QVBoxLayout(container)
@@ -296,17 +297,22 @@ class WidgetsMixin:
         btn_layout.setSpacing(4)
         btn_layout.setAlignment(QtCore.Qt.AlignCenter)
 
-        icon_widget = create_icon_label(icon_name, size=20)
+        icon_widget = create_icon_label(icon_name, size=20, color="#00e5b0")
         icon_widget.setFixedSize(20, 20)
         icon_widget.setAlignment(QtCore.Qt.AlignCenter)
+        icon_widget.setFocusPolicy(QtCore.Qt.NoFocus)
+        icon_widget.setStyleSheet("background: transparent; border: 0px; outline: 0px;")
         btn_layout.addWidget(icon_widget, 0, QtCore.Qt.AlignCenter)
 
         label = QtWidgets.QLabel(label_text, container)
+        label.setFocusPolicy(QtCore.Qt.NoFocus)
         label.setStyleSheet(f"""
             font-size: 9px;
             font-weight: 600;
             color: {COLORS['text_secondary']};
             background: transparent;
+            border: 0px;
+            outline: 0px;
         """)
         label.setAlignment(QtCore.Qt.AlignCenter)
         label.setWordWrap(True)
@@ -339,6 +345,10 @@ class WidgetsMixin:
                 border-color: {COLORS['accent_primary']};
                 outline: 0px;
             }}
+            {selector}:focus {{
+                outline: 0px;
+                border: 1px solid #444444;
+            }}
             {selector}:pressed {{
                 background-color: #1f1f1f;
                 outline: 0px;
@@ -368,6 +378,10 @@ class WidgetsMixin:
                 background-color: #a30000;
                 border-color: white;
                 outline: 0px;
+            }}
+            QPushButton#forensic_btn:focus {{
+                outline: 0px;
+                border: 1px solid #8b0000;
             }}
         """
 
