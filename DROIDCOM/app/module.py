@@ -75,6 +75,8 @@ class AndroidToolsModule(
         self.device_serial = None  # Initialize device_serial to None
         self.active_case = None  # Forensic case currently open, if any
         self.write_blocker = None  # Set when a case is opened
+        self.forensic_mode = False  # When True, write ops are disabled and case metadata is enforced
+        self.case_metadata = None  # {"case_number", "examiner_name", "date"} once entered for this session
         self.threads = []  # Keep track of threads
         self.log_text = None  # Initialize to None, will be created in create_widgets
 
@@ -115,6 +117,67 @@ class AndroidToolsModule(
             self.log_message("Android Tools module loaded - will attempt auto-connection shortly")
             # Increase delay to 1000ms to ensure UI is fully loaded
             QtCore.QTimer.singleShot(1000, self.auto_connect_sequence)
+
+    def prompt_case_metadata(self):
+        """Show a dialog collecting Case Number / Examiner Name / Date and store it
+        in self.case_metadata for the remainder of the session. Returns True if
+        metadata was entered/confirmed, False if the dialog was cancelled."""
+        dialog = QtWidgets.QDialog(self)
+        dialog.setWindowTitle("Case Metadata")
+        layout = QtWidgets.QFormLayout(dialog)
+
+        case_number_edit = QtWidgets.QLineEdit(dialog)
+        examiner_edit = QtWidgets.QLineEdit(dialog)
+        date_edit = QtWidgets.QDateEdit(dialog)
+        date_edit.setCalendarPopup(True)
+        date_edit.setDate(QtCore.QDate.currentDate())
+
+        if self.case_metadata:
+            case_number_edit.setText(self.case_metadata.get("case_number", ""))
+            examiner_edit.setText(self.case_metadata.get("examiner_name", ""))
+
+        layout.addRow("Case Number:", case_number_edit)
+        layout.addRow("Examiner Name:", examiner_edit)
+        layout.addRow("Date:", date_edit)
+
+        buttons = QtWidgets.QDialogButtonBox(
+            QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel, dialog
+        )
+        layout.addRow(buttons)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+
+        if dialog.exec() == QtWidgets.QDialog.Accepted:
+            if not case_number_edit.text().strip() or not examiner_edit.text().strip():
+                QtWidgets.QMessageBox.warning(
+                    self, "Case Metadata Required", "Case Number and Examiner Name are required."
+                )
+                return False
+            self.case_metadata = {
+                "case_number": case_number_edit.text().strip(),
+                "examiner_name": examiner_edit.text().strip(),
+                "date": date_edit.date().toString("yyyy-MM-dd"),
+            }
+            self.log_message(
+                f"Case metadata recorded: case={self.case_metadata['case_number']} "
+                f"examiner={self.case_metadata['examiner_name']}"
+            )
+            return True
+        return False
+
+    def ensure_case_metadata(self):
+        """Gate for device operations: in Forensic Mode, require case metadata to
+        already be entered (or prompt for it) before allowing the operation to proceed.
+        Returns True if it's OK to proceed."""
+        if not self.forensic_mode:
+            return True
+        if self.case_metadata:
+            return True
+        QtWidgets.QMessageBox.information(
+            self, "Forensic Mode Active",
+            "Forensic Mode requires case metadata before any device operation."
+        )
+        return self.prompt_case_metadata()
 
     def _find_adb_path(self):
         """Find the ADB executable path on Windows"""

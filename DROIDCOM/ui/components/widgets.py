@@ -16,12 +16,21 @@ from ..styles import (
     get_main_stylesheet,
     get_card_button_style,
     get_action_button_style,
+    get_secondary_button_style,
     get_primary_button_style,
     get_log_text_style,
     COLORS,
     EMOJI_ICONS,
 )
 from ...tabs import tab_device_info, tab_tools
+from ...app.config import APP_VERSION, BUILD_DATE
+
+LOG_LEVEL_COLORS = {
+    "info": COLORS["text_primary"],
+    "warning": COLORS["warning"],
+    "error": COLORS["error"],
+    "success": COLORS["success"],
+}
 
 
 class GlowButton(QtWidgets.QPushButton):
@@ -90,7 +99,13 @@ class WidgetsMixin:
     """Mixin class providing widget creation and UI utility methods."""
 
     def create_widgets(self):
-        """Create the main UI widgets with modern styling"""
+        """Create the main UI widgets with modern styling.
+
+        Layout: a two-panel horizontal split. The left panel holds the
+        header, platform-tools status, and the tabbed device/tools UI.
+        The right panel is a fixed-width console that stays visible
+        regardless of which left-hand tab is active.
+        """
         # Apply the main stylesheet
         self.setStyleSheet(get_main_stylesheet())
 
@@ -102,30 +117,42 @@ class WidgetsMixin:
         main_container = QtWidgets.QWidget(self)
         main_layout.addWidget(main_container, 1)
 
-        content_layout = QtWidgets.QVBoxLayout(main_container)
-        content_layout.setContentsMargins(16, 16, 16, 16)
+        split_layout = QtWidgets.QHBoxLayout(main_container)
+        split_layout.setContentsMargins(16, 16, 16, 16)
+        split_layout.setSpacing(16)
+
+        # === LEFT PANEL ===
+        left_panel = QtWidgets.QWidget(main_container)
+        content_layout = QtWidgets.QVBoxLayout(left_panel)
+        content_layout.setContentsMargins(0, 0, 0, 0)
         content_layout.setSpacing(16)
+        split_layout.addWidget(left_panel, 1)
 
         # === HEADER SECTION ===
-        self._create_header(content_layout, main_container)
+        self._create_header(content_layout, left_panel)
 
         # === TOOLS STATUS SECTION ===
-        self._create_tools_status(content_layout, main_container)
+        self._create_tools_status(content_layout, left_panel)
 
         # === MAIN TAB WIDGET ===
-        self._create_main_tabs(content_layout, main_container)
+        self._create_main_tabs(content_layout, left_panel)
 
-        # === LOG SECTION ===
-        self._create_log_section(content_layout, main_container)
+        # === RIGHT PANEL (always-visible console) ===
+        self._create_log_section(split_layout, main_container)
 
         # === STATUS BAR ===
         self._create_status_bar(main_layout)
 
         # Initialize log with a welcome message
-        self.log_message("DroidCom initialized - Ready for device connection")
+        self.log_message("DroidCom initialized - Ready for device connection", level="info")
 
     def _create_header(self, content_layout, parent):
-        """Create the modern header section"""
+        """Create the modern header section.
+
+        Sized to its content via the layout's own size hints rather than a
+        hard ``setMaximumHeight`` clamp, so the logo/title can never be
+        clipped regardless of font/DPI.
+        """
         header_frame = QtWidgets.QFrame(parent)
         header_frame.setProperty("headerFrame", True)
         header_frame.setStyleSheet(f"""
@@ -136,11 +163,12 @@ class WidgetsMixin:
                     stop:1 transparent);
                 border: 1px solid {COLORS['surface_border']};
                 border-radius: 14px;
-                padding: 10px;
             }}
         """)
+        header_frame.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
         header_layout = QtWidgets.QHBoxLayout(header_frame)
-        header_layout.setContentsMargins(12, 8, 12, 8)
+        header_layout.setContentsMargins(16, 12, 16, 12)
+        header_layout.setSpacing(10)
 
         # Left side - Icon and Title
         title_container = QtWidgets.QWidget(header_frame)
@@ -149,10 +177,8 @@ class WidgetsMixin:
         title_layout.setSpacing(10)
 
         # Android Robot Icon (using SVG)
-        icon_label = create_icon_label('android-robot', size=22)
-        icon_label.setStyleSheet(f"""
-            background: transparent;
-        """)
+        icon_label = create_icon_label('android-robot', size=28)
+        icon_label.setStyleSheet("background: transparent;")
         title_layout.addWidget(icon_label)
 
         # Title and subtitle
@@ -163,44 +189,151 @@ class WidgetsMixin:
 
         header_label = QtWidgets.QLabel("DROIDCOM", text_container)
         header_label.setStyleSheet(f"""
-            font-size: 15px;
+            font-size: 18px;
             font-weight: 700;
             color: {COLORS['text_primary']};
             background: transparent;
             letter-spacing: 1px;
         """)
+        header_label.setWordWrap(False)
         text_layout.addWidget(header_label)
 
         subtitle_label = QtWidgets.QLabel("Android Device Management & Control", text_container)
         subtitle_label.setStyleSheet(f"""
-            font-size: 10px;
+            font-size: 11px;
             font-weight: 500;
             color: {COLORS['text_secondary']};
             background: transparent;
         """)
+        subtitle_label.setWordWrap(False)
         text_layout.addWidget(subtitle_label)
 
         title_layout.addWidget(text_container)
         header_layout.addWidget(title_container)
         header_layout.addStretch()
 
-        # Right side - Version badge
-        version_badge = QtWidgets.QLabel("v2.0", header_frame)
-        version_badge.setStyleSheet(f"""
-            background-color: {COLORS['accent_muted']};
-            color: {COLORS['accent_primary']};
-            padding: 3px 10px;
+        # Forensic Mode active indicator (hidden until toggled on)
+        self.forensic_indicator = QtWidgets.QLabel("FORENSIC MODE ACTIVE", header_frame)
+        self.forensic_indicator.setStyleSheet(f"""
+            background-color: {COLORS['error_bg']};
+            color: white;
+            padding: 4px 10px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 700;
+        """)
+        self.forensic_indicator.setVisible(False)
+        header_layout.addWidget(self.forensic_indicator)
+
+        # Forensic Mode toggle
+        self.forensic_mode_btn = QtWidgets.QPushButton("Forensic Mode", header_frame)
+        self.forensic_mode_btn.setCheckable(True)
+        self.forensic_mode_btn.setStyleSheet(get_secondary_button_style())
+        self.forensic_mode_btn.setCursor(QtCore.Qt.PointingHandCursor)
+        self.forensic_mode_btn.clicked.connect(self.toggle_forensic_mode)
+        header_layout.addWidget(self.forensic_mode_btn)
+
+        # Settings button
+        settings_btn = QtWidgets.QPushButton(header_frame)
+        settings_btn.setToolTip("Settings / Preferences")
+        settings_icon = create_icon_label(EMOJI_ICONS['settings'], size=16)
+        settings_layout = QtWidgets.QHBoxLayout(settings_btn)
+        settings_layout.addWidget(settings_icon)
+        settings_layout.setContentsMargins(8, 0, 8, 0)
+        settings_btn.setStyleSheet(get_secondary_button_style())
+        settings_btn.setCursor(QtCore.Qt.PointingHandCursor)
+        settings_btn.setFixedSize(36, 32)
+        settings_btn.clicked.connect(self.open_settings_dialog)
+        header_layout.addWidget(settings_btn)
+
+        # Help button
+        help_btn = QtWidgets.QPushButton("?", header_frame)
+        help_btn.setToolTip("Help / Documentation")
+        help_btn.setStyleSheet(get_secondary_button_style())
+        help_btn.setCursor(QtCore.Qt.PointingHandCursor)
+        help_btn.setFixedSize(32, 32)
+        help_btn.clicked.connect(self.open_help_dialog)
+        header_layout.addWidget(help_btn)
+
+        # Connection status indicator
+        self.connection_indicator = QtWidgets.QLabel("Disconnected", header_frame)
+        self.connection_indicator.setStyleSheet(f"""
+            background-color: {COLORS['background_hover']};
+            color: {COLORS['text_secondary']};
+            padding: 4px 10px;
             border-radius: 10px;
             font-size: 11px;
             font-weight: 600;
         """)
-        header_layout.addWidget(version_badge)
+        header_layout.addWidget(self.connection_indicator)
 
-        header_frame.setMaximumHeight(48)
         content_layout.addWidget(header_frame)
 
+    def set_connection_indicator(self, connected, device_name=None):
+        """Update the persistent connection status indicator."""
+        if not hasattr(self, 'connection_indicator'):
+            return
+        if connected:
+            label = f"Connected: {device_name}" if device_name else "Connected"
+            self.connection_indicator.setText(label)
+            self.connection_indicator.setStyleSheet(f"""
+                background-color: {COLORS['success_bg']};
+                color: white;
+                padding: 4px 10px;
+                border-radius: 10px;
+                font-size: 11px;
+                font-weight: 600;
+            """)
+        else:
+            self.connection_indicator.setText("Disconnected")
+            self.connection_indicator.setStyleSheet(f"""
+                background-color: {COLORS['background_hover']};
+                color: {COLORS['text_secondary']};
+                padding: 4px 10px;
+                border-radius: 10px;
+                font-size: 11px;
+                font-weight: 600;
+            """)
+
+    def toggle_forensic_mode(self):
+        """Enable/disable Forensic Mode: gates write operations and enforces
+        case metadata entry while active."""
+        enabling = self.forensic_mode_btn.isChecked()
+        if enabling:
+            if not self.case_metadata and not self.prompt_case_metadata():
+                self.forensic_mode_btn.setChecked(False)
+                return
+            self.forensic_mode = True
+            if self.write_blocker is not None:
+                self.write_blocker.enabled = True
+            self.forensic_indicator.setVisible(True)
+            self.log_message("Forensic Mode enabled - write operations disabled", level="warning")
+        else:
+            self.forensic_mode = False
+            self.forensic_indicator.setVisible(False)
+            self.log_message("Forensic Mode disabled", level="info")
+
+    def open_settings_dialog(self):
+        """Show a basic settings/preferences dialog."""
+        QtWidgets.QMessageBox.information(
+            self, "Settings",
+            f"DROIDCOM v{APP_VERSION}\n\nSettings/preferences are not yet configurable from this dialog."
+        )
+
+    def open_help_dialog(self):
+        """Show a basic help/documentation dialog."""
+        QtWidgets.QMessageBox.information(
+            self, "Help & Documentation",
+            "See DROIDCOM/README.md in the repository for full usage documentation, "
+            "feature descriptions, and setup instructions."
+        )
+
     def _create_tools_status(self, content_layout, parent):
-        """Create the tools status section"""
+        """Create the tools status section.
+
+        No hard max-height clamp is applied here, so the "Install Platform
+        Tools" button (and its padding) is never clipped by the frame.
+        """
         self.setup_status_frame = QtWidgets.QFrame(parent)
         self.setup_status_frame.setStyleSheet(f"""
             QFrame {{
@@ -209,8 +342,9 @@ class WidgetsMixin:
                 border-radius: 10px;
             }}
         """)
+        self.setup_status_frame.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
         setup_layout = QtWidgets.QHBoxLayout(self.setup_status_frame)
-        setup_layout.setContentsMargins(12, 6, 12, 6)
+        setup_layout.setContentsMargins(14, 10, 14, 10)
         setup_layout.setSpacing(10)
 
         # Status icon
@@ -241,7 +375,6 @@ class WidgetsMixin:
             tools_btn.setCursor(QtCore.Qt.PointingHandCursor)
             setup_layout.addWidget(tools_btn)
 
-        self.setup_status_frame.setMaximumHeight(36)
         content_layout.addWidget(self.setup_status_frame)
 
     def _create_main_tabs(self, content_layout, parent):
@@ -282,7 +415,7 @@ class WidgetsMixin:
         button.clicked.connect(callback)
         
         if icon:
-            icon_widget = create_icon_label(icon, size=20)
+            icon_widget = create_icon_label(icon, size=16)
             text_label = QtWidgets.QLabel(text)
             button.setText("")
             button_layout = QtWidgets.QHBoxLayout(button)
@@ -410,19 +543,84 @@ class WidgetsMixin:
             self._add_tool_button(layout, 0, 1, "Evidence Log", self.view_evidence_log, "clipboard")
             self._add_tool_button(layout, 1, 1, "Custody Report", self.generate_chain_of_custody_report, "file")
 
-    def _create_log_section(self, content_layout, parent):
-        """Create the log section with modern styling"""
-        self.log_frame = QtWidgets.QGroupBox("Console Output", parent)
+    def _create_log_section(self, split_layout, parent):
+        """Create the right-hand console panel: fixed width, full window
+        height, always visible regardless of the active left-hand tab."""
+        self.log_frame = QtWidgets.QFrame(parent)
+        self.log_frame.setStyleSheet(f"""
+            QFrame {{
+                background-color: {COLORS['surface']};
+                border: 1px solid {COLORS['surface_border']};
+                border-radius: 12px;
+            }}
+        """)
+        self.log_frame.setFixedWidth(400)
         log_layout = QtWidgets.QVBoxLayout(self.log_frame)
-        log_layout.setContentsMargins(12, 20, 12, 12)
+        log_layout.setContentsMargins(14, 14, 14, 14)
+        log_layout.setSpacing(10)
+
+        # Header row: "Session Log" title + Clear/Copy/Export buttons
+        header_row = QtWidgets.QHBoxLayout()
+        header_row.setSpacing(8)
+
+        session_log_label = QtWidgets.QLabel("Session Log", self.log_frame)
+        session_log_label.setStyleSheet(f"""
+            color: {COLORS['accent_primary']};
+            font-size: 16px;
+            font-weight: 700;
+            background: transparent;
+        """)
+        header_row.addWidget(session_log_label)
+        header_row.addStretch()
+
+        console_btn_style = get_secondary_button_style()
+
+        clear_btn = QtWidgets.QPushButton("Clear", self.log_frame)
+        clear_btn.setStyleSheet(console_btn_style)
+        clear_btn.setCursor(QtCore.Qt.PointingHandCursor)
+        clear_btn.clicked.connect(self._clear_console)
+        header_row.addWidget(clear_btn)
+
+        copy_btn = QtWidgets.QPushButton("Copy", self.log_frame)
+        copy_btn.setStyleSheet(console_btn_style)
+        copy_btn.setCursor(QtCore.Qt.PointingHandCursor)
+        copy_btn.clicked.connect(self._copy_console)
+        header_row.addWidget(copy_btn)
+
+        export_btn = QtWidgets.QPushButton("Export", self.log_frame)
+        export_btn.setStyleSheet(console_btn_style)
+        export_btn.setCursor(QtCore.Qt.PointingHandCursor)
+        export_btn.clicked.connect(self._export_console)
+        header_row.addWidget(export_btn)
+
+        log_layout.addLayout(header_row)
 
         self.log_text = QtWidgets.QTextEdit(self.log_frame)
         self.log_text.setReadOnly(True)
-        self.log_text.setMinimumHeight(140)
-        self.log_text.setMaximumHeight(180)
+        self.log_text.setMinimumHeight(400)
         self.log_text.setStyleSheet(get_log_text_style())
-        log_layout.addWidget(self.log_text)
-        content_layout.addWidget(self.log_frame)
+        log_layout.addWidget(self.log_text, 1)
+        split_layout.addWidget(self.log_frame)
+
+    def _clear_console(self):
+        self.log_text.clear()
+
+    def _copy_console(self):
+        QtWidgets.QApplication.clipboard().setText(self.log_text.toPlainText())
+        self.update_status("Console output copied to clipboard")
+
+    def _export_console(self):
+        path, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self, "Export Console Output", "droidcom_session_log.txt", "Text Files (*.txt)"
+        )
+        if not path:
+            return
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(self.log_text.toPlainText())
+            self.update_status(f"Console output exported to {path}")
+        except Exception as e:
+            QtWidgets.QMessageBox.critical(self, "Export Failed", f"Could not export console output: {str(e)}")
 
     def _create_status_bar(self, main_layout):
         """Create the modern status bar"""
@@ -451,6 +649,19 @@ class WidgetsMixin:
         status_layout.addWidget(self.status_label)
         status_layout.addStretch()
 
+        # Version + build date
+        version_label = QtWidgets.QLabel(f"v{APP_VERSION} ({BUILD_DATE})", status_frame)
+        version_label.setStyleSheet(f"""
+            color: {COLORS['text_muted']};
+            font-size: 11px;
+            background: transparent;
+        """)
+        status_layout.addWidget(version_label)
+
+        separator = QtWidgets.QLabel("|", status_frame)
+        separator.setStyleSheet(f"color: {COLORS['surface_border']}; background: transparent;")
+        status_layout.addWidget(separator)
+
         # Branding
         brand_label = QtWidgets.QLabel("CommandCore Suite", status_frame)
         brand_label.setStyleSheet(f"""
@@ -462,15 +673,21 @@ class WidgetsMixin:
 
         main_layout.addWidget(status_frame)
 
-    def log_message(self, message):
-        """Add a message to the log console with timestamp"""
+    def log_message(self, message, level="info"):
+        """Add a message to the log console with timestamp, colour-coded by severity.
+
+        level: one of "info" (white), "warning" (yellow), "error" (red), "success" (green).
+        """
         logging.info(f"[AndroidTools] {message}")
 
         if self.log_text is not None:
             try:
                 timestamp = time.strftime('%H:%M:%S')
-                # Add colored timestamp
-                formatted_msg = f'<span style="color: {COLORS["accent_primary"]};">[{timestamp}]</span> <span style="color: {COLORS["text_primary"]};">{message}</span>'
+                color = LOG_LEVEL_COLORS.get(level, LOG_LEVEL_COLORS["info"])
+                formatted_msg = (
+                    f'<span style="color: {COLORS["accent_primary"]};">[{timestamp}]</span> '
+                    f'<span style="color: {color};">{message}</span>'
+                )
                 self.log_text.append(formatted_msg)
                 scrollbar = self.log_text.verticalScrollBar()
                 scrollbar.setValue(scrollbar.maximum())
@@ -524,6 +741,14 @@ class WidgetsMixin:
 
     def update_device_info(self):
         """Update the device info display with the connected device information"""
+        if hasattr(self, 'onboarding_frame'):
+            self.onboarding_frame.setVisible(not self.device_info)
+        if hasattr(self, 'set_connection_indicator'):
+            self.set_connection_indicator(
+                connected=bool(self.device_info),
+                device_name=(self.device_info or {}).get('model') if self.device_info else None,
+            )
+
         if not self.device_info:
             return
 
@@ -549,6 +774,12 @@ class WidgetsMixin:
             self.info_fields['IMEI'].setText(self.device_info['imei'])
         elif 'device_id' in self.device_info:
             self.info_fields['IMEI'].setText(f"{self.device_info['device_id']} (Android ID)")
+
+        if 'build_number' in self.device_info:
+            self.info_fields['Build Number'].setText(self.device_info['build_number'])
+
+        if 'security_patch' in self.device_info:
+            self.adv_info_fields['Security Patch Level'].setText(self.device_info['security_patch'])
 
         if 'storage' in self.device_info:
             self.adv_info_fields['Storage'].setText(self.device_info['storage'])

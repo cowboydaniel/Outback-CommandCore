@@ -164,8 +164,8 @@ def get_main_stylesheet():
         padding: 0 10px;
         background-color: {COLORS['surface']};
         color: {COLORS['accent_primary']};
-        font-size: 14px;
-        font-weight: 600;
+        font-size: 16px;
+        font-weight: 700;
     }}
 
     /* ===== TAB WIDGET ===== */
@@ -751,14 +751,47 @@ def get_header_style():
 
 
 def get_subheader_style():
-    """Style for section subheaders"""
+    """Style for section subheaders (smaller/lighter than QGroupBox section titles)"""
     return f"""
         QLabel {{
-            color: {COLORS['accent_primary']};
-            font-size: 15px;
+            color: {COLORS['text_secondary']};
+            font-size: 12px;
             font-weight: 600;
+            text-transform: uppercase;
             background: transparent;
             padding: 3px 0;
+        }}
+    """
+
+
+def get_secondary_button_style():
+    """Style for secondary action buttons (e.g. WiFi ADB, Refresh, Remove Offline)"""
+    return f"""
+        QPushButton {{
+            background-color: {COLORS['surface_light']};
+            color: {COLORS['text_secondary']};
+            border: 1px solid {COLORS['surface_border']};
+            border-radius: 8px;
+            padding: 9px 16px;
+            font-size: 12px;
+            font-weight: 500;
+            min-height: 22px;
+        }}
+
+        QPushButton:hover {{
+            background-color: {COLORS['background_hover']};
+            color: {COLORS['text_primary']};
+            border-color: {COLORS['accent_primary']};
+        }}
+
+        QPushButton:pressed {{
+            background-color: {COLORS['surface_border']};
+        }}
+
+        QPushButton:disabled {{
+            background-color: {COLORS['background_light']};
+            color: {COLORS['text_disabled']};
+            border-color: {COLORS['background_hover']};
         }}
     """
 
@@ -860,4 +893,12 @@ EMOJI_ICONS = {
     'install': 'download',
     'apps': 'rocket',
     'log': 'clipboard',
+    'settings': 'settings',
+    'help': 'file',
+    'forensic': 'shield',
+    'case': 'clipboard',
+    'clear': 'trash',
+    'copy': 'clipboard',
+    'export': 'upload',
+    'dismiss': 'error',
 }

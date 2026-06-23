@@ -129,6 +129,8 @@ class AcquisitionMixin:
         shows the user why).
         """
         blocker = getattr(self, "write_blocker", None)
+        if not blocker and getattr(self, "forensic_mode", False):
+            blocker = WriteBlocker(enabled=True)
         if not blocker:
             return True
         try:

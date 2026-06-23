@@ -18,6 +18,7 @@ IS_WINDOWS = platform.system().lower() == 'windows'
 
 # Application version
 APP_VERSION = '1.1.0'
+BUILD_DATE = '2026-06-23'
 
 # Default ADB port for WiFi connections
 DEFAULT_ADB_PORT = 5555

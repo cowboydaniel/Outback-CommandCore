@@ -161,6 +161,9 @@ class ConnectionMixin:
             )
             return
 
+        if not self.ensure_case_metadata():
+            return
+
         # Check if a device is selected
         selected_items = self.device_listbox.selectedItems()
         if not selected_items:
@@ -317,6 +320,11 @@ class ConnectionMixin:
             def update_ui():
                 self.device_listbox.clear()
 
+                if not devices:
+                    self.device_listbox.show_placeholder(
+                        "No devices connected — enable USB debugging and connect via USB"
+                    )
+
                 if devices:
                     for serial, state in devices:
                         if "DISCONNECTED" in state:
@@ -380,6 +388,17 @@ class ConnectionMixin:
                 self.parent, "Not Installed", "Android Platform Tools are not installed."
             )
             return
+
+        reply = QtWidgets.QMessageBox.question(
+            self.parent,
+            "Remove Offline Devices",
+            "Remove all offline/disconnected devices from the list?",
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+            QtWidgets.QMessageBox.No,
+        )
+        if reply != QtWidgets.QMessageBox.Yes:
+            return
+
         threading.Thread(target=self._remove_offline_devices_task, daemon=True).start()
 
     def _remove_offline_devices_task(self):
@@ -438,6 +457,11 @@ class ConnectionMixin:
 
             def update_ui():
                 self.device_listbox.clear()
+                if not connected_serials:
+                    self.device_listbox.show_placeholder(
+                        "No devices connected — enable USB debugging and connect via USB"
+                    )
+                    return
                 for serial in connected_serials:
                     self.device_listbox.addItem(serial)
                 if self.device_listbox.count() > 0:
