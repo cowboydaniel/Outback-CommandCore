@@ -21,6 +21,7 @@ from ..styles import (
     get_log_text_style,
     get_value_style_for,
     get_value_style,
+    get_subheader_style,
     COLORS,
     EMOJI_ICONS,
 )
