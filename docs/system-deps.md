@@ -294,6 +294,17 @@ pip-installed or auto-cloned, so it still needs a manual/system install.
 `libimobiledevice` (already required above) remains the underlying transport
 these tools build on for acquiring data from the device.
 
+### checkra1n Jailbreak (Optional)
+
+ARES-i's **Security** category can launch [checkra1n](https://checkra1n.com)
+against a connected device. checkra1n exploits the `checkm8` bootrom
+vulnerability, which only affects iPhones with an **A5 through A11** SoC
+(iPhone 4S through iPhone 8 / 8 Plus / X); ARES-i detects the connected
+device's chip from its `ProductType` and refuses to launch checkra1n outside
+that range. checkra1n ships as a standalone AppImage with no pip or apt
+package -- download it from https://checkra1n.com and place the `checkra1n`
+binary on your `PATH` (e.g. `/usr/local/bin`).
+
 ---
 
 ## DROIDCOM
