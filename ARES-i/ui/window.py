@@ -1872,6 +1872,50 @@ class IOSToolsModule(BaseWindow):
         certs_btn.clicked.connect(self.view_certificates)
         layout.addWidget(certs_btn)
 
+        # checkra1n Jailbreak button (A5-A11 devices only)
+        checkra1n_btn = QPushButton("checkra1n Jailbreak")
+        checkra1n_btn.setToolTip("Launch checkra1n for devices in the A5-A11 (checkm8) range")
+        checkra1n_btn.clicked.connect(self.launch_checkra1n)
+        layout.addWidget(checkra1n_btn)
+
+    def launch_checkra1n(self):
+        """Launch checkra1n against the connected device, gated to the A5-A11 (checkm8) chip range"""
+        if not self.device_connected:
+            self.show_info("Error", "No device connected")
+            return
+
+        product_type = self.device_info.get('model_identifier', '')
+        chip = self._get_chip_for_product_type(product_type)
+
+        if not self.is_checkra1n_compatible(product_type):
+            self.show_info(
+                "Unsupported Device",
+                f"checkra1n relies on the checkm8 bootrom exploit, which only covers "
+                f"A5-A11 devices (iPhone 4S through iPhone 8/8 Plus/X).\n\n"
+                f"This device ({product_type or 'unknown model'}) reports chip "
+                f"{chip or 'unknown'}, which is outside that range."
+            )
+            return
+
+        path = shutil.which("checkra1n")
+        if not path:
+            self.show_info(
+                "checkra1n Not Found",
+                "checkra1n is a standalone application distributed as an AppImage "
+                "and is not available via pip or apt.\n\n"
+                "Download it from https://checkra1n.com and place it on your PATH "
+                "as 'checkra1n' (e.g. in /usr/local/bin)."
+            )
+            return
+
+        self.log_message(f"Launching checkra1n for {product_type} (chip {chip})...")
+        try:
+            subprocess.Popen([path])
+            self.status_var.setText("checkra1n launched")
+        except Exception as e:
+            self.log_message(f"Failed to launch checkra1n: {str(e)}")
+            self.show_info("checkra1n Error", f"Failed to launch checkra1n: {str(e)}")
+
     def _add_forensics_widgets(self, layout):
         """Add forensics tooling widgets to the layout"""
         ileapp_btn = QPushButton("iLEAPP Parser")
@@ -5092,9 +5136,33 @@ class IOSToolsModule(BaseWindow):
         
         # Combine all device dictionaries
         all_devices = {**iphone_models, **ipad_models, **ipod_models}
-        
+
         # Return the friendly name if found, otherwise return the identifier
         return all_devices.get(identifier, identifier)
+
+    # ProductType -> Apple SoC generation, for iPhones in the A5-A11 range
+    # (the checkm8 bootrom exploit's supported chips, used by checkra1n).
+    IPHONE_CHIP_MAP = {
+        "iPhone4,1": "A5",        # iPhone 4S
+        "iPhone5,1": "A6", "iPhone5,2": "A6", "iPhone5,3": "A6", "iPhone5,4": "A6",  # 5 / 5C
+        "iPhone6,1": "A7", "iPhone6,2": "A7",  # 5S
+        "iPhone7,1": "A8", "iPhone7,2": "A8",  # 6 Plus / 6
+        "iPhone8,1": "A9", "iPhone8,2": "A9", "iPhone8,4": "A9",  # 6S / 6S Plus / SE (1st gen)
+        "iPhone9,1": "A10", "iPhone9,2": "A10", "iPhone9,3": "A10", "iPhone9,4": "A10",  # 7 / 7 Plus
+        "iPhone10,1": "A11", "iPhone10,2": "A11", "iPhone10,3": "A11",  # 8 / 8 Plus / X
+        "iPhone10,4": "A11", "iPhone10,5": "A11", "iPhone10,6": "A11",
+    }
+
+    # checkra1n relies on the checkm8 bootrom exploit, which only covers A5-A11 SoCs.
+    CHECKRA1N_SUPPORTED_CHIPS = {"A5", "A6", "A7", "A8", "A9", "A10", "A11"}
+
+    def _get_chip_for_product_type(self, product_type):
+        """Return the Apple SoC generation (e.g. "A11") for an iPhone ProductType, or None if unknown."""
+        return self.IPHONE_CHIP_MAP.get(product_type)
+
+    def is_checkra1n_compatible(self, product_type):
+        """Return True if the given iPhone ProductType falls in checkra1n's A5-A11 support range."""
+        return self._get_chip_for_product_type(product_type) in self.CHECKRA1N_SUPPORTED_CHIPS
 
     def _get_device_info_from_libimobiledevice(self, udid):
         """Get device information using libimobiledevice tools"""
@@ -5145,7 +5213,8 @@ class IOSToolsModule(BaseWindow):
                 "activation_status": device_info.get('ActivationState', 'Unknown'),
                 "jailbroken": "Unknown",
                 "ram": ram,
-                "cpu": cpu
+                "cpu": cpu,
+                "chip": self._get_chip_for_product_type(model_identifier)
             }
             
             self.log_message(f"Device info retrieved: {standardized_info['device_name']} running iOS {standardized_info['ios_version']}")
