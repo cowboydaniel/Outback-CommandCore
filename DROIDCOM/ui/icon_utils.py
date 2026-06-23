@@ -41,10 +41,24 @@ def load_svg_pixmap(icon_name, size=16):
     return QtGui.QPixmap()
 
 
-def create_icon_label(icon_name, size=16, tooltip=None):
-    """Create a QLabel with an SVG icon"""
+def tint_pixmap(pixmap, color):
+    """Recolor the opaque pixels of a pixmap to a flat colour, preserving alpha."""
+    tinted = QtGui.QPixmap(pixmap.size())
+    tinted.fill(QtCore.Qt.GlobalColor.transparent)
+    painter = QtGui.QPainter(tinted)
+    painter.drawPixmap(0, 0, pixmap)
+    painter.setCompositionMode(QtGui.QPainter.CompositionMode_SourceIn)
+    painter.fillRect(tinted.rect(), QtGui.QColor(color))
+    painter.end()
+    return tinted
+
+
+def create_icon_label(icon_name, size=16, tooltip=None, color=None):
+    """Create a QLabel with an SVG icon, optionally tinted to a flat colour."""
     label = QtWidgets.QLabel()
     pixmap = load_svg_pixmap(icon_name, size)
+    if color:
+        pixmap = tint_pixmap(pixmap, color)
     label.setPixmap(pixmap)
     if tooltip:
         label.setToolTip(tooltip)

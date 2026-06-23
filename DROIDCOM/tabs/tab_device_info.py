@@ -16,6 +16,7 @@ from ..ui.icon_utils import create_icon_label
 from ..ui.styles import (
     get_subheader_style,
     get_value_style,
+    get_value_style_for,
 )
 
 
@@ -35,8 +36,8 @@ def create_device_info_tab(ui):
     # Create content widget and layout
     content_widget = QtWidgets.QWidget()
     device_layout = QtWidgets.QVBoxLayout(content_widget)
-    device_layout.setContentsMargins(12, 12, 12, 12)
-    device_layout.setSpacing(14)
+    device_layout.setContentsMargins(8, 8, 8, 8)
+    device_layout.setSpacing(10)
 
     # Set up the scroll area
     scroll_area.setWidget(content_widget)
@@ -48,8 +49,8 @@ def create_device_info_tab(ui):
     # === CONNECTION SECTION ===
     connection_frame = QtWidgets.QGroupBox("Device Connection", ui.device_frame)
     connection_layout = QtWidgets.QVBoxLayout(connection_frame)
-    connection_layout.setSpacing(12)
-    connection_layout.setContentsMargins(16, 24, 16, 16)
+    connection_layout.setSpacing(8)
+    connection_layout.setContentsMargins(14, 20, 14, 12)
     device_layout.addWidget(connection_frame)
 
     # Connection buttons
@@ -149,8 +150,8 @@ def create_onboarding_panel(ui, parent_layout):
     """Create a step-by-step getting-started panel shown when no device is connected."""
     ui.onboarding_frame = QtWidgets.QGroupBox("Getting Started", ui.device_frame)
     onboarding_layout = QtWidgets.QVBoxLayout(ui.onboarding_frame)
-    onboarding_layout.setContentsMargins(16, 24, 16, 16)
-    onboarding_layout.setSpacing(8)
+    onboarding_layout.setContentsMargins(14, 20, 14, 12)
+    onboarding_layout.setSpacing(4)
     parent_layout.addWidget(ui.onboarding_frame)
 
     steps = [
@@ -173,15 +174,15 @@ def create_device_info_display(ui, parent_layout):
     """Create the device information display section."""
     device_info_frame = QtWidgets.QGroupBox("Device Information", ui.device_frame)
     device_info_layout = QtWidgets.QVBoxLayout(device_info_frame)
-    device_info_layout.setContentsMargins(16, 24, 16, 16)
+    device_info_layout.setContentsMargins(14, 20, 14, 12)
     parent_layout.addWidget(device_info_frame, 1)
 
     # Info content with grid layout
     info_content = QtWidgets.QWidget(device_info_frame)
     info_layout = QtWidgets.QGridLayout(info_content)
     info_layout.setContentsMargins(0, 0, 0, 0)
-    info_layout.setHorizontalSpacing(20)
-    info_layout.setVerticalSpacing(12)
+    info_layout.setHorizontalSpacing(16)
+    info_layout.setVerticalSpacing(8)
     device_info_layout.addWidget(info_content)
 
     # Basic device info fields (left column)
@@ -203,6 +204,7 @@ def create_device_info_display(ui, parent_layout):
         "CPU": QtWidgets.QLabel("N/A", info_content),
         "Kernel": QtWidgets.QLabel("N/A", info_content),
         "Security Patch Level": QtWidgets.QLabel("N/A", info_content),
+        "Bootloader Status": QtWidgets.QLabel("N/A", info_content),
     }
 
     # Set column widths
@@ -223,12 +225,11 @@ def create_device_info_display(ui, parent_layout):
     # Add info fields with modern styling
     row = 1
     label_style = get_label_style()
-    value_style = get_value_style()
 
     for label_text, value_label in ui.info_fields.items():
         label = QtWidgets.QLabel(f"{label_text}:", info_content)
         label.setStyleSheet(label_style)
-        value_label.setStyleSheet(value_style)
+        value_label.setStyleSheet(get_value_style_for(value_label.text()))
         info_layout.addWidget(label, row, 0, QtCore.Qt.AlignLeft)
         info_layout.addWidget(value_label, row, 1, QtCore.Qt.AlignLeft)
         row += 1
@@ -237,7 +238,7 @@ def create_device_info_display(ui, parent_layout):
     for label_text, value_label in ui.adv_info_fields.items():
         label = QtWidgets.QLabel(f"{label_text}:", info_content)
         label.setStyleSheet(label_style)
-        value_label.setStyleSheet(value_style)
+        value_label.setStyleSheet(get_value_style_for(value_label.text()))
         info_layout.addWidget(label, row, 2, QtCore.Qt.AlignLeft)
         info_layout.addWidget(value_label, row, 3, QtCore.Qt.AlignLeft)
         row += 1
@@ -253,8 +254,9 @@ def create_device_info_display(ui, parent_layout):
     debug_layout.setContentsMargins(0, 0, 0, 0)
     ui.debug_text = QtWidgets.QTextEdit(debug_frame)
     ui.debug_text.setReadOnly(True)
-    ui.debug_text.setMinimumHeight(100)
-    ui.debug_text.setMaximumHeight(140)
+    ui.debug_text.setPlaceholderText("Connect a device to view debug output")
+    ui.debug_text.setMinimumHeight(80)
+    ui.debug_text.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred)
     ui.debug_text.setStyleSheet(get_log_text_style())
     debug_layout.addWidget(ui.debug_text)
     info_layout.addWidget(debug_frame, max_rows + 1, 0, 1, 4)
@@ -264,89 +266,43 @@ def create_device_actions(ui, parent_layout):
     """Create the device actions section."""
     actions_frame = QtWidgets.QGroupBox("Quick Actions", ui.device_frame)
     actions_layout = QtWidgets.QGridLayout(actions_frame)
-    actions_layout.setHorizontalSpacing(12)
-    actions_layout.setVerticalSpacing(12)
-    actions_layout.setContentsMargins(16, 24, 16, 16)
+    actions_layout.setHorizontalSpacing(10)
+    actions_layout.setVerticalSpacing(8)
+    actions_layout.setContentsMargins(14, 20, 14, 12)
     parent_layout.addWidget(actions_frame)
 
     action_btn_style = get_action_button_style()
+    teal = COLORS['accent_primary']
+    connect_tip = "Connect a device to use this feature"
+
+    def _add_action_button(text, callback, icon_key, row, col):
+        btn = QtWidgets.QPushButton(text, actions_frame)
+        btn.setStyleSheet(action_btn_style)
+        btn.clicked.connect(callback)
+        btn.setEnabled(False)
+        btn.setToolTip(connect_tip)
+        btn.setCursor(QtCore.Qt.PointingHandCursor)
+        icon_widget = create_icon_label(EMOJI_ICONS[icon_key], size=16, color=teal)
+        btn_layout = QtWidgets.QHBoxLayout(btn)
+        btn_layout.addWidget(icon_widget)
+        btn_layout.addStretch()
+        btn_layout.setSpacing(8)
+        btn_layout.setContentsMargins(12, 0, 12, 0)
+        actions_layout.addWidget(btn, row, col)
+        return btn
 
     # Row 1
-    ui.screenshot_btn = QtWidgets.QPushButton("Screenshot", actions_frame)
-    ui.screenshot_btn.setStyleSheet(action_btn_style)
-    ui.screenshot_btn.clicked.connect(ui.take_screenshot)
-    ui.screenshot_btn.setEnabled(False)
-    ui.screenshot_btn.setCursor(QtCore.Qt.PointingHandCursor)
-    icon_widget = create_icon_label(EMOJI_ICONS['screenshot'], size=16)
-    btn_layout = QtWidgets.QHBoxLayout(ui.screenshot_btn)
-    btn_layout.addWidget(icon_widget)
-    btn_layout.addStretch()
-    btn_layout.setSpacing(8)
-    btn_layout.setContentsMargins(12, 0, 12, 0)
-    actions_layout.addWidget(ui.screenshot_btn, 0, 0)
+    ui.screenshot_btn = _add_action_button("Screenshot", ui.take_screenshot, 'screenshot', 0, 0)
+    ui.backup_btn = _add_action_button("Backup", ui.backup_device, 'backup', 0, 1)
+    ui.files_btn = _add_action_button("Files", ui.manage_files, 'files', 0, 2)
 
-    ui.backup_btn = QtWidgets.QPushButton("Backup", actions_frame)
-    ui.backup_btn.setStyleSheet(action_btn_style)
-    ui.backup_btn.clicked.connect(ui.backup_device)
-    ui.backup_btn.setEnabled(False)
-    ui.backup_btn.setCursor(QtCore.Qt.PointingHandCursor)
-    icon_widget = create_icon_label(EMOJI_ICONS['backup'], size=16)
-    btn_layout = QtWidgets.QHBoxLayout(ui.backup_btn)
-    btn_layout.addWidget(icon_widget)
-    btn_layout.addStretch()
-    btn_layout.setSpacing(8)
-    btn_layout.setContentsMargins(12, 0, 12, 0)
-    actions_layout.addWidget(ui.backup_btn, 0, 1)
-
-    ui.files_btn = QtWidgets.QPushButton("Files", actions_frame)
-    ui.files_btn.setStyleSheet(action_btn_style)
-    ui.files_btn.clicked.connect(ui.manage_files)
-    ui.files_btn.setEnabled(False)
-    ui.files_btn.setCursor(QtCore.Qt.PointingHandCursor)
-    icon_widget = create_icon_label(EMOJI_ICONS['files'], size=16)
-    btn_layout = QtWidgets.QHBoxLayout(ui.files_btn)
-    btn_layout.addWidget(icon_widget)
-    btn_layout.addStretch()
-    btn_layout.setSpacing(8)
-    btn_layout.setContentsMargins(12, 0, 12, 0)
-    actions_layout.addWidget(ui.files_btn, 0, 2)
+    # Divider between the two rows of Quick Actions buttons
+    divider = QtWidgets.QFrame(actions_frame)
+    divider.setFrameShape(QtWidgets.QFrame.HLine)
+    divider.setStyleSheet(f"background-color: {COLORS['surface_border']}; max-height: 1px; border: none;")
+    actions_layout.addWidget(divider, 1, 0, 1, 3)
 
     # Row 2
-    ui.install_apk_btn = QtWidgets.QPushButton("Install APK", actions_frame)
-    ui.install_apk_btn.setStyleSheet(action_btn_style)
-    ui.install_apk_btn.clicked.connect(ui.install_apk)
-    ui.install_apk_btn.setEnabled(False)
-    ui.install_apk_btn.setCursor(QtCore.Qt.PointingHandCursor)
-    icon_widget = create_icon_label(EMOJI_ICONS['install'], size=16)
-    btn_layout = QtWidgets.QHBoxLayout(ui.install_apk_btn)
-    btn_layout.addWidget(icon_widget)
-    btn_layout.addStretch()
-    btn_layout.setSpacing(8)
-    btn_layout.setContentsMargins(12, 0, 12, 0)
-    actions_layout.addWidget(ui.install_apk_btn, 1, 0)
-
-    ui.app_manager_btn = QtWidgets.QPushButton("App Manager", actions_frame)
-    ui.app_manager_btn.setStyleSheet(action_btn_style)
-    ui.app_manager_btn.clicked.connect(ui.app_manager)
-    ui.app_manager_btn.setEnabled(False)
-    ui.app_manager_btn.setCursor(QtCore.Qt.PointingHandCursor)
-    icon_widget = create_icon_label(EMOJI_ICONS['apps'], size=16)
-    btn_layout = QtWidgets.QHBoxLayout(ui.app_manager_btn)
-    btn_layout.addWidget(icon_widget)
-    btn_layout.addStretch()
-    btn_layout.setSpacing(8)
-    btn_layout.setContentsMargins(12, 0, 12, 0)
-    actions_layout.addWidget(ui.app_manager_btn, 1, 1)
-
-    ui.logcat_btn = QtWidgets.QPushButton("Logcat", actions_frame)
-    ui.logcat_btn.setStyleSheet(action_btn_style)
-    ui.logcat_btn.clicked.connect(ui.view_logcat)
-    ui.logcat_btn.setEnabled(False)
-    ui.logcat_btn.setCursor(QtCore.Qt.PointingHandCursor)
-    icon_widget = create_icon_label(EMOJI_ICONS['log'], size=16)
-    btn_layout = QtWidgets.QHBoxLayout(ui.logcat_btn)
-    btn_layout.addWidget(icon_widget)
-    btn_layout.addStretch()
-    btn_layout.setSpacing(8)
-    btn_layout.setContentsMargins(12, 0, 12, 0)
-    actions_layout.addWidget(ui.logcat_btn, 1, 2)
+    ui.install_apk_btn = _add_action_button("Install APK", ui.install_apk, 'install', 2, 0)
+    ui.app_manager_btn = _add_action_button("App Manager", ui.app_manager, 'apps', 2, 1)
+    ui.logcat_btn = _add_action_button("Logcat", ui.view_logcat, 'log', 2, 2)
