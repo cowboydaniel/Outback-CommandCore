@@ -5,11 +5,13 @@ DROIDCOM is a comprehensive Android diagnostic, penetration, and system control 
 ## Key Features
 
 - **Wide Compatibility**: Extensive support for various Android OS versions and device models
-- **Root Management**: Advanced root detection, privilege escalation, and system modification tools
-- **Security Scanning**: Automated vulnerability scans specifically tailored for Android ecosystems
+- **Root Management**: Root detection, lock-screen bypass/brute-force, and boot integrity verification
+- **Security Scanning**: Encryption, lock screen, dangerous permissions, certificate, AppOps, and keystore audits
 - **Remote Control**: Secure shell and command execution interface for device management
-- **System Monitoring**: Real-time system monitoring and resource management capabilities
-- **Framework Integration**: Seamless integration with custom exploit payload frameworks
+- **System Monitoring**: Real-time battery, memory, CPU, network, thermal, storage, and service monitoring
+- **Stress & Benchmark Testing**: CPU/RAM/GPU/Dalvik cache stress tests, app crash forcing, and looped benchmarking
+- **Automation**: Shell script execution, batch app management, scheduled tasks, and combined logcat/screencap capture
+- **Forensics Integration**: Native Andriller extraction/lockscreen cracking plus launchers for ALEAPP, MVT, and Autopsy
 
 ## Requirements
 
@@ -106,17 +108,34 @@ python DROIDCOM/main.py
 `DROIDCOM` (package with `main.py` entry point)
 
 ### Available Features
-- **Connection** – Device detection and ADB connection management
-- **Device Info** – Hardware and software information display
-- **App Manager** – Install, uninstall, and manage applications
-- **File Manager** – Browse and transfer files to/from device
-- **Screenshot** – Capture device screen
-- **Logcat** – Real-time log viewing and filtering
-- **Device Control** – Reboot, recovery mode, and system commands
-- **Security** – Security scanning and root detection
-- **Backup** – Device backup and restore operations
-- **Debugging** – Advanced debugging and testing tools
-- **Forensics** – Launchers for Andriller, ALEAPP, MVT (Mobile Verification Toolkit), and Autopsy (see [docs/system-deps.md](../docs/system-deps.md#droidcom) for optional install instructions)
+
+- **Connection** – Device detection, Wi-Fi ADB pairing/setup, auto-refreshing device list, and removal of offline devices
+
+- **Device Info** – Hardware/software details, IMEI retrieval, and dialer-based diagnostics
+
+- **App Manager** – Install/uninstall APKs, extract APKs, clear app data, force-stop, freeze/unfreeze, view permissions, app usage/battery stats, and list installed apps
+
+- **File Manager** – Browse, push/pull, and transfer files to/from device; clean app caches; explore protected storage; export SQLite databases; calculate directory size and file checksums; view mount info and recent files
+
+- **Screenshot** – Capture, preview, and save device screenshots
+
+- **Logcat** – Real-time log viewing, filtering, colorized output, and saving logs to file
+
+- **Device Control** – Reboot (normal/recovery/bootloader/EDL), toggle Wi-Fi/Bluetooth/mobile data/airplane mode/Do Not Disturb/flashlight/screen, simulate power button, set brightness and screen timeout, and blind device setup
+
+- **Security** – Root detection, encryption and lock-screen status checks, screen lock brute-forcer (PIN/password/pattern) with lockout handling, security patch level and update checks, dangerous permission scanning (with export), certificate inspection (with export), boot integrity verification, AppOps inspection/modification, and keystore info
+
+- **Backup** – Device backup (apps/data/media) and restore operations
+
+- **Debugging** – Bug report generation, ANR trace viewing, crash dump inspection, system log viewer, and screen recording
+
+- **Automation** – Run custom shell scripts, batch app management across multiple apps, combined logcat + screencap capture, and scheduled/recurring tasks
+
+- **Advanced/Stress Tests** – Screen lock duplicator, battery drain test, app crash forcer (memory pressure, broadcast storm, activity stack, native signal), CPU/RAM/GPU stress tests, Dalvik cache stress test, and looped CPU/storage/memory/UI benchmarking
+
+- **System Tools** – Battery, memory, CPU, network, thermal, and storage stats; running services; detailed device info; sensor status; power profile; location settings; Doze mode; SELinux status; time/date info; CPU governor info
+
+- **Forensics** – Native Andriller extraction and lockscreen cracker dialog, plus launchers for ALEAPP, MVT (Mobile Verification Toolkit), and Autopsy (see [docs/system-deps.md](../docs/system-deps.md#droidcom) for optional install instructions)
 
 ### Examples
 ```bash
