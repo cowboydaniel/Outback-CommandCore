@@ -618,9 +618,18 @@ class WidgetsMixin:
 
         dialog.exec()
 
+    CONSOLE_FONT_SIZES_PX = {"small": 10, "medium": 12, "large": 15}
+
+    def apply_console_font_size(self, size):
+        """Apply the given console font size ('small'/'medium'/'large') to the log console."""
+        font_px = self.CONSOLE_FONT_SIZES_PX.get(size, self.CONSOLE_FONT_SIZES_PX["medium"])
+        if hasattr(self, 'log_text') and self.log_text is not None:
+            self.log_text.setStyleSheet(get_log_text_style(font_px))
+
     def _set_console_font_size(self, size):
-        """Store the selected console font size preference."""
+        """Store and immediately apply the selected console font size preference."""
         self.console_font_size = size
+        self.apply_console_font_size(size)
 
     def open_help_dialog(self):
         """Show a basic help/documentation dialog."""
@@ -977,7 +986,7 @@ class WidgetsMixin:
         self.log_text.setMinimumHeight(400)
         self.log_text.setLineWrapMode(QtWidgets.QTextEdit.WidgetWidth)
         self.log_text.setWordWrapMode(QtGui.QTextOption.WordWrap)
-        self.log_text.setStyleSheet(get_log_text_style())
+        self.apply_console_font_size(getattr(self, 'console_font_size', 'medium'))
         log_layout.addWidget(self.log_text, 1)
         split_layout.addWidget(self.log_frame)
 

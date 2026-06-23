@@ -37,11 +37,12 @@ class AcquisitionMixin:
         case_edit = QtWidgets.QLineEdit()
         exhibit_edit = QtWidgets.QLineEdit()
         examiner_edit = QtWidgets.QLineEdit()
-        root_edit = QtWidgets.QLineEdit(str(Path.home() / "DroidcomCases"))
+        default_root = getattr(self, 'default_export_dir', '') or str(Path.home() / "DroidcomCases")
+        root_edit = QtWidgets.QLineEdit(default_root)
         browse_btn = QtWidgets.QPushButton("Browse...")
 
         def browse():
-            chosen = QtWidgets.QFileDialog.getExistingDirectory(dialog, "Select Case Storage Root")
+            chosen = QtWidgets.QFileDialog.getExistingDirectory(dialog, "Select Case Storage Root", root_edit.text())
             if chosen:
                 root_edit.setText(chosen)
 

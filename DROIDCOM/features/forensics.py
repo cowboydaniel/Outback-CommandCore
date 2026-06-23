@@ -43,7 +43,7 @@ class ForensicsMixin:
             return
 
         output_dir = QtWidgets.QFileDialog.getExistingDirectory(
-            self, "Select ALEAPP Report Output Folder"
+            self, "Select ALEAPP Report Output Folder", getattr(self, 'default_export_dir', '') or ''
         )
         if not output_dir:
             return
@@ -69,7 +69,7 @@ class ForensicsMixin:
             return
 
         output_dir = QtWidgets.QFileDialog.getExistingDirectory(
-            self, "Select MVT Report Output Folder"
+            self, "Select MVT Report Output Folder", getattr(self, 'default_export_dir', '') or ''
         )
         if not output_dir:
             return

@@ -80,6 +80,11 @@ class AndroidToolsModule(
         self.threads = []  # Keep track of threads
         self.log_text = None  # Initialize to None, will be created in create_widgets
 
+        # Settings dialog preferences (overridable from the Settings dialog)
+        self.auto_connect_on_startup = True
+        self.console_font_size = "medium"
+        self.default_export_dir = ""
+
         # Initialize UiDispatcher on the UI thread to prevent threading issues
         # This must be done before any worker threads are spawned
         get_ui_dispatcher(self)
@@ -112,12 +117,15 @@ class AndroidToolsModule(
         # once tools are detected -- see refresh_tools_status() for details).
         self.refresh_tools_status()
 
-        # Automatically try to connect to device when module is opened, if tools are installed
-        if self.platform_tools_installed:
+        # Automatically try to connect to device when module is opened, if tools
+        # are installed and the user hasn't disabled auto-connect in Settings.
+        if self.platform_tools_installed and self.auto_connect_on_startup:
             # Use after() to ensure the UI is fully loaded before attempting connection
             self.log_message("Android Tools module loaded - will attempt auto-connection shortly")
             # Increase delay to 1000ms to ensure UI is fully loaded
             QtCore.QTimer.singleShot(1000, self.auto_connect_sequence)
+        elif self.platform_tools_installed:
+            self.log_message("Auto-connect on startup is disabled in Settings - skipping")
 
     def prompt_case_metadata(self):
         """Show a dialog collecting Case Number / Examiner Name / Date and store it

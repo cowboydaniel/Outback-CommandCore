@@ -707,7 +707,7 @@ def get_primary_button_style():
     """
 
 
-def get_log_text_style():
+def get_log_text_style(font_size_px=12):
     """Style for log/console text areas"""
     return f"""
         QTextEdit {{
@@ -717,7 +717,7 @@ def get_log_text_style():
             border-radius: 10px;
             padding: 12px;
             font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
-            font-size: 12px;
+            font-size: {font_size_px}px;
             line-height: 1.6;
         }}
 
