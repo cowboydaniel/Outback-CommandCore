@@ -2,11 +2,10 @@ from __future__ import annotations
 
 import logging
 import sys
-import time
 from pathlib import Path
 
 from PySide6.QtWidgets import QApplication
-from PySide6.QtCore import QObject, QThread, QTimer, Signal
+from PySide6.QtCore import QTimer
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 if str(BASE_DIR) not in sys.path:
@@ -15,22 +14,6 @@ if str(BASE_DIR) not in sys.path:
 from app import config
 from ui.window import IOSToolsModule
 from ui.splash_screen import show_splash_screen
-
-
-class StartupWorker(QObject):
-    status = Signal(str)
-    progress = Signal(int)
-    finished = Signal()
-    failed = Signal(str)
-
-    def run(self) -> None:
-        try:
-            self.status.emit("Loading modules...")
-            self.status.emit("Ready!")
-            self.finished.emit()
-        except Exception as exc:
-            logging.exception("Startup failed")
-            self.failed.emit(str(exc))
 
 
 def configure_logging() -> None:
@@ -52,56 +35,28 @@ def main() -> int:
     # Show splash screen
     splash = show_splash_screen()
     app.processEvents()
-
-    splash_start_time = time.time()
-    minimum_splash_duration = 5.9
-
-    thread = QThread()
-    worker = StartupWorker()
-    worker.moveToThread(thread)
-
-    worker.status.connect(splash.update_status)
-    if hasattr(splash, "set_progress"):
-        worker.progress.connect(splash.set_progress)
+    splash.update_status("Loading modules...")
 
     main_windows = []
     _live_refs = []
 
-    def show_main() -> None:
-        elapsed = time.time() - splash_start_time
-        remaining = max(0, minimum_splash_duration - elapsed)
-
-        def finish_startup() -> None:
-            # SplashScreen is a QMainWindow, not QSplashScreen - it has no
-            # .finish() method, so close it directly.
-            if splash and splash.isVisible():
-                splash.close()
-
-            window = IOSToolsModule()
-            main_windows.append(window)
-            window.destroyed.connect(app.quit)
-            window.show()
-            _live_refs.clear()
-
-        timer = QTimer()
-        timer.setSingleShot(True)
-        timer.timeout.connect(finish_startup)
-        _live_refs.append(timer)
-        timer.start(int(remaining * 1000))
-
-    def handle_error(message: str) -> None:
+    def finish_startup() -> None:
+        # SplashScreen is a QMainWindow, not QSplashScreen - it has no
+        # .finish() method, so close it directly.
         if splash and splash.isVisible():
-            splash.update_status(f"Error: {message}")
-        QTimer.singleShot(2000, app.quit)
+            splash.close()
 
-    worker.finished.connect(show_main)
-    worker.failed.connect(handle_error)
-    worker.finished.connect(thread.quit)
-    worker.failed.connect(thread.quit)
-    worker.finished.connect(worker.deleteLater)
-    thread.finished.connect(thread.deleteLater)
-    thread.started.connect(worker.run)
-    thread.start()
+        window = IOSToolsModule()
+        main_windows.append(window)
+        window.destroyed.connect(app.quit)
+        window.show()
+        _live_refs.clear()
+
+    timer = QTimer()
+    timer.setSingleShot(True)
+    timer.timeout.connect(finish_startup)
+    _live_refs.append(timer)
+    timer.start(5900)
 
     return app.exec()
 
