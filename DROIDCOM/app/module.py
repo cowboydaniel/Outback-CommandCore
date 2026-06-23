@@ -37,6 +37,7 @@ from ..features.advanced_tests import AdvancedTestsMixin
 from ..features.automation import AutomationMixin
 from ..features.forensics import ForensicsMixin
 from ..features.andriller_native import AndrillerNativeMixin
+from ..features.acquisition import AcquisitionMixin
 
 
 class AndroidToolsModule(
@@ -56,6 +57,7 @@ class AndroidToolsModule(
     AutomationMixin,
     ForensicsMixin,
     AndrillerNativeMixin,
+    AcquisitionMixin,
     QtWidgets.QWidget
 ):
     """Main Android Tools Module that combines all feature mixins."""
@@ -71,6 +73,8 @@ class AndroidToolsModule(
         self.device_connected = False
         self.device_info = {}
         self.device_serial = None  # Initialize device_serial to None
+        self.active_case = None  # Forensic case currently open, if any
+        self.write_blocker = None  # Set when a case is opened
         self.threads = []  # Keep track of threads
         self.log_text = None  # Initialize to None, will be created in create_widgets
 
