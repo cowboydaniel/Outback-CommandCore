@@ -238,7 +238,7 @@ class WidgetsMixin:
         # Settings/Help for visual consistency; shield icon, turns red when active.
         self.forensic_mode_btn, self.forensic_mode_icon, self.forensic_mode_label = \
             self._create_icon_text_header_button(
-                header_frame, "shield", "Forensic",
+                header_frame, "shield-filled", "Forensic",
                 "Forensic Mode - click to toggle", self.toggle_forensic_mode,
                 checkable=True, return_widgets=True, object_name="forensic_btn",
             )
@@ -254,7 +254,7 @@ class WidgetsMixin:
 
         # Help button - icon with a visible text label beneath it
         help_btn = self._create_icon_text_header_button(
-            header_frame, EMOJI_ICONS.get('help', 'file'), "Help",
+            header_frame, "question-filled", "Help",
             "Help / Documentation", self.open_help_dialog,
             object_name="help_btn",
         )
@@ -297,7 +297,10 @@ class WidgetsMixin:
         btn_layout.setSpacing(4)
         btn_layout.setAlignment(QtCore.Qt.AlignCenter)
 
-        icon_widget = create_icon_label(icon_name, size=20, color="#00e5b0")
+        # "-filled" icons already carry their own teal/contrast colours baked
+        # into the SVG, so they must not be flattened by the single-colour tint.
+        tint = None if icon_name.endswith("-filled") else "#00e5b0"
+        icon_widget = create_icon_label(icon_name, size=20, color=tint)
         icon_widget.setFixedSize(20, 20)
         icon_widget.setAlignment(QtCore.Qt.AlignCenter)
         icon_widget.setFocusPolicy(QtCore.Qt.NoFocus)
@@ -443,7 +446,7 @@ class WidgetsMixin:
             self.forensic_mode = False
             self.forensic_indicator.setVisible(False)
             self.forensic_mode_btn.setStyleSheet(self._forensic_button_style(active=False))
-            self.forensic_mode_icon.setPixmap(load_svg_pixmap('shield', 16))
+            self.forensic_mode_icon.setPixmap(load_svg_pixmap('shield-filled', 20))
             self.forensic_mode_label.setText("Forensic")
             self.forensic_mode_label.setStyleSheet(f"""
                 font-size: 9px;
