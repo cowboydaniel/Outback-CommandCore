@@ -907,7 +907,7 @@ EMOJI_ICONS = {
     'apps': 'rocket',
     'log': 'clipboard',
     'settings': 'settings',
-    'help': 'file',
+    'help': 'question',
     'forensic': 'shield',
     'case': 'clipboard',
     'clear': 'trash',

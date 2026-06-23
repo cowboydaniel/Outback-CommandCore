@@ -288,6 +288,7 @@ class WidgetsMixin:
         container.setStyleSheet(self._header_button_style(object_name))
         container.setCursor(QtCore.Qt.PointingHandCursor)
         container.setFixedSize(70, 60)
+        container.setIconSize(QtCore.QSize(20, 20))
         container.clicked.connect(callback)
 
         btn_layout = QtWidgets.QVBoxLayout(container)
@@ -295,8 +296,8 @@ class WidgetsMixin:
         btn_layout.setSpacing(4)
         btn_layout.setAlignment(QtCore.Qt.AlignCenter)
 
-        icon_widget = create_icon_label(icon_name, size=18)
-        icon_widget.setFixedSize(18, 18)
+        icon_widget = create_icon_label(icon_name, size=20)
+        icon_widget.setFixedSize(20, 20)
         icon_widget.setAlignment(QtCore.Qt.AlignCenter)
         btn_layout.addWidget(icon_widget, 0, QtCore.Qt.AlignCenter)
 
@@ -683,6 +684,7 @@ class WidgetsMixin:
         state changes (e.g. after Install/Reinstall finishes).
         """
         self.setup_status_frame = QtWidgets.QFrame(parent)
+        self.setup_status_frame.setObjectName("platform_tools_bar")
         self.setup_status_frame.setFrameShape(QtWidgets.QFrame.NoFrame)
         self.setup_status_frame.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
         content_layout.addWidget(self.setup_status_frame)
@@ -721,7 +723,11 @@ class WidgetsMixin:
         # Status icon - green checkmark when installed, otherwise nothing alarming
         if installed:
             icon_label = create_icon_label('success', size=14)
-            icon_label.setStyleSheet("background: transparent;")
+            icon_label.setObjectName("platform_tools_icon")
+            icon_label.setFrameShape(QtWidgets.QFrame.NoFrame)
+            icon_label.setStyleSheet(
+                "QLabel#platform_tools_icon { background: transparent; border: none; outline: 0px; }"
+            )
             setup_layout.addWidget(icon_label)
 
         # Status text - fully green when installed, neutral otherwise
@@ -729,22 +735,34 @@ class WidgetsMixin:
             self.tools_label = QtWidgets.QLabel(
                 "Android Platform Tools: Installed", self.setup_status_frame
             )
+            self.tools_label.setObjectName("platform_tools_label")
+            self.tools_label.setFrameShape(QtWidgets.QFrame.NoFrame)
             self.tools_label.setStyleSheet(f"""
-                font-size: 11px;
-                font-weight: 600;
-                color: {COLORS['success']};
-                background: transparent;
+                QLabel#platform_tools_label {{
+                    font-size: 11px;
+                    font-weight: 600;
+                    color: {COLORS['success']};
+                    background: transparent;
+                    border: none;
+                    outline: 0px;
+                }}
             """)
         else:
             self.tools_label = QtWidgets.QLabel(
                 f"Android Platform Tools: <span style='color: {COLORS['text_secondary']}; font-weight: 600;'>Not Installed</span>",
                 self.setup_status_frame
             )
+            self.tools_label.setObjectName("platform_tools_label")
+            self.tools_label.setFrameShape(QtWidgets.QFrame.NoFrame)
             self.tools_label.setTextFormat(QtCore.Qt.RichText)
             self.tools_label.setStyleSheet(f"""
-                font-size: 11px;
-                color: {COLORS['text_primary']};
-                background: transparent;
+                QLabel#platform_tools_label {{
+                    font-size: 11px;
+                    color: {COLORS['text_primary']};
+                    background: transparent;
+                    border: none;
+                    outline: 0px;
+                }}
             """)
         setup_layout.addWidget(self.tools_label)
         setup_layout.addStretch()
@@ -777,18 +795,20 @@ class WidgetsMixin:
         # Subtle dark-green tint on the whole bar reinforces the confirmed status
         if installed:
             self.setup_status_frame.setStyleSheet(f"""
-                QFrame {{
+                QFrame#platform_tools_bar {{
                     background-color: {COLORS['success']}1a;
                     border: 1px solid {COLORS['success']}55;
                     border-radius: 10px;
+                    outline: 0px;
                 }}
             """)
         else:
             self.setup_status_frame.setStyleSheet(f"""
-                QFrame {{
+                QFrame#platform_tools_bar {{
                     background-color: {COLORS['surface']};
                     border: 1px solid {COLORS['surface_border']};
                     border-radius: 10px;
+                    outline: 0px;
                 }}
             """)
 
