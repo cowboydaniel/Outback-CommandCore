@@ -1399,7 +1399,7 @@ class DeviceControlMixin:
                 "none": "#6c7086",         # grey
             }
             labels = {
-                "device": f"✓ Connected & authorized  ({serial})",
+                "device": f"✓ Connected && authorized  ({serial})",
                 "recovery": f"⚙  Recovery mode  ({serial}) — ADB shell available",
                 "unauthorized": f"⚠  Unauthorized  ({serial}) — device needs to accept the dialog",
                 "fastboot": f"⚡ Fastboot mode  ({serial})",

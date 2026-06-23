@@ -3417,7 +3417,7 @@ class AdvancedTestsMixin:
             opt_layout = QGridLayout(opt_group)
 
             # Control
-            control_cb = QCheckBox("Enable keyboard & mouse control")
+            control_cb = QCheckBox("Enable keyboard && mouse control")
             control_cb.setChecked(True)
             opt_layout.addWidget(control_cb, 0, 0, 1, 2)
 

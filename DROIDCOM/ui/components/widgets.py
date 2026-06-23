@@ -205,7 +205,7 @@ class WidgetsMixin:
         header_label.setWordWrap(False)
         text_layout.addWidget(header_label)
 
-        subtitle_label = QtWidgets.QLabel("Android Device Management & Control", text_container)
+        subtitle_label = QtWidgets.QLabel("Android Device Management && Control", text_container)
         subtitle_label.setStyleSheet(f"""
             font-size: 11px;
             font-weight: 500;

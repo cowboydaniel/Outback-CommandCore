@@ -144,7 +144,10 @@ def create_tools_tab(ui):
         col = idx % num_columns
 
         # Create category frame with improved styling
-        category_frame = QtWidgets.QGroupBox(category['name'], categories_container)
+        # Escape '&' to '&&' for display only -- QGroupBox titles interpret a
+        # single '&' as a mnemonic marker, underlining the next character
+        # (even a space) which renders as a stray underscore-like artifact.
+        category_frame = QtWidgets.QGroupBox(category['name'].replace('&', '&&'), categories_container)
 
         # Apply consistent styling to all category frames
         category_frame.setStyleSheet(f"""
