@@ -20,6 +20,7 @@ from ..styles import (
     get_primary_button_style,
     get_log_text_style,
     get_value_style_for,
+    get_value_style,
     COLORS,
     EMOJI_ICONS,
 )
@@ -270,15 +271,16 @@ class WidgetsMixin:
         container.setCheckable(checkable)
         container.setStyleSheet(get_secondary_button_style())
         container.setCursor(QtCore.Qt.PointingHandCursor)
-        container.setFixedSize(56, 44)
+        container.setFixedSize(70, 60)
         container.clicked.connect(callback)
 
         btn_layout = QtWidgets.QVBoxLayout(container)
-        btn_layout.setContentsMargins(4, 4, 4, 4)
-        btn_layout.setSpacing(2)
+        btn_layout.setContentsMargins(4, 8, 4, 6)
+        btn_layout.setSpacing(4)
         btn_layout.setAlignment(QtCore.Qt.AlignCenter)
 
-        icon_widget = create_icon_label(icon_name, size=16)
+        icon_widget = create_icon_label(icon_name, size=18)
+        icon_widget.setFixedSize(18, 18)
         icon_widget.setAlignment(QtCore.Qt.AlignCenter)
         btn_layout.addWidget(icon_widget, 0, QtCore.Qt.AlignCenter)
 
@@ -402,21 +404,58 @@ class WidgetsMixin:
 
         No hard max-height clamp is applied here, so the "Install Platform
         Tools" button (and its padding) is never clipped by the frame.
+
+        ``self.platform_tools_installed`` is only known for certain *after*
+        ``app/module.py`` finishes its post-construction detection (it is a
+        placeholder ``False`` while ``create_widgets`` runs). The frame is
+        therefore built empty here and fully populated by
+        ``refresh_tools_status()``, which module.py calls once detection is
+        complete -- and which can also be re-called any time the install
+        state changes (e.g. after Install/Reinstall finishes).
         """
         self.setup_status_frame = QtWidgets.QFrame(parent)
         self.setup_status_frame.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
+        content_layout.addWidget(self.setup_status_frame)
+        self.refresh_tools_status()
+
+    def refresh_tools_status(self):
+        """(Re)build the platform-tools status bar from the current
+        ``self.platform_tools_installed`` value.
+
+        Rebuilding (rather than just relabeling) is the fix for the
+        Install button reappearing: previously only ``tools_label.setText``
+        was updated after detection, so the Install button -- added while
+        the flag was still the placeholder ``False`` -- was never removed.
+        """
+        old_layout = self.setup_status_frame.layout()
+        if old_layout is not None:
+            while old_layout.count():
+                item = old_layout.takeAt(0)
+                widget = item.widget()
+                if widget is not None:
+                    widget.deleteLater()
+            QtWidgets.QWidget().setLayout(old_layout)  # detach so a fresh layout can be set
+
         setup_layout = QtWidgets.QHBoxLayout(self.setup_status_frame)
         setup_layout.setContentsMargins(12, 7, 12, 7)
         setup_layout.setSpacing(10)
 
+        installed = self.platform_tools_installed
+        self.log_message(
+            f"Platform tools status check: {'INSTALLED' if installed else 'NOT INSTALLED'} "
+            f"(adb_path={getattr(self, 'adb_path', None)}) - "
+            f"{'hiding Install button, showing green checkmark' if installed else 'showing Install button'}",
+            level="info",
+        )
+
         # Status icon - green checkmark when installed, otherwise nothing alarming
-        if self.platform_tools_installed:
+        if installed:
             icon_label = create_icon_label('success', size=14)
             icon_label.setStyleSheet("background: transparent;")
             setup_layout.addWidget(icon_label)
 
         # Status text - fully green when installed, neutral otherwise
-        if self.platform_tools_installed:
+        if installed:
             self.tools_label = QtWidgets.QLabel(
                 "Android Platform Tools: Installed", self.setup_status_frame
             )
@@ -440,7 +479,7 @@ class WidgetsMixin:
         setup_layout.addWidget(self.tools_label)
         setup_layout.addStretch()
 
-        if not self.platform_tools_installed:
+        if not installed:
             tools_btn = QtWidgets.QPushButton("Install Platform Tools", self.setup_status_frame)
             tools_btn.setStyleSheet(get_primary_button_style())
             tools_btn.clicked.connect(self.install_platform_tools)
@@ -466,7 +505,7 @@ class WidgetsMixin:
             setup_layout.addWidget(reinstall_link)
 
         # Subtle dark-green tint on the whole bar reinforces the confirmed status
-        if self.platform_tools_installed:
+        if installed:
             self.setup_status_frame.setStyleSheet(f"""
                 QFrame {{
                     background-color: {COLORS['success']}1a;
@@ -482,8 +521,6 @@ class WidgetsMixin:
                     border-radius: 10px;
                 }}
             """)
-
-        content_layout.addWidget(self.setup_status_frame)
 
     def _create_main_tabs(self, content_layout, parent):
         """Create the main tabbed interface"""
@@ -872,6 +909,27 @@ class WidgetsMixin:
         thread.start()
         return thread
 
+    def _apply_value_label_color(self, value_label):
+        """Force the value label's text colour directly on the instance.
+
+        Set explicitly (not just via a shared stylesheet string) so nothing
+        else in the cascade -- app-level stylesheet, QGroupBox styling, etc
+        -- can silently override it.
+        """
+        text = value_label.text().strip()
+        if text.upper() in ("N/A", "UNKNOWN", ""):
+            value_label.setStyleSheet(get_value_style_for(text))
+            value_label.setProperty("_value_na", True)
+        else:
+            value_label.setStyleSheet(get_value_style())
+            value_label.setProperty("_value_na", False)
+        # Belt-and-braces: re-assert directly via QPalette too, in case some
+        # other stylesheet application happens after this call.
+        palette = value_label.palette()
+        color = QtGui.QColor("#6b6b6b" if text.upper() in ("N/A", "UNKNOWN", "") else COLORS['text_primary'])
+        palette.setColor(QtGui.QPalette.WindowText, color)
+        value_label.setPalette(palette)
+
     def update_device_info(self):
         """Update the device info display with the connected device information"""
         if hasattr(self, 'onboarding_frame'):
@@ -933,4 +991,4 @@ class WidgetsMixin:
             self.adv_info_fields['Bootloader Status'].setText(self.device_info['bootloader_status'])
 
         for value_label in list(self.info_fields.values()) + list(self.adv_info_fields.values()):
-            value_label.setStyleSheet(get_value_style_for(value_label.text()))
+            self._apply_value_label_color(value_label)

@@ -50,7 +50,7 @@ def create_device_info_tab(ui):
     connection_frame = QtWidgets.QGroupBox("Device Connection", ui.device_frame)
     connection_layout = QtWidgets.QVBoxLayout(connection_frame)
     connection_layout.setSpacing(6)
-    connection_layout.setContentsMargins(10, 14, 10, 8)
+    connection_layout.setContentsMargins(6, 6, 6, 6)
     device_layout.addWidget(connection_frame)
 
     # Connection buttons
@@ -130,8 +130,8 @@ def create_device_info_tab(ui):
     list_layout.addSpacing(8)
 
     ui.device_listbox = ListBox(list_frame)
-    ui.device_listbox.setMinimumHeight(60)
-    ui.device_listbox.setMaximumHeight(140)
+    ui.device_listbox.setMinimumHeight(55)
+    ui.device_listbox.setMaximumHeight(120)
     ui.device_listbox.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
     ui.device_listbox.show_placeholder("No devices connected — enable USB debugging and connect via USB")
     list_layout.addWidget(ui.device_listbox)
@@ -152,7 +152,7 @@ def create_onboarding_panel(ui, parent_layout):
     """Create a step-by-step getting-started panel shown when no device is connected."""
     ui.onboarding_frame = QtWidgets.QGroupBox("Getting Started", ui.device_frame)
     onboarding_layout = QtWidgets.QVBoxLayout(ui.onboarding_frame)
-    onboarding_layout.setContentsMargins(10, 11, 10, 7)
+    onboarding_layout.setContentsMargins(6, 6, 6, 6)
     onboarding_layout.setSpacing(1)
     parent_layout.addWidget(ui.onboarding_frame)
 
@@ -176,7 +176,7 @@ def create_device_info_display(ui, parent_layout):
     """Create the device information display section."""
     device_info_frame = QtWidgets.QGroupBox("Device Information", ui.device_frame)
     device_info_layout = QtWidgets.QVBoxLayout(device_info_frame)
-    device_info_layout.setContentsMargins(10, 14, 10, 8)
+    device_info_layout.setContentsMargins(6, 6, 6, 6)
     parent_layout.addWidget(device_info_frame, 1)
 
     # Info content with grid layout
@@ -231,7 +231,7 @@ def create_device_info_display(ui, parent_layout):
     for label_text, value_label in ui.info_fields.items():
         label = QtWidgets.QLabel(f"{label_text}:", info_content)
         label.setStyleSheet(label_style)
-        value_label.setStyleSheet(get_value_style_for(value_label.text()))
+        ui._apply_value_label_color(value_label)
         info_layout.addWidget(label, row, 0, QtCore.Qt.AlignLeft)
         info_layout.addWidget(value_label, row, 1, QtCore.Qt.AlignLeft)
         row += 1
@@ -240,7 +240,7 @@ def create_device_info_display(ui, parent_layout):
     for label_text, value_label in ui.adv_info_fields.items():
         label = QtWidgets.QLabel(f"{label_text}:", info_content)
         label.setStyleSheet(label_style)
-        value_label.setStyleSheet(get_value_style_for(value_label.text()))
+        ui._apply_value_label_color(value_label)
         info_layout.addWidget(label, row, 2, QtCore.Qt.AlignLeft)
         info_layout.addWidget(value_label, row, 3, QtCore.Qt.AlignLeft)
         row += 1
@@ -295,7 +295,7 @@ def create_device_actions(ui, parent_layout):
     actions_layout = QtWidgets.QGridLayout(actions_frame)
     actions_layout.setHorizontalSpacing(7)
     actions_layout.setVerticalSpacing(6)
-    actions_layout.setContentsMargins(10, 14, 10, 8)
+    actions_layout.setContentsMargins(6, 6, 6, 6)
     parent_layout.addWidget(actions_frame)
 
     action_btn_style = get_action_button_style()

@@ -107,9 +107,10 @@ class AndroidToolsModule(
             # Linux/Mac initialization
             self.platform_tools_installed = self._check_platform_tools()
 
-        # Update UI to reflect the actual tools status
-        tools_status = "Installed" if self.platform_tools_installed else "Not Installed"
-        self.tools_label.setText(f"Android Platform Tools: {tools_status}")
+        # Update UI to reflect the actual tools status (rebuilds the whole
+        # status bar so a stale "Install Platform Tools" button can't linger
+        # once tools are detected -- see refresh_tools_status() for details).
+        self.refresh_tools_status()
 
         # Automatically try to connect to device when module is opened, if tools are installed
         if self.platform_tools_installed:
@@ -381,8 +382,8 @@ class AndroidToolsModule(
                 self.log_message(f"Failed to clean up temporary files: {str(e)}")
 
             # Update UI to reflect successful installation
-            emit_ui(self, lambda: self.tools_label.setText("Android Platform Tools: Installed"))
             self.platform_tools_installed = True
+            emit_ui(self, self.refresh_tools_status)
 
             # Show success message with PATH instructions
             self.update_status("Installation completed")

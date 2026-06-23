@@ -151,8 +151,8 @@ def get_main_stylesheet():
         background-color: {COLORS['surface']};
         border: 1px solid {COLORS['surface_border']};
         border-radius: 12px;
-        margin-top: 20px;
-        padding: 20px 15px 15px 15px;
+        margin-top: 14px;
+        padding: 14px 8px 8px 8px;
         font-weight: 600;
     }}
 
