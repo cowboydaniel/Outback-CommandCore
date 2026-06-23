@@ -373,9 +373,16 @@ launched from the UI (and installs its `requirements.txt` into the same
 Python environment). Autopsy is a standalone Java application and cannot be
 pip-installed or auto-cloned, so it still needs a manual/system install.
 
+Andriller is used as a library, not launched as its own application: DROIDCOM
+drives its `ChainExecution` acquisition/decoding pipeline and `cracking`
+module directly and renders every decoded artifact (call logs, SMS, WhatsApp,
+Wi-Fi passwords, browser history, accounts, etc.) plus a lockscreen hash
+cracker natively in DROIDCOM's own dialogs — andriller's separate Tk GUI is
+never opened.
+
 | Tool | Purpose | Install |
 |------|---------|---------|
-| [Andriller](https://github.com/den4uk/andriller) | Android forensics toolkit; detects ADB devices automatically | Bundled via `requirements.txt` (`pip install andriller`) |
+| [Andriller](https://github.com/den4uk/andriller) | Android forensics toolkit; results shown natively in DROIDCOM (no separate GUI) | Bundled via `requirements.txt` (`pip install andriller`) |
 | [ALEAPP](https://github.com/abrignoni/ALEAPP) | Android artifact parser/report generator | Auto-cloned on first use from the UI (no PyPI package exists) |
 | [MVT](https://docs.mvt.re/) (`mvt-android`) | Indicator-of-compromise scanning (built by Amnesty International) | Bundled via `requirements.txt` (`pip install mvt`) |
 | [Autopsy](https://www.autopsy.com/download/) | Full forensic case analysis platform | Standalone install; `sudo snap install autopsy` (do **not** use `apt-get install autopsy` -- that's the abandoned, non-functional Autopsy 2.24) |
