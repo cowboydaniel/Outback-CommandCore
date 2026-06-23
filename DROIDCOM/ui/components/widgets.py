@@ -412,11 +412,224 @@ class WidgetsMixin:
             self.update_forensic_lock_state()
 
     def open_settings_dialog(self):
-        """Show a basic settings/preferences dialog."""
-        QtWidgets.QMessageBox.information(
-            self, "Settings",
-            f"DROIDCOM v{APP_VERSION}\n\nSettings/preferences are not yet configurable from this dialog."
+        """Show a custom-styled (frameless, dark-themed) settings dialog."""
+        dialog = QtWidgets.QDialog(self)
+        dialog.setWindowTitle("Settings")
+        dialog.setWindowFlag(QtCore.Qt.FramelessWindowHint, True)
+        dialog.setAttribute(QtCore.Qt.WA_TranslucentBackground, False)
+        dialog.setMinimumWidth(420)
+        dialog.setStyleSheet(f"""
+            QDialog {{
+                background-color: {COLORS['surface']};
+                border: 1px solid {COLORS['surface_border']};
+                border-radius: 12px;
+            }}
+        """)
+
+        outer_layout = QtWidgets.QVBoxLayout(dialog)
+        outer_layout.setContentsMargins(0, 0, 0, 0)
+        outer_layout.setSpacing(0)
+
+        # --- Custom dark title bar (the dialog is frameless, so the native
+        # OS title bar -- which renders light/white regardless of our
+        # stylesheet -- never appears) ---
+        title_bar = QtWidgets.QFrame(dialog)
+        title_bar.setStyleSheet(f"""
+            QFrame {{
+                background-color: {COLORS['background_dark']};
+                border-top-left-radius: 12px;
+                border-top-right-radius: 12px;
+            }}
+        """)
+        title_bar.setFixedHeight(40)
+        title_bar_layout = QtWidgets.QHBoxLayout(title_bar)
+        title_bar_layout.setContentsMargins(14, 0, 10, 0)
+
+        title_label = QtWidgets.QLabel("Settings", title_bar)
+        title_label.setStyleSheet(f"""
+            color: {COLORS['text_primary']};
+            font-size: 13px;
+            font-weight: 700;
+            background: transparent;
+            border: none;
+        """)
+        title_bar_layout.addWidget(title_label)
+        title_bar_layout.addStretch()
+
+        close_btn = QtWidgets.QPushButton("✕", title_bar)
+        close_btn.setFixedSize(26, 26)
+        close_btn.setCursor(QtCore.Qt.PointingHandCursor)
+        close_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent;
+                border: none;
+                color: {COLORS['text_secondary']};
+                font-size: 13px;
+            }}
+            QPushButton:hover {{
+                background-color: {COLORS['error']};
+                color: white;
+                border-radius: 13px;
+            }}
+        """)
+        close_btn.clicked.connect(dialog.reject)
+        title_bar_layout.addWidget(close_btn)
+
+        outer_layout.addWidget(title_bar)
+
+        # Allow dragging the frameless dialog by its custom title bar.
+        def _title_mouse_press(event):
+            dialog._drag_pos = event.globalPosition().toPoint() - dialog.frameGeometry().topLeft()
+
+        def _title_mouse_move(event):
+            if hasattr(dialog, '_drag_pos') and event.buttons() & QtCore.Qt.LeftButton:
+                dialog.move(event.globalPosition().toPoint() - dialog._drag_pos)
+
+        title_bar.mousePressEvent = _title_mouse_press
+        title_bar.mouseMoveEvent = _title_mouse_move
+
+        # --- Content ---
+        content = QtWidgets.QWidget(dialog)
+        content_layout = QtWidgets.QVBoxLayout(content)
+        content_layout.setContentsMargins(20, 16, 20, 16)
+        content_layout.setSpacing(14)
+        outer_layout.addWidget(content)
+
+        # Theme selector
+        theme_label = QtWidgets.QLabel("Theme", content)
+        theme_label.setStyleSheet(get_subheader_style())
+        content_layout.addWidget(theme_label)
+
+        theme_row = QtWidgets.QHBoxLayout()
+        theme_combo = QtWidgets.QComboBox(content)
+        theme_combo.addItem("Dark (default)")
+        theme_combo.setEnabled(False)
+        theme_combo.setStyleSheet(f"""
+            QComboBox {{
+                background-color: {COLORS['surface_light']};
+                color: {COLORS['text_secondary']};
+                border: 1px solid {COLORS['surface_border']};
+                border-radius: 6px;
+                padding: 6px 10px;
+            }}
+        """)
+        theme_row.addWidget(theme_combo)
+        theme_row.addStretch()
+        content_layout.addLayout(theme_row)
+
+        # Console font size
+        font_label = QtWidgets.QLabel("Console Font Size", content)
+        font_label.setStyleSheet(get_subheader_style())
+        content_layout.addWidget(font_label)
+
+        font_size_row = QtWidgets.QHBoxLayout()
+        font_size_group = QtWidgets.QButtonGroup(dialog)
+        current_font_size = getattr(self, 'console_font_size', 'medium')
+        for key, text in (("small", "Small"), ("medium", "Medium"), ("large", "Large")):
+            radio = QtWidgets.QRadioButton(text, content)
+            radio.setStyleSheet(f"color: {COLORS['text_primary']}; background: transparent;")
+            if key == current_font_size:
+                radio.setChecked(True)
+            font_size_group.addButton(radio)
+            font_size_row.addWidget(radio)
+            radio.toggled.connect(lambda checked, k=key: self._set_console_font_size(k) if checked else None)
+        font_size_row.addStretch()
+        content_layout.addLayout(font_size_row)
+
+        # Auto-connect on startup
+        auto_connect_check = QtWidgets.QCheckBox("Auto-connect on startup", content)
+        auto_connect_check.setStyleSheet(f"color: {COLORS['text_primary']}; background: transparent;")
+        auto_connect_check.setChecked(getattr(self, 'auto_connect_on_startup', True))
+        auto_connect_check.toggled.connect(lambda checked: setattr(self, 'auto_connect_on_startup', checked))
+        content_layout.addWidget(auto_connect_check)
+
+        # Default case export directory
+        export_label = QtWidgets.QLabel("Default Case Export Directory", content)
+        export_label.setStyleSheet(get_subheader_style())
+        content_layout.addWidget(export_label)
+
+        export_row = QtWidgets.QHBoxLayout()
+        export_path_edit = QtWidgets.QLineEdit(content)
+        export_path_edit.setText(getattr(self, 'default_export_dir', '') or '')
+        export_path_edit.setPlaceholderText("No directory selected")
+        export_path_edit.setStyleSheet(f"""
+            QLineEdit {{
+                background-color: {COLORS['surface_light']};
+                color: {COLORS['text_primary']};
+                border: 1px solid {COLORS['surface_border']};
+                border-radius: 6px;
+                padding: 6px 10px;
+            }}
+        """)
+        export_row.addWidget(export_path_edit)
+
+        def _browse_export_dir():
+            chosen = QtWidgets.QFileDialog.getExistingDirectory(
+                dialog, "Select Default Case Export Directory", export_path_edit.text()
+            )
+            if chosen:
+                export_path_edit.setText(chosen)
+                self.default_export_dir = chosen
+
+        browse_btn = QtWidgets.QPushButton("Browse...", content)
+        browse_btn.setIcon(QtGui.QIcon())
+        browse_btn.setStyleSheet(get_secondary_button_style())
+        browse_btn.setCursor(QtCore.Qt.PointingHandCursor)
+        browse_btn.clicked.connect(_browse_export_dir)
+        export_row.addWidget(browse_btn)
+        content_layout.addLayout(export_row)
+
+        # Divider
+        divider = QtWidgets.QFrame(content)
+        divider.setFrameShape(QtWidgets.QFrame.HLine)
+        divider.setStyleSheet(f"background-color: {COLORS['surface_border']}; max-height: 1px; border: none;")
+        content_layout.addWidget(divider)
+
+        # About section
+        about_label = QtWidgets.QLabel("About", content)
+        about_label.setStyleSheet(get_subheader_style())
+        content_layout.addWidget(about_label)
+
+        about_text = QtWidgets.QLabel(
+            f"DROIDCOM v{APP_VERSION}\n"
+            f"Part of the CommandCore Suite\n"
+            f"by Outback Electronics",
+            content,
         )
+        about_text.setStyleSheet(f"""
+            color: {COLORS['text_secondary']};
+            font-size: 12px;
+            background: transparent;
+            border: none;
+        """)
+        content_layout.addWidget(about_text)
+
+        # OK button -- text only, no icon, styled like other secondary buttons.
+        button_row = QtWidgets.QHBoxLayout()
+        button_row.addStretch()
+        ok_btn = QtWidgets.QPushButton("OK", content)
+        ok_btn.setIcon(QtGui.QIcon())
+        ok_btn.setStyleSheet(get_secondary_button_style())
+        ok_btn.setCursor(QtCore.Qt.PointingHandCursor)
+        ok_btn.setMinimumWidth(90)
+        ok_btn.clicked.connect(dialog.accept)
+        button_row.addWidget(ok_btn)
+        content_layout.addLayout(button_row)
+
+        dialog.exec()
+
+    CONSOLE_FONT_SIZES_PX = {"small": 10, "medium": 12, "large": 15}
+
+    def apply_console_font_size(self, size):
+        """Apply the given console font size ('small'/'medium'/'large') to the log console."""
+        font_px = self.CONSOLE_FONT_SIZES_PX.get(size, self.CONSOLE_FONT_SIZES_PX["medium"])
+        if hasattr(self, 'log_text') and self.log_text is not None:
+            self.log_text.setStyleSheet(get_log_text_style(font_px))
+
+    def _set_console_font_size(self, size):
+        """Store and immediately apply the selected console font size preference."""
+        self.console_font_size = size
+        self.apply_console_font_size(size)
 
     def open_help_dialog(self):
         """Show a basic help/documentation dialog."""
@@ -773,7 +986,7 @@ class WidgetsMixin:
         self.log_text.setMinimumHeight(400)
         self.log_text.setLineWrapMode(QtWidgets.QTextEdit.WidgetWidth)
         self.log_text.setWordWrapMode(QtGui.QTextOption.WordWrap)
-        self.log_text.setStyleSheet(get_log_text_style())
+        self.apply_console_font_size(getattr(self, 'console_font_size', 'medium'))
         log_layout.addWidget(self.log_text, 1)
         split_layout.addWidget(self.log_frame)
 
