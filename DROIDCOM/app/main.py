@@ -7,7 +7,7 @@ from pathlib import Path
 import sys
 
 from PySide6 import QtCore, QtWidgets
-from PySide6.QtGui import QColor, QIcon, QPalette
+from PySide6.QtGui import QIcon
 from PySide6.QtCore import QTimer
 
 
@@ -31,20 +31,14 @@ def _apply_dark_title_bar(window) -> None:
     elif sys.platform.startswith("linux"):
         app = QtWidgets.QApplication.instance()
         if app is not None:
-            app.setStyle("Fusion")
-            palette = QPalette()
-            palette.setColor(QPalette.ColorRole.Window, QColor("#1a1a1a"))
             try:
-                # Qt 6.5+: asks the platform theme (e.g. xdg-desktop-portal on
-                # GNOME/KDE Wayland) for dark window decorations. Has no effect
-                # on a bare X11 window manager, which paints the title bar
-                # itself and ignores in-app hints entirely -- that case can
-                # only be fixed by the desktop's own dark-theme setting, not
-                # by this application.
+                # Qt 6.5+: asks the platform theme (e.g. xdg-desktop-portal,
+                # or the native KDE/GNOME theme plugin) for dark window
+                # decorations, the same hint native/well-integrated apps rely
+                # on to get an automatically dark title bar.
                 app.styleHints().setColorScheme(QtCore.Qt.ColorScheme.Dark)
             except Exception:
                 pass
-            app.setPalette(palette)
 
 if __package__:
     from . import AndroidToolsModule
@@ -77,13 +71,7 @@ def main():
         # Create main window
         window = QtWidgets.QWidget()
         window.setWindowTitle("DROIDCOM - Android Device Management")
-        window.setWindowFlags(
-            QtCore.Qt.Window |
-            QtCore.Qt.WindowMinimizeButtonHint |
-            QtCore.Qt.WindowMaximizeButtonHint |
-            QtCore.Qt.WindowCloseButtonHint
-        )
-        
+
         # Set window size to screen size
         screen = QtWidgets.QApplication.primaryScreen()
         screen_geometry = screen.availableGeometry()
