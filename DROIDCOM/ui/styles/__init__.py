@@ -757,7 +757,6 @@ def get_subheader_style():
             color: {COLORS['text_secondary']};
             font-size: 12px;
             font-weight: 600;
-            text-transform: uppercase;
             background: transparent;
             padding: 3px 0;
         }}
@@ -818,6 +817,20 @@ def get_value_style():
             background: transparent;
         }}
     """
+
+
+def get_value_style_for(value):
+    """Style for info values, dimmed grey when the value is N/A/unknown."""
+    if value is None or str(value).strip().upper() in ("N/A", "UNKNOWN", ""):
+        return f"""
+            QLabel {{
+                color: #666666;
+                font-size: 13px;
+                font-weight: 400;
+                background: transparent;
+            }}
+        """
+    return get_value_style()
 
 
 def get_category_frame_style():

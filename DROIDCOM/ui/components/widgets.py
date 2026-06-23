@@ -19,6 +19,7 @@ from ..styles import (
     get_secondary_button_style,
     get_primary_button_style,
     get_log_text_style,
+    get_value_style_for,
     COLORS,
     EMOJI_ICONS,
 )
@@ -118,14 +119,14 @@ class WidgetsMixin:
         main_layout.addWidget(main_container, 1)
 
         split_layout = QtWidgets.QHBoxLayout(main_container)
-        split_layout.setContentsMargins(16, 16, 16, 16)
-        split_layout.setSpacing(16)
+        split_layout.setContentsMargins(12, 12, 12, 12)
+        split_layout.setSpacing(12)
 
         # === LEFT PANEL ===
         left_panel = QtWidgets.QWidget(main_container)
         content_layout = QtWidgets.QVBoxLayout(left_panel)
         content_layout.setContentsMargins(0, 0, 0, 0)
-        content_layout.setSpacing(16)
+        content_layout.setSpacing(10)
         split_layout.addWidget(left_panel, 1)
 
         # === HEADER SECTION ===
@@ -167,8 +168,8 @@ class WidgetsMixin:
         """)
         header_frame.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
         header_layout = QtWidgets.QHBoxLayout(header_frame)
-        header_layout.setContentsMargins(16, 12, 16, 12)
-        header_layout.setSpacing(10)
+        header_layout.setContentsMargins(14, 8, 14, 8)
+        header_layout.setSpacing(8)
 
         # Left side - Icon and Title
         title_container = QtWidgets.QWidget(header_frame)
@@ -225,75 +226,113 @@ class WidgetsMixin:
         self.forensic_indicator.setVisible(False)
         header_layout.addWidget(self.forensic_indicator)
 
-        # Forensic Mode toggle
+        # Forensic Mode toggle - visual state changes drastically when active
         self.forensic_mode_btn = QtWidgets.QPushButton("Forensic Mode", header_frame)
         self.forensic_mode_btn.setCheckable(True)
-        self.forensic_mode_btn.setStyleSheet(get_secondary_button_style())
+        self.forensic_mode_btn.setStyleSheet(self._forensic_button_style(active=False))
         self.forensic_mode_btn.setCursor(QtCore.Qt.PointingHandCursor)
+        self.forensic_mode_btn.setToolTip("Toggle Forensic Mode")
         self.forensic_mode_btn.clicked.connect(self.toggle_forensic_mode)
         header_layout.addWidget(self.forensic_mode_btn)
 
-        # Settings button
-        settings_btn = QtWidgets.QPushButton(header_frame)
-        settings_btn.setToolTip("Settings / Preferences")
-        settings_icon = create_icon_label(EMOJI_ICONS['settings'], size=16)
-        settings_layout = QtWidgets.QHBoxLayout(settings_btn)
-        settings_layout.addWidget(settings_icon)
-        settings_layout.setContentsMargins(8, 0, 8, 0)
-        settings_btn.setStyleSheet(get_secondary_button_style())
-        settings_btn.setCursor(QtCore.Qt.PointingHandCursor)
-        settings_btn.setFixedSize(36, 32)
-        settings_btn.clicked.connect(self.open_settings_dialog)
+        # Settings button - icon with a visible text label beneath it
+        settings_btn = self._create_icon_text_header_button(
+            header_frame, EMOJI_ICONS['settings'], "Settings",
+            "Settings / Preferences", self.open_settings_dialog
+        )
         header_layout.addWidget(settings_btn)
 
-        # Help button
-        help_btn = QtWidgets.QPushButton("?", header_frame)
-        help_btn.setToolTip("Help / Documentation")
-        help_btn.setStyleSheet(get_secondary_button_style())
-        help_btn.setCursor(QtCore.Qt.PointingHandCursor)
-        help_btn.setFixedSize(32, 32)
-        help_btn.clicked.connect(self.open_help_dialog)
+        # Help button - icon with a visible text label beneath it
+        help_btn = self._create_icon_text_header_button(
+            header_frame, EMOJI_ICONS.get('help', 'file'), "Help",
+            "Help / Documentation", self.open_help_dialog
+        )
         header_layout.addWidget(help_btn)
 
-        # Connection status indicator
-        self.connection_indicator = QtWidgets.QLabel("Disconnected", header_frame)
-        self.connection_indicator.setStyleSheet(f"""
-            background-color: {COLORS['background_hover']};
+        # Connection status pill with a coloured status dot
+        self.connection_indicator = QtWidgets.QLabel(header_frame)
+        self.connection_indicator.setTextFormat(QtCore.Qt.RichText)
+        header_layout.addWidget(self.connection_indicator)
+        self.set_connection_indicator(connected=False)
+
+        content_layout.addWidget(header_frame)
+
+    def _create_icon_text_header_button(self, parent, icon_name, label_text, tooltip, callback):
+        """A small header button: icon on top, a visible text label beneath it."""
+        container = QtWidgets.QPushButton(parent)
+        container.setToolTip(tooltip)
+        container.setStyleSheet(get_secondary_button_style())
+        container.setCursor(QtCore.Qt.PointingHandCursor)
+        container.setFixedSize(56, 44)
+        container.clicked.connect(callback)
+
+        btn_layout = QtWidgets.QVBoxLayout(container)
+        btn_layout.setContentsMargins(4, 4, 4, 4)
+        btn_layout.setSpacing(2)
+        btn_layout.setAlignment(QtCore.Qt.AlignCenter)
+
+        icon_widget = create_icon_label(icon_name, size=16)
+        icon_widget.setAlignment(QtCore.Qt.AlignCenter)
+        btn_layout.addWidget(icon_widget, 0, QtCore.Qt.AlignCenter)
+
+        label = QtWidgets.QLabel(label_text, container)
+        label.setStyleSheet(f"""
+            font-size: 9px;
+            font-weight: 600;
             color: {COLORS['text_secondary']};
+            background: transparent;
+        """)
+        label.setAlignment(QtCore.Qt.AlignCenter)
+        btn_layout.addWidget(label, 0, QtCore.Qt.AlignCenter)
+
+        return container
+
+    def _forensic_button_style(self, active):
+        """Standard secondary style when inactive; unmistakeable red/glow when active."""
+        if not active:
+            return get_secondary_button_style()
+        return f"""
+            QPushButton {{
+                background-color: {COLORS['error_bg']};
+                color: white;
+                border: 2px solid {COLORS['error']};
+                border-radius: 8px;
+                padding: 9px 16px;
+                font-size: 12px;
+                font-weight: 700;
+            }}
+            QPushButton:hover {{
+                background-color: {COLORS['error']};
+                border-color: white;
+            }}
+        """
+
+    def set_connection_indicator(self, connected, device_name=None):
+        """Update the persistent connection status pill, including its status dot."""
+        if not hasattr(self, 'connection_indicator'):
+            return
+        if connected:
+            dot_color = COLORS['success']
+            text = f"Connected — {device_name}" if device_name else "Connected"
+            bg = COLORS['success_bg']
+            text_color = "white"
+        else:
+            dot_color = COLORS['error']
+            text = "Disconnected"
+            bg = COLORS['background_hover']
+            text_color = COLORS['text_secondary']
+
+        self.connection_indicator.setText(
+            f'<span style="color:{dot_color};">●</span> '
+            f'<span style="color:{text_color};">{text}</span>'
+        )
+        self.connection_indicator.setStyleSheet(f"""
+            background-color: {bg};
             padding: 4px 10px;
             border-radius: 10px;
             font-size: 11px;
             font-weight: 600;
         """)
-        header_layout.addWidget(self.connection_indicator)
-
-        content_layout.addWidget(header_frame)
-
-    def set_connection_indicator(self, connected, device_name=None):
-        """Update the persistent connection status indicator."""
-        if not hasattr(self, 'connection_indicator'):
-            return
-        if connected:
-            label = f"Connected: {device_name}" if device_name else "Connected"
-            self.connection_indicator.setText(label)
-            self.connection_indicator.setStyleSheet(f"""
-                background-color: {COLORS['success_bg']};
-                color: white;
-                padding: 4px 10px;
-                border-radius: 10px;
-                font-size: 11px;
-                font-weight: 600;
-            """)
-        else:
-            self.connection_indicator.setText("Disconnected")
-            self.connection_indicator.setStyleSheet(f"""
-                background-color: {COLORS['background_hover']};
-                color: {COLORS['text_secondary']};
-                padding: 4px 10px;
-                border-radius: 10px;
-                font-size: 11px;
-                font-weight: 600;
-            """)
 
     def toggle_forensic_mode(self):
         """Enable/disable Forensic Mode: gates write operations and enforces
@@ -307,11 +346,17 @@ class WidgetsMixin:
             if self.write_blocker is not None:
                 self.write_blocker.enabled = True
             self.forensic_indicator.setVisible(True)
+            self.forensic_mode_btn.setText("FORENSIC MODE ACTIVE")
+            self.forensic_mode_btn.setStyleSheet(self._forensic_button_style(active=True))
             self.log_message("Forensic Mode enabled - write operations disabled", level="warning")
         else:
             self.forensic_mode = False
             self.forensic_indicator.setVisible(False)
+            self.forensic_mode_btn.setText("Forensic Mode")
+            self.forensic_mode_btn.setStyleSheet(self._forensic_button_style(active=False))
             self.log_message("Forensic Mode disabled", level="info")
+        if hasattr(self, "update_forensic_lock_state"):
+            self.update_forensic_lock_state()
 
     def open_settings_dialog(self):
         """Show a basic settings/preferences dialog."""
@@ -344,17 +389,18 @@ class WidgetsMixin:
         """)
         self.setup_status_frame.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
         setup_layout = QtWidgets.QHBoxLayout(self.setup_status_frame)
-        setup_layout.setContentsMargins(14, 10, 14, 10)
+        setup_layout.setContentsMargins(12, 7, 12, 7)
         setup_layout.setSpacing(10)
 
-        # Status icon
-        icon_label = create_icon_label('success' if self.platform_tools_installed else 'error', size=14)
-        icon_label.setStyleSheet("background: transparent;")
-        setup_layout.addWidget(icon_label)
+        # Status icon - green checkmark when installed, otherwise nothing alarming
+        if self.platform_tools_installed:
+            icon_label = create_icon_label('success', size=14)
+            icon_label.setStyleSheet("background: transparent;")
+            setup_layout.addWidget(icon_label)
 
         # Status text
         tools_status = "Installed" if self.platform_tools_installed else "Not Installed"
-        status_color = COLORS['success'] if self.platform_tools_installed else COLORS['error']
+        status_color = COLORS['success'] if self.platform_tools_installed else COLORS['text_secondary']
         self.tools_label = QtWidgets.QLabel(
             f"Android Platform Tools: <span style='color: {status_color}; font-weight: 600;'>{tools_status}</span>",
             self.setup_status_frame
@@ -374,6 +420,24 @@ class WidgetsMixin:
             tools_btn.clicked.connect(self.install_platform_tools)
             tools_btn.setCursor(QtCore.Qt.PointingHandCursor)
             setup_layout.addWidget(tools_btn)
+        else:
+            reinstall_link = QtWidgets.QPushButton("Reinstall", self.setup_status_frame)
+            reinstall_link.setFlat(True)
+            reinstall_link.setCursor(QtCore.Qt.PointingHandCursor)
+            reinstall_link.setStyleSheet(f"""
+                QPushButton {{
+                    color: {COLORS['text_secondary']};
+                    background: transparent;
+                    border: none;
+                    text-decoration: underline;
+                    font-size: 11px;
+                }}
+                QPushButton:hover {{
+                    color: {COLORS['text_primary']};
+                }}
+            """)
+            reinstall_link.clicked.connect(self.install_platform_tools)
+            setup_layout.addWidget(reinstall_link)
 
         content_layout.addWidget(self.setup_status_frame)
 
@@ -707,20 +771,43 @@ class WidgetsMixin:
     def enable_device_actions(self):
         """Enable device action buttons when a device is connected"""
         self.screenshot_btn.setEnabled(True)
+        self.screenshot_btn.setToolTip("")
         self.backup_btn.setEnabled(True)
+        self.backup_btn.setToolTip("")
         self.files_btn.setEnabled(True)
-        self.install_apk_btn.setEnabled(True)
+        self.files_btn.setToolTip("")
         self.app_manager_btn.setEnabled(True)
+        self.app_manager_btn.setToolTip("")
         self.logcat_btn.setEnabled(True)
+        self.logcat_btn.setToolTip("")
+        self.install_apk_btn.setEnabled(True)
+        self.install_apk_btn.setToolTip("")
+        self.update_forensic_lock_state()
 
     def disable_device_actions(self):
         """Disable device action buttons when no device is connected"""
-        self.screenshot_btn.setEnabled(False)
-        self.backup_btn.setEnabled(False)
-        self.files_btn.setEnabled(False)
-        self.install_apk_btn.setEnabled(False)
-        self.app_manager_btn.setEnabled(False)
-        self.logcat_btn.setEnabled(False)
+        connect_tip = "Connect a device to use this feature"
+        for btn in (self.screenshot_btn, self.backup_btn, self.files_btn,
+                    self.install_apk_btn, self.app_manager_btn, self.logcat_btn):
+            btn.setEnabled(False)
+            btn.setToolTip(connect_tip)
+
+    def update_forensic_lock_state(self):
+        """In Forensic Mode, disable and visually lock the Install APK action."""
+        if not hasattr(self, 'install_apk_btn'):
+            return
+        if getattr(self, 'forensic_mode', False):
+            self.install_apk_btn.setEnabled(False)
+            self.install_apk_btn.setToolTip("Disabled in Forensic Mode")
+            self.install_apk_btn.setText("\U0001F512 Install APK")
+        else:
+            self.install_apk_btn.setText("Install APK")
+            if self.device_connected:
+                self.install_apk_btn.setEnabled(True)
+                self.install_apk_btn.setToolTip("")
+            else:
+                self.install_apk_btn.setEnabled(False)
+                self.install_apk_btn.setToolTip("Connect a device to use this feature")
 
     def _run_in_thread(self, target_function, *args, **kwargs):
         """Run a function in a separate thread with error handling"""
@@ -795,3 +882,9 @@ class WidgetsMixin:
 
         if 'kernel' in self.device_info:
             self.adv_info_fields['Kernel'].setText(self.device_info['kernel'])
+
+        if 'bootloader_status' in self.device_info:
+            self.adv_info_fields['Bootloader Status'].setText(self.device_info['bootloader_status'])
+
+        for value_label in list(self.info_fields.values()) + list(self.adv_info_fields.values()):
+            value_label.setStyleSheet(get_value_style_for(value_label.text()))
