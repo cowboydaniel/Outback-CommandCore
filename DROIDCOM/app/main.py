@@ -34,6 +34,16 @@ def _apply_dark_title_bar(window) -> None:
             app.setStyle("Fusion")
             palette = QPalette()
             palette.setColor(QPalette.ColorRole.Window, QColor("#1a1a1a"))
+            try:
+                # Qt 6.5+: asks the platform theme (e.g. xdg-desktop-portal on
+                # GNOME/KDE Wayland) for dark window decorations. Has no effect
+                # on a bare X11 window manager, which paints the title bar
+                # itself and ignores in-app hints entirely -- that case can
+                # only be fixed by the desktop's own dark-theme setting, not
+                # by this application.
+                app.styleHints().setColorScheme(QtCore.Qt.ColorScheme.Dark)
+            except Exception:
+                pass
             app.setPalette(palette)
 
 if __package__:
