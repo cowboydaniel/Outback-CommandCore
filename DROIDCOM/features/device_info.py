@@ -176,6 +176,28 @@ class DeviceInfoMixin:
             if kernel_cmd.returncode == 0:
                 device_info['kernel'] = kernel_cmd.stdout.strip()
 
+            # Get build number
+            build_cmd = subprocess.run(
+                [adb_cmd, '-s', serial, 'shell', 'getprop', 'ro.build.display.id'],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=5
+            )
+            if build_cmd.returncode == 0 and build_cmd.stdout.strip():
+                device_info['build_number'] = build_cmd.stdout.strip()
+
+            # Get security patch level
+            patch_cmd = subprocess.run(
+                [adb_cmd, '-s', serial, 'shell', 'getprop', 'ro.build.version.security_patch'],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=5
+            )
+            if patch_cmd.returncode == 0 and patch_cmd.stdout.strip():
+                device_info['security_patch'] = patch_cmd.stdout.strip()
+
             # Try to get IMEI
             self._get_device_imei(device_info, serial, adb_cmd)
 

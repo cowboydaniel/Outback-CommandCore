@@ -5,7 +5,10 @@ from PySide6 import QtCore, QtWidgets
 from ..ui.components.listbox import ListBox
 from ..ui.styles import (
     EMOJI_ICONS,
+    COLORS,
     get_action_button_style,
+    get_primary_button_style,
+    get_secondary_button_style,
     get_label_style,
     get_log_text_style,
 )
@@ -55,27 +58,29 @@ def create_device_info_tab(ui):
     conn_buttons_layout.setContentsMargins(0, 0, 0, 0)
     conn_buttons_layout.setSpacing(10)
 
-    button_style = get_action_button_style()
+    secondary_style = get_secondary_button_style()
 
+    # "Connect Device" is the primary call-to-action: accent colour, slightly larger.
     ui.connect_btn = QtWidgets.QPushButton("Connect Device", conn_buttons_frame)
-    ui.connect_btn.setStyleSheet(button_style)
+    ui.connect_btn.setStyleSheet(get_primary_button_style())
     ui.connect_btn.clicked.connect(ui.connect_device)
     ui.connect_btn.setCursor(QtCore.Qt.PointingHandCursor)
-    ui.connect_btn.setMinimumWidth(170)
-    icon_widget = create_icon_label(EMOJI_ICONS['connect'], size=16)
+    ui.connect_btn.setMinimumWidth(190)
+    icon_widget = create_icon_label(EMOJI_ICONS['connect'], size=18)
     btn_layout = QtWidgets.QHBoxLayout(ui.connect_btn)
     btn_layout.addWidget(icon_widget)
     btn_layout.addStretch()
     btn_layout.setSpacing(8)
-    btn_layout.setContentsMargins(12, 0, 12, 0)
+    btn_layout.setContentsMargins(14, 0, 14, 0)
     conn_buttons_layout.addWidget(ui.connect_btn)
 
+    # WiFi ADB / Refresh / Remove Offline are secondary actions.
     ui.wifi_adb_btn = QtWidgets.QPushButton("WiFi ADB", conn_buttons_frame)
-    ui.wifi_adb_btn.setStyleSheet(button_style)
+    ui.wifi_adb_btn.setStyleSheet(secondary_style)
     ui.wifi_adb_btn.clicked.connect(ui.setup_wifi_adb)
     ui.wifi_adb_btn.setCursor(QtCore.Qt.PointingHandCursor)
-    ui.wifi_adb_btn.setMinimumWidth(150)
-    icon_widget = create_icon_label(EMOJI_ICONS['wifi'], size=16)
+    ui.wifi_adb_btn.setMinimumWidth(140)
+    icon_widget = create_icon_label(EMOJI_ICONS['wifi'], size=14)
     btn_layout = QtWidgets.QHBoxLayout(ui.wifi_adb_btn)
     btn_layout.addWidget(icon_widget)
     btn_layout.addStretch()
@@ -84,11 +89,11 @@ def create_device_info_tab(ui):
     conn_buttons_layout.addWidget(ui.wifi_adb_btn)
 
     ui.refresh_btn = QtWidgets.QPushButton("Refresh", conn_buttons_frame)
-    ui.refresh_btn.setStyleSheet(button_style)
+    ui.refresh_btn.setStyleSheet(secondary_style)
     ui.refresh_btn.clicked.connect(ui.refresh_device_list)
     ui.refresh_btn.setCursor(QtCore.Qt.PointingHandCursor)
-    ui.refresh_btn.setMinimumWidth(140)
-    icon_widget = create_icon_label(EMOJI_ICONS['refresh'], size=16)
+    ui.refresh_btn.setMinimumWidth(130)
+    icon_widget = create_icon_label(EMOJI_ICONS['refresh'], size=14)
     btn_layout = QtWidgets.QHBoxLayout(ui.refresh_btn)
     btn_layout.addWidget(icon_widget)
     btn_layout.addStretch()
@@ -97,11 +102,11 @@ def create_device_info_tab(ui):
     conn_buttons_layout.addWidget(ui.refresh_btn)
 
     ui.remove_offline_btn = QtWidgets.QPushButton("Remove Offline", conn_buttons_frame)
-    ui.remove_offline_btn.setStyleSheet(button_style)
+    ui.remove_offline_btn.setStyleSheet(secondary_style)
     ui.remove_offline_btn.clicked.connect(ui.remove_offline_devices)
     ui.remove_offline_btn.setCursor(QtCore.Qt.PointingHandCursor)
-    ui.remove_offline_btn.setMinimumWidth(160)
-    icon_widget = create_icon_label(EMOJI_ICONS['remove'], size=16)
+    ui.remove_offline_btn.setMinimumWidth(150)
+    icon_widget = create_icon_label(EMOJI_ICONS['remove'], size=14)
     btn_layout = QtWidgets.QHBoxLayout(ui.remove_offline_btn)
     btn_layout.addWidget(icon_widget)
     btn_layout.addStretch()
@@ -125,15 +130,43 @@ def create_device_info_tab(ui):
     ui.device_listbox = ListBox(list_frame)
     ui.device_listbox.setMinimumHeight(90)
     ui.device_listbox.setMaximumHeight(120)
+    ui.device_listbox.show_placeholder("No devices connected — enable USB debugging and connect via USB")
     list_layout.addWidget(ui.device_listbox)
 
     connection_layout.addWidget(list_frame)
+
+    # === ONBOARDING / GETTING STARTED PANEL (shown until a device connects) ===
+    create_onboarding_panel(ui, device_layout)
 
     # === DEVICE INFO SECTION ===
     create_device_info_display(ui, device_layout)
 
     # === DEVICE ACTIONS SECTION ===
     create_device_actions(ui, device_layout)
+
+
+def create_onboarding_panel(ui, parent_layout):
+    """Create a step-by-step getting-started panel shown when no device is connected."""
+    ui.onboarding_frame = QtWidgets.QGroupBox("Getting Started", ui.device_frame)
+    onboarding_layout = QtWidgets.QVBoxLayout(ui.onboarding_frame)
+    onboarding_layout.setContentsMargins(16, 24, 16, 16)
+    onboarding_layout.setSpacing(8)
+    parent_layout.addWidget(ui.onboarding_frame)
+
+    steps = [
+        "1. Enable Developer Options on the Android device",
+        "2. Enable USB Debugging in Developer Options",
+        "3. Connect the device via USB",
+        "4. Accept the RSA key fingerprint prompt on the device",
+    ]
+    for step in steps:
+        step_label = QtWidgets.QLabel(step, ui.onboarding_frame)
+        step_label.setStyleSheet(f"""
+            color: {COLORS['text_secondary']};
+            font-size: 13px;
+            padding: 2px 0;
+        """)
+        onboarding_layout.addWidget(step_label)
 
 
 def create_device_info_display(ui, parent_layout):
@@ -158,6 +191,7 @@ def create_device_info_display(ui, parent_layout):
         "Android Version": QtWidgets.QLabel("N/A", info_content),
         "Serial Number": QtWidgets.QLabel("N/A", info_content),
         "IMEI": QtWidgets.QLabel("N/A", info_content),
+        "Build Number": QtWidgets.QLabel("N/A", info_content),
         "Battery Level": QtWidgets.QLabel("N/A", info_content),
     }
 
@@ -168,6 +202,7 @@ def create_device_info_display(ui, parent_layout):
         "Screen Resolution": QtWidgets.QLabel("N/A", info_content),
         "CPU": QtWidgets.QLabel("N/A", info_content),
         "Kernel": QtWidgets.QLabel("N/A", info_content),
+        "Security Patch Level": QtWidgets.QLabel("N/A", info_content),
     }
 
     # Set column widths

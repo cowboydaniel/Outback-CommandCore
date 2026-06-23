@@ -1,6 +1,6 @@
 """ListBox component used in DROIDCOM widgets."""
 
-from PySide6 import QtWidgets
+from PySide6 import QtCore, QtWidgets
 
 
 class ListBox(QtWidgets.QListWidget):
@@ -10,6 +10,14 @@ class ListBox(QtWidgets.QListWidget):
         super().__init__(parent)
         self.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
         self.setAlternatingRowColors(True)
+
+    def show_placeholder(self, text):
+        """Replace the list contents with a single, non-selectable placeholder row."""
+        self.clear()
+        item = QtWidgets.QListWidgetItem(text)
+        item.setFlags(QtCore.Qt.NoItemFlags)
+        item.setForeground(self.palette().placeholderText())
+        self.addItem(item)
 
     def curselection(self):
         return [self.row(item) for item in self.selectedItems()]
