@@ -156,6 +156,7 @@ class WidgetsMixin:
         clipped regardless of font/DPI.
         """
         header_frame = QtWidgets.QFrame(parent)
+        header_frame.setFrameShape(QtWidgets.QFrame.NoFrame)
         header_frame.setProperty("headerFrame", True)
         header_frame.setStyleSheet(f"""
             QFrame {{
@@ -180,7 +181,8 @@ class WidgetsMixin:
 
         # Android Robot Icon (using SVG)
         icon_label = create_icon_label('android-robot', size=28)
-        icon_label.setStyleSheet("background: transparent;")
+        icon_label.setStyleSheet("background: transparent; border: none;")
+        icon_label.setFrameShape(QtWidgets.QFrame.NoFrame)
         title_layout.addWidget(icon_label)
 
         # Title and subtitle
@@ -195,8 +197,10 @@ class WidgetsMixin:
             font-weight: 700;
             color: {COLORS['text_primary']};
             background: transparent;
+            border: none;
             letter-spacing: 1px;
         """)
+        header_label.setFrameShape(QtWidgets.QFrame.NoFrame)
         header_label.setWordWrap(False)
         text_layout.addWidget(header_label)
 
@@ -206,7 +210,9 @@ class WidgetsMixin:
             font-weight: 500;
             color: {COLORS['text_secondary']};
             background: transparent;
+            border: none;
         """)
+        subtitle_label.setFrameShape(QtWidgets.QFrame.NoFrame)
         subtitle_label.setWordWrap(False)
         text_layout.addWidget(subtitle_label)
 
@@ -414,6 +420,7 @@ class WidgetsMixin:
         state changes (e.g. after Install/Reinstall finishes).
         """
         self.setup_status_frame = QtWidgets.QFrame(parent)
+        self.setup_status_frame.setFrameShape(QtWidgets.QFrame.NoFrame)
         self.setup_status_frame.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
         content_layout.addWidget(self.setup_status_frame)
         self.refresh_tools_status()
