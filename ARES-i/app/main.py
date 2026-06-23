@@ -45,6 +45,9 @@ def main() -> int:
     configure_logging()
     app = QApplication(sys.argv)
     app.setApplicationVersion(config.APP_VERSION)
+    # Splash is a QMainWindow; closing it before the real window appears
+    # must not trigger quitOnLastWindowClosed and kill the app.
+    app.setQuitOnLastWindowClosed(False)
 
     # Show splash screen
     splash = show_splash_screen()
@@ -62,21 +65,29 @@ def main() -> int:
         worker.progress.connect(splash.set_progress)
 
     main_windows = []
+    _live_refs = []
 
     def show_main() -> None:
         elapsed = time.time() - splash_start_time
         remaining = max(0, minimum_splash_duration - elapsed)
 
         def finish_startup() -> None:
-            # Close splash FIRST before any potentially blocking operations
+            # SplashScreen is a QMainWindow, not QSplashScreen - it has no
+            # .finish() method, so close it directly.
             if splash and splash.isVisible():
-                splash.finish(None)
+                splash.close()
 
             window = IOSToolsModule()
             main_windows.append(window)
+            window.destroyed.connect(app.quit)
             window.show()
+            _live_refs.clear()
 
-        QTimer.singleShot(int(remaining * 1000), finish_startup)
+        timer = QTimer()
+        timer.setSingleShot(True)
+        timer.timeout.connect(finish_startup)
+        _live_refs.append(timer)
+        timer.start(int(remaining * 1000))
 
     def handle_error(message: str) -> None:
         if splash and splash.isVisible():
