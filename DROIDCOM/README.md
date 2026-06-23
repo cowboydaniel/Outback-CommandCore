@@ -12,6 +12,11 @@ DROIDCOM is a comprehensive Android diagnostic, penetration, and system control 
 - **Stress & Benchmark Testing**: CPU/RAM/GPU/Dalvik cache stress tests, app crash forcing, and looped benchmarking
 - **Automation**: Shell script execution, batch app management, scheduled tasks, and combined logcat/screencap capture
 - **Forensics Integration**: Native Andriller extraction/lockscreen cracking plus launchers for ALEAPP, MVT, and Autopsy
+- **Acquisition Imaging**: Logical (tar-stream) device image with a SHA-256 computed and recorded at capture time, with later re-verification against that recorded hash
+- **Write Blocker Enforcement**: Toggleable guard that rejects device-mutating ADB commands (install/uninstall/clear-data/push, etc.) while active, with every check logged
+- **Chain of Custody Reporting**: PDF (or text fallback) report with examiner name, case/exhibit numbers, timestamps, device info, and acquisition hashes
+- **Case Management**: Organises acquisitions and reports on disk by case number and exhibit number
+- **Evidence Integrity Log**: Hash-chained, append-only audit trail of every case action, with built-in tamper detection
 
 ## Requirements
 
@@ -24,6 +29,7 @@ Install via pip:
 pip install -r requirements.txt
 ```
 - `PySide6>=6.5.0` – Qt6 GUI framework
+- `reportlab` (optional) – PDF chain-of-custody reports; falls back to a plain-text report if not installed
 
 ### UI Baseline
 DROIDCOM now targets PySide6 exclusively. Legacy Tkinter compatibility has been
@@ -136,6 +142,10 @@ python DROIDCOM/main.py
 - **System Tools** – Battery, memory, CPU, network, thermal, and storage stats; running services; detailed device info; sensor status; power profile; location settings; Doze mode; SELinux status; time/date info; CPU governor info
 
 - **Forensics** – Native Andriller extraction and lockscreen cracker dialog, plus launchers for ALEAPP, MVT (Mobile Verification Toolkit), and Autopsy (see [docs/system-deps.md](../docs/system-deps.md#droidcom) for optional install instructions)
+
+- **Evidence & Custody** – Open a case (case number, exhibit number, examiner name) to create an on-disk case/exhibit folder structure; acquire a logical, hash-verified image of the device (tar-stream of a chosen device path, SHA-256 computed at capture and re-checkable later); enable/disable the write blocker, which inspects every ADB command issued through the guarded paths and refuses anything classified as a write (`install`, `uninstall`, `push`, `pm clear`, etc.) while active; view the evidence log, an append-only, hash-chained record of every case action (case opened, commands allowed/blocked, acquisitions, verifications, report generation) with one-click chain-integrity verification; and generate a chain-of-custody report (PDF via `reportlab` if installed, otherwise a plain-text report) summarizing the case, device info, acquisition hashes, and full evidence log
+
+  > **Scope note:** acquisition is a *logical* image (a tar stream of the requested path over ADB), not a physical bit-for-bit dump of the underlying flash/block device — most Android devices do not expose that without root. The write blocker covers ADB commands issued through DROIDCOM's guarded code paths (install/uninstall/clear-data APK management plus the acquisition pipeline itself); it is not a kernel- or USB-level hardware write blocker for every code path in the application.
 
 ### Examples
 ```bash

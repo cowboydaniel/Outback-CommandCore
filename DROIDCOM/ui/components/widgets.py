@@ -140,16 +140,16 @@ class WidgetsMixin:
             }}
         """)
         header_layout = QtWidgets.QHBoxLayout(header_frame)
-        header_layout.setContentsMargins(20, 16, 20, 16)
+        header_layout.setContentsMargins(12, 8, 12, 8)
 
         # Left side - Icon and Title
         title_container = QtWidgets.QWidget(header_frame)
         title_layout = QtWidgets.QHBoxLayout(title_container)
         title_layout.setContentsMargins(0, 0, 0, 0)
-        title_layout.setSpacing(16)
+        title_layout.setSpacing(10)
 
         # Android Robot Icon (using SVG)
-        icon_label = create_icon_label('android-robot', size=36)
+        icon_label = create_icon_label('android-robot', size=22)
         icon_label.setStyleSheet(f"""
             background: transparent;
         """)
@@ -159,21 +159,21 @@ class WidgetsMixin:
         text_container = QtWidgets.QWidget(title_container)
         text_layout = QtWidgets.QVBoxLayout(text_container)
         text_layout.setContentsMargins(0, 0, 0, 0)
-        text_layout.setSpacing(2)
+        text_layout.setSpacing(0)
 
         header_label = QtWidgets.QLabel("DROIDCOM", text_container)
         header_label.setStyleSheet(f"""
-            font-size: 26px;
-            font-weight: 800;
+            font-size: 15px;
+            font-weight: 700;
             color: {COLORS['text_primary']};
             background: transparent;
-            letter-spacing: 2px;
+            letter-spacing: 1px;
         """)
         text_layout.addWidget(header_label)
 
         subtitle_label = QtWidgets.QLabel("Android Device Management & Control", text_container)
         subtitle_label.setStyleSheet(f"""
-            font-size: 12px;
+            font-size: 10px;
             font-weight: 500;
             color: {COLORS['text_secondary']};
             background: transparent;
@@ -189,13 +189,14 @@ class WidgetsMixin:
         version_badge.setStyleSheet(f"""
             background-color: {COLORS['accent_muted']};
             color: {COLORS['accent_primary']};
-            padding: 6px 14px;
-            border-radius: 12px;
-            font-size: 12px;
+            padding: 3px 10px;
+            border-radius: 10px;
+            font-size: 11px;
             font-weight: 600;
         """)
         header_layout.addWidget(version_badge)
 
+        header_frame.setMaximumHeight(48)
         content_layout.addWidget(header_frame)
 
     def _create_tools_status(self, content_layout, parent):
@@ -209,11 +210,11 @@ class WidgetsMixin:
             }}
         """)
         setup_layout = QtWidgets.QHBoxLayout(self.setup_status_frame)
-        setup_layout.setContentsMargins(16, 12, 16, 12)
-        setup_layout.setSpacing(16)
+        setup_layout.setContentsMargins(12, 6, 12, 6)
+        setup_layout.setSpacing(10)
 
         # Status icon
-        icon_label = create_icon_label('success' if self.platform_tools_installed else 'error', size=18)
+        icon_label = create_icon_label('success' if self.platform_tools_installed else 'error', size=14)
         icon_label.setStyleSheet("background: transparent;")
         setup_layout.addWidget(icon_label)
 
@@ -226,7 +227,7 @@ class WidgetsMixin:
         )
         self.tools_label.setTextFormat(QtCore.Qt.RichText)
         self.tools_label.setStyleSheet(f"""
-            font-size: 13px;
+            font-size: 11px;
             color: {COLORS['text_primary']};
             background: transparent;
         """)
@@ -240,6 +241,7 @@ class WidgetsMixin:
             tools_btn.setCursor(QtCore.Qt.PointingHandCursor)
             setup_layout.addWidget(tools_btn)
 
+        self.setup_status_frame.setMaximumHeight(36)
         content_layout.addWidget(self.setup_status_frame)
 
     def _create_main_tabs(self, content_layout, parent):
@@ -399,6 +401,14 @@ class WidgetsMixin:
             self._add_tool_button(layout, 1, 0, "ALEAPP Parser", self.run_aleapp, "clipboard")
             self._add_tool_button(layout, 2, 0, "MVT Check", self.run_mvt_check, "shield")
             self._add_tool_button(layout, 3, 0, "Autopsy", self.launch_autopsy, "rocket")
+
+        elif category_name == "Evidence & Custody":
+            self._add_tool_button(layout, 0, 0, "New Case", self.new_case_dialog, "file")
+            self._add_tool_button(layout, 1, 0, "Toggle Write Blocker", self.toggle_write_blocker, "lock")
+            self._add_tool_button(layout, 2, 0, "Acquire Image", self.run_device_acquisition, "download")
+            self._add_tool_button(layout, 3, 0, "Verify Image", self.verify_acquisition_image, "shield")
+            self._add_tool_button(layout, 0, 1, "Evidence Log", self.view_evidence_log, "clipboard")
+            self._add_tool_button(layout, 1, 1, "Custody Report", self.generate_chain_of_custody_report, "file")
 
     def _create_log_section(self, content_layout, parent):
         """Create the log section with modern styling"""

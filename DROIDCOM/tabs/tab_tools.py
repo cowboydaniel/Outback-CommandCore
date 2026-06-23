@@ -130,6 +130,11 @@ def create_tools_tab(ui):
             "icon": EMOJI_ICONS['Forensics'],
             "min_height": 280
         },
+        {
+            "name": "Evidence & Custody",
+            "icon": EMOJI_ICONS['Evidence & Custody'],
+            "min_height": 280
+        },
     ]
 
     # Calculate the number of columns based on available width

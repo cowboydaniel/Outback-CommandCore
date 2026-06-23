@@ -56,8 +56,12 @@ class AppManagerMixin:
                 self.update_status("Installation failed")
                 return
 
+            install_cmd = [adb_cmd, '-s', serial, 'install', '-r', apk_path]
+            if not self._check_write_blocker(install_cmd, f"install APK {os.path.basename(apk_path)}"):
+                return
+
             result = subprocess.run(
-                [adb_cmd, '-s', serial, 'install', '-r', apk_path],
+                install_cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
@@ -320,8 +324,12 @@ class AppManagerMixin:
             self.log_message(f"Uninstalling {package_name}...")
             self.update_status(f"Uninstalling {package_name}...")
 
+            uninstall_cmd = [adb_cmd, '-s', serial, 'uninstall', package_name]
+            if not self._check_write_blocker(uninstall_cmd, f"uninstall {package_name}"):
+                return
+
             result = subprocess.run(
-                [adb_cmd, '-s', serial, 'uninstall', package_name],
+                uninstall_cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
@@ -381,8 +389,12 @@ class AppManagerMixin:
             self.log_message(f"Clearing data for {package_name}...")
             self.update_status(f"Clearing data for {package_name}...")
 
+            clear_cmd = [adb_cmd, '-s', serial, 'shell', 'pm', 'clear', package_name]
+            if not self._check_write_blocker(clear_cmd, f"clear data for {package_name}"):
+                return
+
             result = subprocess.run(
-                [adb_cmd, '-s', serial, 'shell', 'pm', 'clear', package_name],
+                clear_cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
