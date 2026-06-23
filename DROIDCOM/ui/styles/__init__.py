@@ -172,6 +172,7 @@ def get_main_stylesheet():
     QTabWidget::pane {{
         background-color: {COLORS['surface']};
         border: 1px solid {COLORS['surface_border']};
+        border-top: 0px;
         border-radius: 12px;
         border-top-left-radius: 0px;
         padding: 10px;
