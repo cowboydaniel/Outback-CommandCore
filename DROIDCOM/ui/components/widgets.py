@@ -240,43 +240,52 @@ class WidgetsMixin:
             self._create_icon_text_header_button(
                 header_frame, "shield", "Forensic",
                 "Forensic Mode - click to toggle", self.toggle_forensic_mode,
-                checkable=True, return_widgets=True,
+                checkable=True, return_widgets=True, object_name="forensic_btn",
             )
         header_layout.addWidget(self.forensic_mode_btn)
 
         # Settings button - icon with a visible text label beneath it
         settings_btn = self._create_icon_text_header_button(
             header_frame, EMOJI_ICONS['settings'], "Settings",
-            "Settings / Preferences", self.open_settings_dialog
+            "Settings / Preferences", self.open_settings_dialog,
+            object_name="settings_btn",
         )
         header_layout.addWidget(settings_btn)
 
         # Help button - icon with a visible text label beneath it
         help_btn = self._create_icon_text_header_button(
             header_frame, EMOJI_ICONS.get('help', 'file'), "Help",
-            "Help / Documentation", self.open_help_dialog
+            "Help / Documentation", self.open_help_dialog,
+            object_name="help_btn",
         )
         header_layout.addWidget(help_btn)
 
-        # Connection status pill with a coloured status dot
+        # Connection status pill with a coloured status dot -- same dark
+        # background/border/radius/height as the Forensic/Settings/Help
+        # buttons so all four header elements look visually consistent.
         self.connection_indicator = QtWidgets.QLabel(header_frame)
+        self.connection_indicator.setObjectName("connection_pill")
         self.connection_indicator.setTextFormat(QtCore.Qt.RichText)
+        self.connection_indicator.setAlignment(QtCore.Qt.AlignCenter)
+        self.connection_indicator.setFixedHeight(60)
         header_layout.addWidget(self.connection_indicator)
         self.set_connection_indicator(connected=False)
 
         content_layout.addWidget(header_frame)
 
     def _create_icon_text_header_button(self, parent, icon_name, label_text, tooltip, callback,
-                                         checkable=False, return_widgets=False):
+                                         checkable=False, return_widgets=False, object_name=None):
         """A small header button: icon on top, a visible text label beneath it.
 
         Used for Settings, Help, and Forensic Mode so all three header
         buttons share identical sizing/styling.
         """
         container = QtWidgets.QPushButton(parent)
+        if object_name:
+            container.setObjectName(object_name)
         container.setToolTip(tooltip)
         container.setCheckable(checkable)
-        container.setStyleSheet(self._flat_header_button_style())
+        container.setStyleSheet(self._header_button_style(object_name))
         container.setCursor(QtCore.Qt.PointingHandCursor)
         container.setFixedSize(70, 60)
         container.clicked.connect(callback)
@@ -306,44 +315,58 @@ class WidgetsMixin:
             return container, icon_widget, label
         return container
 
-    def _flat_header_button_style(self):
-        """No visible box in the default state -- just a subtle hover background.
+    def _header_button_style(self, object_name=None):
+        """Visible dark button in its default state -- always recognisable as
+        clickable without needing a hover, matching Settings/Help/Forensic.
 
-        Shared by the Settings, Help, and (when inactive) Forensic Mode
-        header buttons so none of them show a bounding box against the
-        header.
+        Uses a fully-qualified ``QPushButton#<object_name>`` selector (rather
+        than a bare ``QPushButton {}`` rule) so this style can never bleed
+        onto -- or be overridden by -- any other button on the page, and
+        ``outline: 0px`` is set on every state to rule out the native focus
+        outline as a source of the stray white box around the icon/label.
         """
+        selector = f"QPushButton#{object_name}" if object_name else "QPushButton"
         return f"""
-            QPushButton {{
-                background: transparent;
-                border: none;
+            {selector} {{
+                background-color: #2a2a2a;
+                border: 1px solid #444444;
                 border-radius: 8px;
+                outline: 0px;
             }}
-            QPushButton:hover {{
-                background-color: {COLORS['background_hover']};
+            {selector}:hover {{
+                background-color: #383838;
+                border-color: {COLORS['accent_primary']};
+                outline: 0px;
             }}
-            QPushButton:checked {{
-                background-color: {COLORS['background_hover']};
+            {selector}:pressed {{
+                background-color: #1f1f1f;
+                outline: 0px;
+            }}
+            {selector}:checked {{
+                background-color: #383838;
+                border-color: {COLORS['accent_primary']};
+                outline: 0px;
             }}
         """
 
     def _forensic_button_style(self, active):
-        """Flat/borderless when inactive; unmistakeable red/glow when active.
-
-        Matches the fixed 70x60 icon-above/label-below layout shared with
-        the Settings and Help header buttons.
+        """Same dark button look as Settings/Help when inactive; solid dark
+        red with white text when Forensic Mode is active.
         """
         if not active:
-            return self._flat_header_button_style()
+            return self._header_button_style("forensic_btn")
         return f"""
-            QPushButton {{
-                background-color: {COLORS['error_bg']};
-                border: 2px solid {COLORS['error']};
+            QPushButton#forensic_btn {{
+                background-color: #8b0000;
+                color: white;
+                border: 1px solid #8b0000;
                 border-radius: 8px;
+                outline: 0px;
             }}
-            QPushButton:hover {{
-                background-color: {COLORS['error']};
+            QPushButton#forensic_btn:hover {{
+                background-color: #a30000;
                 border-color: white;
+                outline: 0px;
             }}
         """
 
@@ -354,24 +377,29 @@ class WidgetsMixin:
         if connected:
             dot_color = COLORS['success']
             text = f"Connected — {device_name}" if device_name else "Connected"
-            bg = COLORS['success_bg']
             text_color = "white"
         else:
             dot_color = COLORS['error']
             text = "Disconnected"
-            bg = COLORS['background_hover']
             text_color = COLORS['text_secondary']
 
         self.connection_indicator.setText(
             f'<span style="color:{dot_color};">●</span> '
             f'<span style="color:{text_color};">{text}</span>'
         )
-        self.connection_indicator.setStyleSheet(f"""
-            background-color: {bg};
-            padding: 4px 10px;
-            border-radius: 10px;
-            font-size: 11px;
-            font-weight: 600;
+        # Same dark background/border/radius as the header buttons -- see
+        # _header_button_style() -- so the pill reads as part of the same
+        # consistent header element family.
+        self.connection_indicator.setStyleSheet("""
+            QLabel#connection_pill {
+                background-color: #2a2a2a;
+                border: 1px solid #444444;
+                border-radius: 8px;
+                padding: 0 14px;
+                font-size: 11px;
+                font-weight: 600;
+                outline: 0px;
+            }
         """)
 
     def toggle_forensic_mode(self):
