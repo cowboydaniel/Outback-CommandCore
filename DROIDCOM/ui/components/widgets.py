@@ -246,7 +246,7 @@ class WidgetsMixin:
 
         # Settings button - icon with a visible text label beneath it
         settings_btn = self._create_icon_text_header_button(
-            header_frame, EMOJI_ICONS['settings'], "Settings",
+            header_frame, "settings-filled", "Settings",
             "Settings / Preferences", self.open_settings_dialog,
             object_name="settings_btn",
         )
